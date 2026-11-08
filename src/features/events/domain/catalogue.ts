@@ -21,7 +21,7 @@ export const EVENT_KIND_IDS = [
 
 export type EventKindId = (typeof EVENT_KIND_IDS)[number];
 
-export type SiteKind = 'stage' | 'beach';
+export type SiteKind = 'stage' | 'lobby' | 'beach';
 
 export type EventHost = 'animator' | 'performer';
 
@@ -83,6 +83,8 @@ export interface EventKind {
   readonly keepsUp?: boolean;
   // Held round a fire pit on the sand, not out on the open beach.
   readonly hearth?: boolean;
+  // Held only on a stage that welcomes, or at a reception's lobby as something smaller.
+  readonly greeting?: { readonly lobbyLabel: string; readonly lobbyLift: number };
 }
 
 const HOUR = 60;
@@ -320,7 +322,7 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     id: 'welcome',
     label: 'Welcome meeting',
     blurb: "An animator greets yesterday's new guests with a coffee and the week's programme.",
-    sites: ['stage'],
+    sites: ['stage', 'lobby'],
     duration: 1 * HOUR,
     earliest: 8 * HOUR,
     latest: 10 * HOUR,
@@ -337,6 +339,8 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     audience: (party, day) => party.arrivedOn === day - 1,
     builtIn: true,
     latecomers: true,
+    // A glass at the desk is a smaller welcome than a stage and the week's programme.
+    greeting: { lobbyLabel: 'Welcome drink', lobbyLift: 0.6 },
   },
   // Launched from the sea, so a plot with no beach of its own is never offered them.
   fireworks: {
@@ -405,16 +409,34 @@ export function drawOf(kind: EventKind, tier: string | undefined): number {
   return tierOf(kind, tier)?.draw ?? 1;
 }
 
-export function liftFor(kind: EventKind, tier: string | undefined, timesBefore: number): number {
-  return (tierOf(kind, tier)?.lift ?? kind.lift) * (kind.novelty?.(timesBefore) ?? 1);
+// Taken from the site and not offered as a tier: the weather can move a greeting to a lobby.
+const inLobby = (kind: EventKind, site: SiteKind | undefined) =>
+  site === 'lobby' ? kind.greeting : undefined;
+
+export function liftFor(
+  kind: EventKind,
+  tier: string | undefined,
+  timesBefore: number,
+  site?: SiteKind,
+): number {
+  const share = inLobby(kind, site)?.lobbyLift ?? 1;
+  return (tierOf(kind, tier)?.lift ?? kind.lift) * share * (kind.novelty?.(timesBefore) ?? 1);
 }
 
-export function memoryFor(kind: EventKind, tier: string | undefined, timesBefore: number): number {
+export function memoryFor(
+  kind: EventKind,
+  tier: string | undefined,
+  timesBefore: number,
+  site?: SiteKind,
+): number {
   const memory = tierOf(kind, tier)?.memory ?? kind.memory ?? 0;
-  return memory * (kind.novelty?.(timesBefore) ?? 1);
+  const share = inLobby(kind, site)?.lobbyLift ?? 1;
+  return memory * share * (kind.novelty?.(timesBefore) ?? 1);
 }
 
-export function labelOf(kind: EventKind, tier: string | undefined): string {
+export function labelOf(kind: EventKind, tier: string | undefined, site?: SiteKind): string {
+  const lobby = inLobby(kind, site);
+  if (lobby) return lobby.lobbyLabel;
   const chosen = tierOf(kind, tier);
   return chosen ? `${chosen.label} ${kind.label.toLowerCase()}` : kind.label;
 }

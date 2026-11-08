@@ -1,6 +1,6 @@
 import { buildCostOf, chargeOf, nightPriceOf, priceOf } from '../../catalog/domain/prices';
 import type { EventsState } from '../../events/domain/eventRuns';
-import { stageKeysOf } from '../../events/domain/sites';
+import { welcomeSitesOf } from '../../events/domain/sites';
 import { welcomeGapOf } from '../../events/domain/welcome';
 import { bedCount, presentCount, type Guests } from '../../guests/domain/guests';
 import type { Plot } from '../../resort-prep/domain/prepareResort';
@@ -138,7 +138,7 @@ function noteMissedWelcome(resort: DayCloseState): void {
   if (resort.today.arrived === 0 || resort.today.welcome !== undefined) return;
   const gap = welcomeGapOf({
     programme: resort.events.programme,
-    stages: stageKeysOf(resort.venues).length,
+    sites: welcomeSitesOf(resort.venues).length,
     held: false,
     called: false,
   });

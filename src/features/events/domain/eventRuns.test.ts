@@ -303,7 +303,7 @@ describe('a welcome in the weather', () => {
     });
   const welcomed = (...drafts: Partial<BookingDraft>[]): EventsState => {
     const state = stateWith(...drafts);
-    state.programme = withBuiltIns(state.programme, BUILT_INS, [STAGE.venue]);
+    state.programme = withBuiltIns(state.programme, BUILT_INS, [STAGE]);
     return state;
   };
   const announce = tickAt(2, 9 * HOUR);

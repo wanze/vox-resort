@@ -95,7 +95,7 @@ describe('plotFactsOf', () => {
         "nodes": 1146,
         "rentalVenues": 2,
         "siteVenues": 58,
-        "stages": 6,
+        "stages": 7,
         "unreachable": 0,
         "venues": 57,
       }

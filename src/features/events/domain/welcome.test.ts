@@ -9,8 +9,7 @@ import { tickAt } from './week';
 import {
   LATE_CALL_CUTOFF,
   latecomersFor,
-  stageRank,
-  stagesByPreference,
+  shelterSitesOf,
   welcomeGapOf,
   withoutBuiltIns,
   type LateCall,
@@ -122,32 +121,32 @@ describe('latecomersFor', () => {
   });
 });
 
-describe('the stage the welcome prefers', () => {
-  it('puts the biggest stage first, and breaks ties by key', () => {
+describe('where the weather moves a show', () => {
+  it('tries every stage, the biggest first and ties by key, then the lobbies', () => {
     const venues = [
       stage('playground#0', 25),
+      { ...stage('reception#0', 12), stage: false, receives: true, lobby: 24 },
       stage('open-air-stage#0', 80),
       stage('beach-club#0', 25),
     ];
-    expect(stagesByPreference(venues)).toEqual([
+    expect(shelterSitesOf(venues)).toEqual([
       { kind: 'stage', venue: 'open-air-stage#0' },
       { kind: 'stage', venue: 'beach-club#0' },
       { kind: 'stage', venue: 'playground#0' },
-    ]);
-    const rank = stageRank(venues);
-    expect([rank('open-air-stage#0'), rank('beach-club#0'), rank('gone#0')]).toEqual([
-      -80, -25, -0,
+      { kind: 'lobby', venue: 'reception#0' },
     ]);
   });
 });
 
 describe('welcomeGapOf', () => {
   it('names why no welcome was held, and nothing when one was', () => {
-    const programme = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, ['beach-club#0']);
+    const programme = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [
+      { kind: 'stage', venue: 'beach-club#0' },
+    ]);
     const off = switchBuiltIn(programme, 1, false);
-    const day = { programme, stages: 1, held: false, called: false };
+    const day = { programme, sites: 1, held: false, called: false };
     expect(welcomeGapOf({ ...day, held: true })).toBeNull();
-    expect(welcomeGapOf({ ...day, stages: 0 })).toBe('no-stage');
+    expect(welcomeGapOf({ ...day, sites: 0 })).toBe('no-stage');
     expect(welcomeGapOf({ ...day, programme: off })).toBe('off');
     expect(welcomeGapOf({ ...day, called: true })).toBe('called-off');
     expect(withoutBuiltIns(programme).bookings).toEqual([]);

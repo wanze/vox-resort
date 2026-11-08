@@ -7,6 +7,7 @@ const count = z.number().int().nonnegative();
 
 const siteSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('stage'), venue: z.string() }),
+  z.object({ kind: z.literal('lobby'), venue: z.string() }),
   z.object({ kind: z.literal('beach') }),
 ]);
 

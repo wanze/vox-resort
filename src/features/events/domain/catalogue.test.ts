@@ -163,6 +163,22 @@ describe('liftFor', () => {
     expect(liftFor(fading, 'grand', 0)).toBeCloseTo(0.3);
     expect(liftFor(fading, 'grand', 2)).toBeCloseTo(0.1);
   });
+
+  it('lifts less for a welcome drink at the desk than for the meeting on a stage', () => {
+    const { welcome } = EVENT_KINDS;
+    const drink = liftFor(welcome, undefined, 0, 'lobby');
+    expect(drink).toBeCloseTo(welcome.lift * welcome.greeting!.lobbyLift);
+    expect(drink).toBeLessThan(liftFor(welcome, undefined, 0, 'stage'));
+    expect(liftFor(EVENT_KINDS.bingo, undefined, 0, 'lobby')).toBe(EVENT_KINDS.bingo.lift);
+  });
+});
+
+describe('labelOf', () => {
+  it('names the welcome by where it is held', () => {
+    expect(labelOf(EVENT_KINDS.welcome, undefined, 'lobby')).toBe('Welcome drink');
+    expect(labelOf(EVENT_KINDS.welcome, undefined, 'stage')).toBe('Welcome meeting');
+    expect(labelOf(EVENT_KINDS.welcome, undefined)).toBe('Welcome meeting');
+  });
 });
 
 describe('bonfire', () => {

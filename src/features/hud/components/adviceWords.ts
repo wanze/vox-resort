@@ -57,7 +57,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `${count} ${roleWord('cleaner', count)} ${count === 1 ? 'fetches' : 'fetch'} supplies from the entrance`,
   unvisited: ({ subject }) => `Nobody visited ${subject} today`,
   'no-events': () => 'Nothing is on the programme for the week ahead',
-  'no-welcome': () => 'New guests have no stage to be welcomed on',
+  'no-welcome': () => 'New guests have no stage or reception to be welcomed at',
   'no-fireworks': () => 'Nothing to celebrate in two weeks',
   'weather-closed': ({ subject, need }) =>
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,

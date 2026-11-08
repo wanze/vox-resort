@@ -461,8 +461,8 @@ export function endRun(
   const people = [...run.attended].filter((person) => guests.present[person] === 1);
   for (const person of people) {
     const seen = timesBefore(person);
-    glowOn(state.glow, person, liftFor(kind, occurrence.tier, seen));
-    const memory = memoryFor(kind, occurrence.tier, seen);
+    glowOn(state.glow, person, liftFor(kind, occurrence.tier, seen, occurrence.site.kind));
+    const memory = memoryFor(kind, occurrence.tier, seen, occurrence.site.kind);
     if (memory > 0) remember(person, memory);
     if (late) state.tired.add(guests.party[person]!);
   }
@@ -504,7 +504,8 @@ export function callOffRun(
   const people = (step.run?.parties ?? []).flatMap((party) => membersOf(guests, party));
   if (step.run) step.run.parties.length = 0;
   const { occurrence } = step;
-  const letDown = liftFor(kindOf(occurrence), occurrence.tier, 0) * LET_DOWN[step.reason];
+  const lift = liftFor(kindOf(occurrence), occurrence.tier, 0, occurrence.site.kind);
+  const letDown = lift * LET_DOWN[step.reason];
   for (const person of people) {
     dimGlow(state.glow, person, letDown);
     remember(person, -letDown * LET_DOWN_REMEMBERED);

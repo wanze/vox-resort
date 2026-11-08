@@ -149,7 +149,7 @@ type Heard = NonNullable<Parameters<typeof createRouter>[0]['onThought']>;
 
 type EventParts = Pick<
   Parameters<typeof createRouter>[0],
-  'upLate' | 'eventStay' | 'onWoke' | 'outLate' | 'onNightOver'
+  'upLate' | 'eventStay' | 'onWoke' | 'outLate' | 'onNightOver' | 'hostsEvent'
 >;
 
 const hearing = (): { heard: [number, string, string | null][]; onThought: Heard } => {
@@ -791,6 +791,26 @@ describe('a venue that holds only as many as it says', () => {
     expect(crowd.x[first]).toBeCloseTo(shower(7).x);
     expect(crowd.z[first]).toBeCloseTo(shower(7).z);
     expect(crowd.z[second]).toBeGreaterThan(crowd.z[first]!);
+  });
+
+  it('lets a lobby take a welcome beyond its desks, and only while one is on there', () => {
+    const network = networkOf(street(8));
+    const desk: Venue = { ...shower(7), receives: true, lobby: 2 };
+    const [first, second] = strangers();
+    const door = nodeAt(network, 7);
+    for (const hosting of [true, false]) {
+      const { router } = routerOn(network, [desk], grubby(), {
+        lodgings: [],
+        tickOfDay: () => NOON,
+        events: { hostsEvent: () => hosting },
+      });
+      for (const person of [first, second]) router.step(person, nodeAt(network, 0));
+      router.step(first, door);
+      router.step(second, door);
+      expect(router.occupancyOf('beach-shower#0')).toEqual(
+        hosting ? { inside: 2, waiting: 0 } : { inside: 1, waiting: 1 },
+      );
+    }
   });
 
   it('leaves both of them standing for as long as the clock does not run', () => {

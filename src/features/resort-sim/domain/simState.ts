@@ -12,8 +12,7 @@ import {
   type Occurrence,
   withBuiltIns,
 } from '../../events/domain/programme';
-import { stageKeysOf } from '../../events/domain/sites';
-import { stageRank } from '../../events/domain/welcome';
+import { welcomeSitesOf } from '../../events/domain/sites';
 import {
   type Guests,
   bedCount,
@@ -423,12 +422,7 @@ function ageingParts(resort: () => SimState, ticks: () => number) {
 
 function eventsOf(population: number, venues: readonly Venue[]): EventsState {
   const events = createEvents(population);
-  events.programme = withBuiltIns(
-    events.programme,
-    BUILT_INS,
-    stageKeysOf(venues),
-    stageRank(venues),
-  );
+  events.programme = withBuiltIns(events.programme, BUILT_INS, welcomeSitesOf(venues));
   return events;
 }
 
@@ -504,6 +498,7 @@ export function createSimState(parts: SimParts): SimState {
       resort.invited.end[party]! < 0 &&
       resort.keen[party] !== 1,
     onNightOver: (party) => resort.homeEarly.add(party),
+    hostsEvent: (venue) => resort.eventBooked[venue] === 1,
     eventStay: (person, venue) => {
       const party = guests.party[person]!;
       if (resort.invited.venue[party] === venue) return resort.invited.end[party]!;

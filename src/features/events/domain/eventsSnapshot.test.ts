@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEvents } from './eventRuns';
 import { eventsSnapshotSchema, restoreEvents, snapshotEvents } from './eventsSnapshot';
-import { book, occurrencesOn } from './programme';
+import { BUILT_INS, book, occurrencesOn, withBuiltIns } from './programme';
 
 const played = () => {
   const state = createEvents(6);
@@ -38,6 +38,15 @@ describe('events snapshots', () => {
     const restored = restoreEvents(saved, 6);
     expect(restored).toEqual(state);
     expect(snapshotEvents(restored)).toEqual(snapshotEvents(state));
+  });
+
+  it('keeps a welcome drink at its reception', () => {
+    const state = createEvents(6);
+    state.programme = withBuiltIns(state.programme, BUILT_INS, [
+      { kind: 'lobby', venue: 'reception#0' },
+    ]);
+    const saved = eventsSnapshotSchema.parse(structuredClone(snapshotEvents(state)));
+    expect(restoreEvents(saved, 6).programme).toEqual(state.programme);
   });
 
   it('drops a kind it does not know, from a later version', () => {

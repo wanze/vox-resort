@@ -85,6 +85,41 @@ describe('runEvents', () => {
   });
 });
 
+// The reference resort without its open-air stage and beach club: only the playgrounds, the kids
+// club and the game hall are left, and none of them is fit for a welcome.
+const welcoming = (id: string): boolean => /^(open-air-stage|beach-club)/.test(id);
+
+describe('the welcome with no stage that welcomes', () => {
+  const bare = { ...world, placements: world.placements.filter((each) => !welcoming(each.id)) };
+  const bareFacts = plotFactsOf({ plan, shore, terrain: terrainFor(plan) }, bare, new Map());
+  const bareState = (): SimState =>
+    createSimState({
+      plan,
+      plot: { ...bare, layout: bare },
+      shore,
+      facts: bareFacts,
+      population: 60,
+      away: false,
+      guestVariants: 4,
+      childVariant: 1,
+      staffVariants: 4,
+      clock: { ticks: () => 0, tickOfDay: () => 0, weather: () => 'clear' },
+    });
+
+  it('pours a welcome drink at the reception, hosted there, with room beyond its desks', () => {
+    const state = bareState();
+    const start = 10 * TICKS_PER_HOUR;
+    runEvents(state, nowAt(start - TICKS_PER_HOUR), 1, () => {});
+    runEvents(state, nowAt(start + 2), 5, () => {});
+    const [run] = state.events.runs;
+    expect(run!.occurrence.site.kind).toBe('lobby');
+    const desk = heldAt(run!.occurrence.site, run!.occurrence.kind, state.venues);
+    expect(state.venues[desk]!.receives).toBe(true);
+    expect(state.hosted.map((show) => show.venue)).toContain(desk);
+    expect(state.eventBooked[desk]).toBe(1);
+  });
+});
+
 describe('refreshEventVenues', () => {
   it('sizes its marks to the venues standing', () => {
     const state = freshState();

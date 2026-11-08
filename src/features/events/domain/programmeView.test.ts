@@ -150,7 +150,9 @@ describe('programmeView', () => {
   });
 
   it('shows the welcome in the morning, where nothing else can be booked', () => {
-    const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, ['beach-club#0']);
+    const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [
+      { kind: 'stage', venue: 'beach-club#0' },
+    ]);
     const earlier = rebook(welcome, 1, { start: 8 * HOUR }).programme;
     const view = programmeView(facts({ programme: earlier }), null);
     expect(view.days[0]!.parts.morning.map((chip) => [chip.time, chip.label])).toEqual([
@@ -164,6 +166,30 @@ describe('programmeView', () => {
     expect(programmeView(facts({ programme: off }), null).days[0]!.parts.morning[0]!.off).toBe(
       true,
     );
+  });
+
+  it('shows a welcome drink on a reception tab, movable only to a stage that welcomes', () => {
+    const desk: Venue = {
+      ...stage('reception#0', 'Reception', 12),
+      stage: false,
+      receives: true,
+      lobby: 24,
+    };
+    const stages = [STAGES[0]!, { ...STAGES[1]!, welcomes: true }];
+    const atDesk = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [
+      { kind: 'lobby', venue: 'reception#0' },
+    ]);
+    const view = programmeView(
+      facts({ programme: atDesk, stages, lobbies: [desk] }),
+      'reception#0',
+    );
+    expect(view.site).toMatchObject({ key: 'reception#0', label: 'Reception', capacity: 24 });
+    const [chip] = view.days[0]!.parts.morning;
+    expect(chip!.label).toBe('Welcome drink');
+    expect(chip!.sites.map((site) => site.key)).toEqual(['beach-club#0', 'reception#0']);
+    expect(view.upcoming[0]).toMatchObject({ label: 'Welcome drink', site: 'Reception' });
+    const onStage = programmeView(facts({ stages, lobbies: [desk] }), null);
+    expect(onStage.sites.map((site) => site.key)).toEqual(['beach-club#0', 'kids-club#0']);
   });
 
   it('offers only the starts inside the part of the day', () => {
@@ -244,7 +270,9 @@ describe('booking only what can be booked', () => {
   });
 
   it('lets a built-in be switched off, and back on', () => {
-    const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, ['beach-club#0']);
+    const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [
+      { kind: 'stage', venue: 'beach-club#0' },
+    ]);
     const off = switchBuiltIn(welcome, 1, false);
     const morning = (programme: Programme) =>
       programmeView(facts({ programme }), null).days[0]!.parts.morning[0]!;

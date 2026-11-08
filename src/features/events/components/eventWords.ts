@@ -74,7 +74,7 @@ export function tallyWords(tally: EventTally | undefined): string | null {
 }
 
 const GAP_WORDS: { readonly [gap in WelcomeGap]: string } = {
-  'no-stage': 'None: no stage',
+  'no-stage': 'None: no stage or reception',
   off: 'None: switched off',
   'called-off': 'None: called off',
 };

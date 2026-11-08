@@ -12,7 +12,7 @@ import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import { walkNetworkFor, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { EventSite } from '../../events/domain/programme';
-import { stagesByPreference } from '../../events/domain/welcome';
+import { shelterSitesOf } from '../../events/domain/welcome';
 import { sandOf, type LaunchSite } from '../../fireworks/domain/launch';
 import type { Home } from '../../guests/domain/homes';
 import { ownedSpan } from '../../land/domain/landRights';
@@ -211,7 +211,7 @@ function indicesOf(venues: readonly Venue[], siteVenues: readonly Venue[]) {
     rentalVenues: new Map(
       venues.flatMap((venue, index) => (hireOf(venue.id) ? [[venue.key, index] as const] : [])),
     ),
-    stages: stagesByPreference(venues),
+    stages: shelterSitesOf(venues),
   };
 }
 

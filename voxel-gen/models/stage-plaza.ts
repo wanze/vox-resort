@@ -63,6 +63,7 @@ export const PLAZA_VENUE = {
   shelter: 'open',
   sign: 'stage',
   stage: true,
+  welcomes: true,
   satisfies: [{ need: 'fun', amount: 0.6 }],
   capacity: 80,
   dwellSeconds: { min: 1800, max: 5400 },

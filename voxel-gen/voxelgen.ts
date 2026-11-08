@@ -379,6 +379,12 @@ export interface ModelVenue {
   readonly litter?: number;
   // An animator can put a show on here.
   readonly stage?: boolean;
+  // The morning welcome may be held on this stage; one for children, like a playground, never is.
+  // Read from the original, as a variant only looks different.
+  readonly welcomes?: true;
+  // A receiving venue only: how many a welcome drink holds when no stage welcomes, beside the
+  // desk's own capacity. Read from the original.
+  readonly lobby?: number;
   // Music plays whenever it is open: its visitors dance and cheer with or without an animator.
   readonly dj?: true;
   // Guests go in the water here, so somebody should be watching.

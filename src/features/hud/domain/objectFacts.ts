@@ -1,5 +1,5 @@
 import type { ModelVenue } from '../../../../voxel-gen/voxelgen.ts';
-import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
+import { venueOf, type ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { SETTING_PREMIUM } from '../../catalog/domain/prices';
 import { clockWords } from '../../events/domain/week';
 import { NIGHT_NOISE_DISCOUNT } from '../../sim/domain/nightNoise';
@@ -61,7 +61,8 @@ function fixtureFacts({ model }: ObjectTypeDefinition): ObjectFact[] {
   ];
 }
 
-function venueNotes(venue: ModelVenue): string[] {
+// The welcome's places come from the original, as the simulation reads them.
+function venueNotes(venue: ModelVenue, family: ModelVenue): string[] {
   const notes: [boolean, string][] = [
     [venue.role === 'lodging', `Up to ${SETTING_PREMIUM * 100}% more in pleasant surroundings`],
     [venue.role === 'lodging', `Up to ${NIGHT_NOISE_DISCOUNT * 100}% less after a noisy night`],
@@ -69,6 +70,8 @@ function venueNotes(venue: ModelVenue): string[] {
     [venue.shelter === 'open', 'Open-air: closes in rain and storms'],
     [venue.cools === true, 'Draws more guests the hotter the day'],
     [venue.stage === true, 'Animators can put on shows here'],
+    [family.welcomes === true, "Hosts the morning welcome for yesterday's arrivals"],
+    [family.lobby !== undefined, 'Pours a welcome drink when no stage hosts the welcome'],
     [venue.dj === true, 'Music and dancing whenever it is open'],
     [venue.bathing === true, 'Guests swim here, so a lifeguard should watch'],
     [venue.reliability !== undefined, 'Breaks down now and then; a mechanic repairs it'],
@@ -104,6 +107,9 @@ export function objectFacts(type: ObjectTypeDefinition, cost: number): ObjectFac
       ...ownFacts,
       ...fixtureFacts(type),
     ],
-    notes: [...(venue ? venueNotes(venue) : []), ...fixtureNotes(type)],
+    notes: [
+      ...(venue ? venueNotes(venue, venueOf(type.family) ?? venue) : []),
+      ...fixtureNotes(type),
+    ],
   };
 }

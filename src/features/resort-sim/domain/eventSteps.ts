@@ -20,7 +20,7 @@ import {
   showingVenues,
 } from '../../events/domain/eventRuns';
 import { fadeGlow } from '../../events/domain/glow';
-import { heldAt, stageKeysOf } from '../../events/domain/sites';
+import { heldAt, welcomeSitesOf } from '../../events/domain/sites';
 import { bookingDayKey, keenParties, tonightsShow } from '../../events/domain/stayingUp';
 import { latecomersFor } from '../../events/domain/welcome';
 import { watchRoom } from '../../fireworks/domain/launch';
@@ -33,7 +33,7 @@ import { canAfford, record } from '../../sim/domain/ledger';
 import { strongestNeed } from '../../sim/domain/needs';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { stayCount } from '../../sim/domain/thoughts';
-import { shelterOf } from '../../sim/domain/venues';
+import { eventRoomOf, shelterOf } from '../../sim/domain/venues';
 import { effectOn, type Season } from '../../sim/domain/season';
 import { type Weather, isOpenIn, weatherEffect, weatherOn } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
@@ -121,7 +121,7 @@ function freeOnTheSandOf(resort: SimState): () => readonly AudienceParty[] {
 function stageRoomOf(resort: SimState, venue: number): number {
   const declared = resort.siteVenues[venue]!;
   const there = resort.router.occupancyOf(declared.key) ?? { inside: 0, waiting: 0 };
-  return declared.capacity - there.inside - there.waiting;
+  return eventRoomOf(declared) - there.inside - there.waiting;
 }
 
 // The sand's own room on the beach, whose capacity has no door to count at.
@@ -204,7 +204,7 @@ function endEvent(resort: SimState, run: EventRun, now: number): void {
     (person) => stayCount(resort.thoughts, person, kind.praise),
     (person, amount) => remember(resort.happiness, person, amount),
   );
-  const label = eventLabelOf(kind, run.occurrence.tier);
+  const label = eventLabelOf(kind, run.occurrence.tier, run.occurrence.site.kind);
   for (const person of ended.people) hear(resort, now, person, kind.praise, label);
   resort.today = countEvent(resort.today, ended.tally);
   if (kind.id === 'welcome' && ended.tally.held > 0) {
@@ -212,9 +212,9 @@ function endEvent(resort: SimState, run: EventRun, now: number): void {
   }
 }
 
-// Its stage gone only when no stage stands: one pulled down mid-meeting leaves others to use.
+// Its site gone only when none stands: one pulled down mid-meeting leaves others to use.
 function noteWelcomeCalledOff(resort: SimState, step: CallOffStep): void {
-  const gone = step.reason === 'no-site' && stageKeysOf(resort.venues).length === 0;
+  const gone = step.reason === 'no-site' && welcomeSitesOf(resort.venues).length === 0;
   resort.today = noteWelcomeGap(resort.today, gone ? 'no-stage' : 'called-off');
 }
 
@@ -224,7 +224,7 @@ const quietCallOff = (step: CallOffStep): boolean =>
 
 function callOffEvent(resort: SimState, step: CallOffStep, now: number): void {
   const kind = eventKindOf(step.occurrence);
-  const label = eventLabelOf(kind, step.occurrence.tier);
+  const label = eventLabelOf(kind, step.occurrence.tier, step.occurrence.site.kind);
   resort.settled.add(bookingDayKey(step.occurrence));
   if (kind.id === 'welcome') noteWelcomeCalledOff(resort, step);
   if (quietCallOff(step)) return;

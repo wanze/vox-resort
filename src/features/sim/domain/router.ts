@@ -58,7 +58,7 @@ import { openNow } from './hours';
 import { weatherEffect, type Weather } from './weather';
 import { appetiteAt } from './mealtimes';
 import { createVenueRoutes, SAND_ROUTE_TILES } from './venueRoutes';
-import { type Venue } from './venues';
+import { eventRoomOf, type Venue } from './venues';
 
 // Duplicated rather than imported: simClock's constant is private to the clock.
 const TICK_SECONDS = 60;
@@ -246,6 +246,8 @@ export function createRouter(parts: {
   readonly unbuilt?: (venue: number) => boolean;
   // How much a venue smells or is loud from its neighbours, 0 to 1; absent, nothing does.
   readonly nuisanceOf?: (venue: number) => number;
+  // An event is on or due here, so it holds its event room: a reception its lobby, not its desks.
+  readonly hostsEvent?: (venue: number) => boolean;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -396,6 +398,12 @@ export function createRouter(parts: {
   // The ceiling is safe where no lane is laid yet: nobody can be waiting there.
   const queueLimit = (venue: number): number => caches.lanes[venue]?.length ?? MAX_QUEUE_SHOWN;
 
+  const roomOf = (venue: number): number => {
+    const place = venues[venue];
+    if (!place) return 0;
+    return parts.hostsEvent?.(venue) === true ? eventRoomOf(place) : place.capacity;
+  };
+
   // Seeded, so bench runs replay the same scene. Never zero, or a visit would admit and
   // release in one call and no queue would ever form.
   const dwellTicksFor = (venue: Venue): number => {
@@ -514,14 +522,7 @@ export function createRouter(parts: {
       return 'balked';
     }
     state.visitCount[venue]!++;
-    return arriveAt(
-      state.occupancy,
-      person,
-      venue,
-      venues[venue]!.capacity,
-      dwellFor(person, venue),
-      now,
-    );
+    return arriveAt(state.occupancy, person, venue, roomOf(venue), dwellFor(person, venue), now);
   };
 
   // Past midnight the minigolf is no night out: only a venue that keeps hours is.
@@ -1403,7 +1404,7 @@ export function createRouter(parts: {
       now = at;
       const swept = sweepOccupancy(
         state.occupancy,
-        (venue) => venues[venue]?.capacity ?? 0,
+        roomOf,
         (venue, person) => (venues[venue] ? dwellFor(person, venue) : 1),
         at,
       );

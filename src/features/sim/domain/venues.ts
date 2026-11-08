@@ -37,6 +37,8 @@ export interface Venue {
   readonly reliability?: number;
   // A fire pit: a bonfire booked on the beach is held here.
   readonly hearth?: boolean;
+  readonly welcomes?: boolean;
+  readonly lobby?: number;
   readonly x: number;
   readonly z: number;
   readonly tileX: number;
@@ -69,6 +71,18 @@ const nuisanceOf = (id: string) => {
   };
 };
 
+// The room a show there has: a reception's lobby, not its desks.
+export const eventRoomOf = (venue: Venue): number =>
+  venue.receives === true && venue.lobby !== undefined ? venue.lobby : venue.capacity;
+
+const welcomeOf = (id: string) => {
+  const family = venueOf(familyOf(id));
+  return {
+    ...(family?.welcomes === true ? { welcomes: true } : {}),
+    ...(family?.lobby === undefined ? {} : { lobby: family.lobby }),
+  };
+};
+
 // Derived on demand rather than cached, since placements change under hand edits.
 // Lodging is left out: `guests/domain/homes.ts` owns where everybody sleeps.
 // Names are keyed by placement; typed inline so this module needs nothing from naming/.
@@ -92,6 +106,7 @@ export function venuesOn(
       dwellSeconds: venue.dwellSeconds,
       ...traitsOf(venue),
       ...nuisanceOf(placement.id),
+      ...welcomeOf(placement.id),
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
       tileX: placement.tileX,

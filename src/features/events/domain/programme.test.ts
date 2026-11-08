@@ -99,7 +99,7 @@ describe('book', () => {
   });
 
   it('lets a switched-off built-in not block the stage', () => {
-    const withWelcome = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue]);
+    const withWelcome = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE]);
     const off = switchBuiltIn(withWelcome, 1, false);
     expect(book(withWelcome, draft({ start: 19.5 * HOUR }), 0).refusal).toBe('overlap');
     expect(book(off, draft({ start: 19.5 * HOUR }), 0).refusal).toBeNull();
@@ -113,7 +113,7 @@ describe('unbook', () => {
   it('removes a booking but keeps a built-in', () => {
     const programme = booked(draft());
     expect(unbook(programme, 1).bookings).toEqual([]);
-    const withWelcome = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue]);
+    const withWelcome = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE]);
     expect(unbook(withWelcome, 1)).toBe(withWelcome);
   });
 });
@@ -130,11 +130,11 @@ describe('rebook', () => {
   });
 });
 
-const rank = (key: string): number => (key === STAGE.venue ? -25 : -20);
+const LOBBY: EventSite = { kind: 'lobby', venue: 'reception#0' };
 
 describe('withBuiltIns', () => {
-  it('adds a missing built-in on the first stage, re-sites it when that is gone, and is idempotent', () => {
-    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], ['kids-club#0', 'beach-club#0']);
+  it('adds a missing built-in on the best site, re-sites it when that is gone, and is idempotent', () => {
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE, OTHER]);
     expect(added.bookings).toEqual([
       {
         id: 1,
@@ -145,68 +145,71 @@ describe('withBuiltIns', () => {
         builtIn: 'welcome',
       },
     ]);
-    expect(withBuiltIns(added, [WELCOME], ['kids-club#0', 'beach-club#0'])).toBe(added);
-    const moved = withBuiltIns(added, [WELCOME], ['kids-club#0']);
+    expect(withBuiltIns(added, [WELCOME], [STAGE, OTHER])).toBe(added);
+    const moved = withBuiltIns(added, [WELCOME], [OTHER]);
     expect(moved.bookings[0]!.site).toEqual(OTHER);
     expect(withBuiltIns(added, [WELCOME], [])).toBe(added);
   });
 
-  it('puts a new built-in on the lowest-ranked stage', () => {
-    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], ['kids-club#0', 'beach-club#0'], rank);
-    expect(added.bookings[0]!.site).toEqual(STAGE);
-    const sameRank = withBuiltIns(
-      EMPTY_PROGRAMME,
-      [WELCOME],
-      ['kids-club#0', 'beach-club#0'],
-      () => 0,
-    );
-    expect(sameRank.bookings[0]!.site).toEqual(STAGE);
+  it('moves a built-in off a stage that is no longer one of the sites, as a playground is not', () => {
+    const onOther = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [OTHER]);
+    expect(withBuiltIns(onOther, [WELCOME], [STAGE, LOBBY]).bookings[0]!.site).toEqual(STAGE);
+    expect(withBuiltIns(onOther, [WELCOME], [LOBBY]).bookings[0]!.site).toEqual(LOBBY);
   });
 
   it('puts a built-in kept from before its hours moved back to its kind’s start', () => {
-    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue]);
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE]);
     const stale: Programme = {
       ...added,
       bookings: [{ ...added.bookings[0]!, start: 12 * HOUR }],
     };
-    expect(withBuiltIns(stale, [WELCOME], [STAGE.venue]).bookings[0]!.start).toBe(20 * HOUR);
+    expect(withBuiltIns(stale, [WELCOME], [STAGE]).bookings[0]!.start).toBe(20 * HOUR);
     expect(withBuiltIns(stale, [WELCOME], []).bookings[0]!.start).toBe(20 * HOUR);
   });
 
-  it('leaves a built-in the player moved to another standing stage where it is', () => {
-    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue, OTHER.venue], rank);
+  it('leaves a built-in the player moved to another standing site where it is', () => {
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE, OTHER]);
     const moved = rebook(added, 1, { site: OTHER }).programme;
-    expect(withBuiltIns(moved, [WELCOME], [STAGE.venue, OTHER.venue], rank)).toBe(moved);
+    expect(withBuiltIns(moved, [WELCOME], [STAGE, OTHER])).toBe(moved);
   });
 });
 
 describe('toNewStage', () => {
-  const onOther = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [OTHER.venue], rank);
+  const onOther = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [OTHER]);
 
-  it('moves a built-in to a bigger stage just built', () => {
-    const moved = toNewStage(onOther, [STAGE.venue], rank);
+  it('moves a built-in to a better stage just built', () => {
+    const moved = toNewStage(onOther, [STAGE.venue], [STAGE, OTHER]);
     expect(moved.bookings[0]!.site).toEqual(STAGE);
   });
 
-  it('leaves it put with nothing built, or nothing bigger', () => {
-    expect(toNewStage(onOther, [], rank)).toBe(onOther);
-    const onStage = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue], rank);
-    expect(toNewStage(onStage, [OTHER.venue], rank)).toBe(onStage);
+  it('draws the welcome off a lobby onto a stage just built, but never back', () => {
+    const greeting: BuiltIn = {
+      id: 'welcome',
+      kind: 'welcome',
+      repeat: { every: 'day' },
+      start: 10 * HOUR,
+    };
+    const atDesk = withBuiltIns(EMPTY_PROGRAMME, [greeting], [LOBBY]);
+    const moved = toNewStage(atDesk, [STAGE.venue], [STAGE, LOBBY]);
+    expect(moved.bookings[0]!.site).toEqual(STAGE);
+    expect(toNewStage(moved, [LOBBY.venue], [STAGE, LOBBY])).toBe(moved);
+  });
+
+  it('leaves it put with nothing built, or nothing better', () => {
+    expect(toNewStage(onOther, [], [STAGE, OTHER])).toBe(onOther);
+    const onStage = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE]);
+    expect(toNewStage(onStage, [OTHER.venue], [STAGE, OTHER])).toBe(onStage);
   });
 
   it('leaves the bookings that are not built-ins where they are', () => {
     const programme = booked(draft({ site: OTHER }));
-    expect(toNewStage(programme, [STAGE.venue], rank)).toBe(programme);
+    expect(toNewStage(programme, [STAGE.venue], [STAGE, OTHER])).toBe(programme);
   });
 });
 
 describe('keepStanding', () => {
   it('drops a demolished stage’s bookings and keeps the built-ins', () => {
-    const programme = withBuiltIns(
-      booked(draft(), draft({ site: OTHER })),
-      [WELCOME],
-      [STAGE.venue],
-    );
+    const programme = withBuiltIns(booked(draft(), draft({ site: OTHER })), [WELCOME], [STAGE]);
     const kept = keepStanding(programme, new Set([OTHER.venue]));
     expect(kept.bookings.map((each) => each.id)).toEqual([2, 3]);
   });

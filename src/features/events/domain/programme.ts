@@ -4,6 +4,8 @@ import { dayAt, START_STEP, tickAt, weekdayOf, type Weekday } from './week';
 
 export type EventSite =
   | { readonly kind: 'stage'; readonly venue: string }
+  // A reception holding the welcome as a drink, for want of a stage that welcomes.
+  | { readonly kind: 'lobby'; readonly venue: string }
   | { readonly kind: 'beach' };
 
 export type Repeat =
@@ -77,7 +79,7 @@ const WEEK = 7;
 
 // A placement key always holds a '#', so a stage never reads as the beach.
 export function siteKey(site: EventSite): string {
-  return site.kind === 'stage' ? site.venue : 'beach';
+  return site.kind === 'beach' ? 'beach' : site.venue;
 }
 
 export function occursOn(repeat: Repeat, day: number): boolean {
@@ -181,12 +183,12 @@ function inItsHours(booking: Booking): Booking {
   return { ...booking, start: kind.start };
 }
 
-// With no stage left, a built-in stays where it was and simply cannot run.
+// `sites` in order of preference, best first. With none left, a built-in stays where it was and
+// simply cannot run; one on a site no longer in the list goes to the best.
 export function withBuiltIns(
   programme: Programme,
   builtIns: readonly BuiltIn[],
-  stages: readonly string[],
-  rank: (key: string) => number = () => 0,
+  sites: readonly EventSite[],
 ): Programme {
   let changed = false;
   let bookings = programme.bookings.map((each) => {
@@ -194,13 +196,16 @@ export function withBuiltIns(
     changed ||= kept !== each;
     return kept;
   });
-  const first = stages.toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
-  if (first === undefined) return changed ? { ...programme, bookings } : programme;
-  const standing = new Set(stages);
-  const site: EventSite = { kind: 'stage', venue: first };
+  const site = sites[0];
+  if (site === undefined) return changed ? { ...programme, bookings } : programme;
+  const standing = new Set(sites.map(siteKey));
   let { nextId } = programme;
   bookings = bookings.map((each) => {
-    if (each.builtIn === undefined || each.site.kind !== 'stage' || standing.has(each.site.venue)) {
+    if (
+      each.builtIn === undefined ||
+      each.site.kind === 'beach' ||
+      standing.has(siteKey(each.site))
+    ) {
       return each;
     }
     changed = true;
@@ -216,20 +221,25 @@ export function withBuiltIns(
   return changed ? { bookings, nextId } : programme;
 }
 
-// Only a stage just built draws a built-in over, so one the player moved stays where it was put.
+// Only a site just built draws a built-in over, and only from a worse one, so one the player
+// moved stays where it was put. `sites` in order of preference, as for withBuiltIns.
 export function toNewStage(
   programme: Programme,
   built: readonly string[],
-  rank: (key: string) => number,
+  sites: readonly EventSite[],
 ): Programme {
-  const best = built.toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
+  const fresh = new Set(built);
+  const best = sites.find((site) => fresh.has(siteKey(site)));
   if (best === undefined) return programme;
-  const site: EventSite = { kind: 'stage', venue: best };
+  const rank = (site: EventSite): number => {
+    const at = sites.findIndex((each) => siteKey(each) === siteKey(site));
+    return at < 0 ? Number.POSITIVE_INFINITY : at;
+  };
   let moved = programme;
   for (const booking of programme.bookings) {
-    if (booking.builtIn === undefined || booking.site.kind !== 'stage') continue;
-    if (rank(best) >= rank(booking.site.venue)) continue;
-    const result = rebook(moved, booking.id, { site });
+    if (booking.builtIn === undefined || booking.site.kind === 'beach') continue;
+    if (rank(best) >= rank(booking.site)) continue;
+    const result = rebook(moved, booking.id, { site: best });
     if (result.refusal === null) moved = result.programme;
   }
   return moved;

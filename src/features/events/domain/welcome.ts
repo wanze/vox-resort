@@ -4,8 +4,8 @@ import type { Venue } from '../../sim/domain/venues';
 import { partiesAmong } from './audience';
 import type { AudienceParty, EventKind } from './catalogue';
 import type { EventRun } from './eventRuns';
-import { siteKey, type EventSite, type Programme } from './programme';
-import { sitesOf } from './sites';
+import type { EventSite, Programme } from './programme';
+import { byEventRoom, welcomeSitesOf } from './sites';
 
 // Later than this an invited party would walk in as the cups are cleared away.
 export const LATE_CALL_CUTOFF = 15;
@@ -30,22 +30,15 @@ export function latecomersFor(call: LateCall): readonly AudienceParty[] {
   return left.length === 0 ? [] : partiesAmong(call.guests, left, call.isFree, call.urgency);
 }
 
-const capacityOf = (venues: readonly Venue[], key: string): number =>
-  venues.find((venue) => venue.key === key && venue.stage === true)?.capacity ?? 0;
-
-// For withBuiltIns: the biggest stage first, which seats the most of a day's arrivals.
-export const stageRank =
-  (venues: readonly Venue[]) =>
-  (key: string): number =>
-    -capacityOf(venues, key);
-
-const byKey = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
-export function stagesByPreference(venues: readonly Venue[]): readonly EventSite[] {
-  return sitesOf(venues, [], false).toSorted((a, b) => {
-    const [first, second] = [siteKey(a), siteKey(b)];
-    return capacityOf(venues, second) - capacityOf(venues, first) || byKey(first, second);
-  });
+// For a show the weather moves: every stage, the biggest first, then the lobbies, where only a
+// greeting is ever held.
+export function shelterSitesOf(venues: readonly Venue[]): readonly EventSite[] {
+  const stages = venues
+    .filter((venue) => venue.stage === true)
+    .toSorted(byEventRoom)
+    .map((venue): EventSite => ({ kind: 'stage', venue: venue.key }));
+  const lobbies = welcomeSitesOf(venues).filter((site) => site.kind === 'lobby');
+  return [...stages, ...lobbies];
 }
 
 export function withoutBuiltIns(programme: Programme): Programme {
@@ -55,14 +48,15 @@ export function withoutBuiltIns(programme: Programme): Programme {
 
 export interface WelcomeDay {
   readonly programme: Programme;
-  readonly stages: number;
+  // Stages that welcome and lobbies alike.
+  readonly sites: number;
   readonly held: boolean;
   readonly called: boolean;
 }
 
 export function welcomeGapOf(day: WelcomeDay): WelcomeGap | null {
   if (day.held) return null;
-  if (day.stages === 0) return 'no-stage';
+  if (day.sites === 0) return 'no-stage';
   const welcome = day.programme.bookings.find((each) => each.builtIn === 'welcome');
   if (welcome?.off === true) return 'off';
   return day.called ? 'called-off' : null;

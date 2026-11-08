@@ -101,7 +101,7 @@ const labelOf = (site: EventSite, venues: readonly Venue[]): string | null =>
   venueWords(venues[siteVenueOf(site, venues)]);
 
 const showLabelOf = (occurrence: Occurrence): string =>
-  eventLabelOf(EVENT_KINDS[occurrence.kind], occurrence.tier);
+  eventLabelOf(EVENT_KINDS[occurrence.kind], occurrence.tier, occurrence.site.kind);
 
 function announceExtras(
   step: TellingStep,

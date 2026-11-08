@@ -69,7 +69,9 @@ describe('tallyWords', () => {
 describe('welcomeWords', () => {
   it('counts the welcomed against the arrivals, or says why there were none', () => {
     expect(welcomeWords(reportWith(34, { welcomed: 28, gap: null }))).toBe('28 of 34 new guests');
-    expect(welcomeWords(reportWith(34, { welcomed: 0, gap: 'no-stage' }))).toBe('None: no stage');
+    expect(welcomeWords(reportWith(34, { welcomed: 0, gap: 'no-stage' }))).toBe(
+      'None: no stage or reception',
+    );
     expect(welcomeWords(reportWith(34, { welcomed: 0, gap: 'off' }))).toBe('None: switched off');
     expect(welcomeWords(reportWith(34, { welcomed: 0, gap: 'called-off' }))).toBe(
       'None: called off',

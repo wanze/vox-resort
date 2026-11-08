@@ -62,6 +62,8 @@ export default defineModel({
     spots: DESKS.map(([x0]) => ({ x: x0 + 3, y: GROUND, z: LOGGIA.z + 2, facing: 2 as const })),
     doors: [{ x: 31, z: FRONT, facing: 0 }],
     receives: true,
+    // Those over the desks and benches are indoors, in the hall behind the loggia.
+    lobby: 24,
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

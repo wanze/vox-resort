@@ -167,8 +167,13 @@ import {
   type Programme,
 } from '../features/events/domain/programme';
 import { type DayForecast, type ProgrammeFacts } from '../features/events/domain/programmeView';
-import { heldAt, stageKeysOf } from '../features/events/domain/sites';
-import { stageRank, withoutBuiltIns } from '../features/events/domain/welcome';
+import {
+  heldAt,
+  stageKeysOf,
+  unwelcomeMove,
+  welcomeSitesOf,
+} from '../features/events/domain/sites';
+import { withoutBuiltIns } from '../features/events/domain/welcome';
 import { bookingDayKey, showToTell } from '../features/events/domain/stayingUp';
 import { dayAt } from '../features/events/domain/week';
 import { watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
@@ -1777,6 +1782,7 @@ function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
   return {
     programme: resort.events.programme,
     stages: resort.venues.filter((venue) => venue.stage === true),
+    lobbies: resort.venues.filter((venue) => venue.receives === true && venue.lobby !== undefined),
     now: clock.ticks,
     mode: resort.ledger.mode,
     balance: resort.ledger.balance,
@@ -1794,10 +1800,10 @@ function keepProgrammeStanding(resort: Resort, wasStanding: readonly Venue[]): v
   const stages = stageKeysOf(resort.venues);
   const sites = new Set(resort.beachTiles > 0 ? [...stages, siteKey({ kind: 'beach' })] : stages);
   const kept: Programme = keepStanding(resort.events.programme, sites);
-  const rank = stageRank(resort.venues);
-  const before = new Set(stageKeysOf(wasStanding));
-  const built = stages.filter((key) => !before.has(key));
-  resort.events.programme = toNewStage(withBuiltIns(kept, BUILT_INS, stages, rank), built, rank);
+  const welcoming = welcomeSitesOf(resort.venues);
+  const before = new Set(welcomeSitesOf(wasStanding).map(siteKey));
+  const built = welcoming.map(siteKey).filter((key) => !before.has(key));
+  resort.events.programme = toNewStage(withBuiltIns(kept, BUILT_INS, welcoming), built, welcoming);
 }
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
@@ -1903,7 +1909,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     ),
     idleStage: idleStageOf(resort, now),
     quietBeach: quietBeachOf(resort, now),
-    welcomeless: stageKeysOf(resort.venues).length === 0 ? resort.today.arrived : 0,
+    welcomeless: welcomeSitesOf(resort.venues).length === 0 ? resort.today.arrived : 0,
   };
 }
 
@@ -2327,8 +2333,7 @@ function restoreGame(resort: Resort, saved: GameSnapshot, clock: Clock): void {
   resort.events.programme = withBuiltIns(
     resort.events.programme,
     BUILT_INS,
-    stageKeysOf(resort.venues),
-    stageRank(resort.venues),
+    welcomeSitesOf(resort.venues),
   );
   resort.newcomers = partiesArrivedOn(resort.guests, dayAt(saved.clock.ticks - CHECK_IN_TICK));
   resort.settled.clear();
@@ -3513,7 +3518,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       if (after !== programme) programmeChanged(after);
     },
     rebook(id, change) {
-      const result = rebook(current().events.programme, id, change);
+      const { programme } = current().events;
+      if (unwelcomeMove(programme, id, change, current().siteVenues)) return 'site';
+      const result = rebook(programme, id, change);
       if (!result.refusal) programmeChanged(result.programme);
       return result.refusal;
     },

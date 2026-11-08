@@ -4,7 +4,9 @@ import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import { shoreFor } from '../../layout/domain/shoreline';
 import type { Venue } from '../../sim/domain/venues';
 import { EVENT_KINDS, type EventKind } from './catalogue';
-import { heldAt, siteVenueOf, sitesOf } from './sites';
+import type { EventSite } from './programme';
+import { BUILT_INS, book, EMPTY_PROGRAMME, withBuiltIns } from './programme';
+import { heldAt, siteVenueOf, sitesOf, unwelcomeMove, welcomeSitesOf } from './sites';
 
 const venue = (key: string, label: string, stage: boolean): Venue => ({
   key,
@@ -75,6 +77,84 @@ describe('heldAt', () => {
   it('holds every other kind where it was booked', () => {
     expect(heldAt({ kind: 'stage', venue: 'kids-club#0' }, 'bingo', pits)).toBe(1);
     expect(heldAt({ kind: 'beach' }, 'fireworks', pits)).toBe(-1);
+  });
+
+  const WELCOMING = [
+    venue('playground#0', 'Swings', true),
+    venue('game-hall#0', 'Arcade', true),
+    { ...venue('beach-club#0', 'Coral Stage', true), welcomes: true },
+    { ...venue('reception#0', 'Reception', false), receives: true, lobby: 24 },
+  ];
+
+  it('holds the welcome only on a stage that welcomes, or at a lobby', () => {
+    const at = (site: EventSite) => heldAt(site, 'welcome', WELCOMING);
+    expect(at({ kind: 'stage', venue: 'playground#0' })).toBe(-1);
+    expect(at({ kind: 'stage', venue: 'game-hall#0' })).toBe(-1);
+    expect(at({ kind: 'stage', venue: 'beach-club#0' })).toBe(2);
+    expect(at({ kind: 'lobby', venue: 'reception#0' })).toBe(3);
+  });
+
+  it('holds nothing but the welcome at a lobby, which is no stage', () => {
+    expect(heldAt({ kind: 'lobby', venue: 'reception#0' }, 'bingo', WELCOMING)).toBe(-1);
+    expect(heldAt({ kind: 'stage', venue: 'reception#0' }, 'bingo', WELCOMING)).toBe(-1);
+    expect(heldAt({ kind: 'stage', venue: 'playground#0' }, 'bingo', WELCOMING)).toBe(0);
+  });
+});
+
+describe('unwelcomeMove', () => {
+  const WELCOMING = [
+    venue('playground#0', 'Swings', true),
+    { ...venue('beach-club#0', 'Coral Stage', true), welcomes: true },
+  ];
+  const programme = book(
+    withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [{ kind: 'stage', venue: 'beach-club#0' }]),
+    {
+      kind: 'bingo',
+      site: { kind: 'stage', venue: 'beach-club#0' },
+      repeat: { every: 'day' },
+      start: 20 * 60,
+    },
+    0,
+  ).programme;
+  const swings: EventSite = { kind: 'stage', venue: 'playground#0' };
+
+  it('stops the welcome moving onto a playground, and nothing else', () => {
+    expect(unwelcomeMove(programme, 1, { site: swings }, WELCOMING)).toBe(true);
+    expect(unwelcomeMove(programme, 2, { site: swings }, WELCOMING)).toBe(false);
+    expect(unwelcomeMove(programme, 1, { start: 9 * 60 }, WELCOMING)).toBe(false);
+    expect(unwelcomeMove(programme, 9, { site: swings }, WELCOMING)).toBe(false);
+  });
+});
+
+describe('welcomeSitesOf', () => {
+  const stage = (key: string, capacity: number): Venue => ({
+    ...venue(key, key, true),
+    capacity,
+    welcomes: true,
+  });
+
+  it('ranks the stages that welcome, biggest first, before any lobby', () => {
+    const venues = [
+      { ...venue('reception#1', 'Annex', false), receives: true, lobby: 40 },
+      stage('beach-club#0', 18),
+      { ...venue('kids-club#0', 'Kids', true), capacity: 99 },
+      stage('open-air-stage#0', 80),
+      { ...venue('reception#0', 'Reception', false), receives: true, lobby: 24 },
+    ];
+    expect(welcomeSitesOf(venues)).toEqual([
+      { kind: 'stage', venue: 'open-air-stage#0' },
+      { kind: 'stage', venue: 'beach-club#0' },
+      { kind: 'lobby', venue: 'reception#1' },
+      { kind: 'lobby', venue: 'reception#0' },
+    ]);
+  });
+
+  it('falls back to a lobby alone, and to nothing with no reception', () => {
+    const desk = { ...venue('reception#0', 'Reception', false), receives: true, lobby: 24 };
+    expect(welcomeSitesOf([venue('playground#0', 'Swings', true), desk])).toEqual([
+      { kind: 'lobby', venue: 'reception#0' },
+    ]);
+    expect(welcomeSitesOf([venue('playground#0', 'Swings', true)])).toEqual([]);
   });
 });
 

@@ -95,6 +95,7 @@ export default defineModel({
       'The Palm Club',
     ],
     stage: true,
+    welcomes: true,
     satisfies: [
       { need: 'fun', amount: 0.7 },
       { need: 'thirst', amount: 0.4 },

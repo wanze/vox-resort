@@ -145,6 +145,23 @@ describe('reliefAt', () => {
     expect(only([at('bakery#0', 'bakery')]).stage).toBe(false);
   });
 
+  it('welcomes new guests only on a grown-up stage, and every style of one', () => {
+    for (const id of ['open-air-stage', 'open-air-stage-b', 'beach-club', 'beach-club-b']) {
+      expect(only([at(`${id}#0`, id, 0, 0, 8)]).welcomes).toBe(true);
+    }
+    for (const id of ['playground', 'playground-b', 'kids-club', 'game-hall']) {
+      expect(only([at(`${id}#0`, id, 0, 0, 8)]).welcomes).toBeUndefined();
+    }
+  });
+
+  it('gives every style of reception room for a welcome drink beyond its desks', () => {
+    for (const id of ['reception', 'reception-b']) {
+      const desk = only([at(`${id}#0`, id, 0, 0, 4)]);
+      expect(desk.lobby).toBeGreaterThan(desk.capacity);
+    }
+    expect(only([at('bakery#0', 'bakery')]).lobby).toBeUndefined();
+  });
+
   it('carries where guests swim off the art, so a lifeguard knows where to watch', () => {
     expect(only([at('swimming-pool#0', 'swimming-pool')]).bathing).toBe(true);
     expect(only([at('kids-club#0', 'kids-club')]).bathing).toBe(false);

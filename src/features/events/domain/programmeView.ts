@@ -1,6 +1,6 @@
 import { familyOf, signOf, type SignKind } from '../../catalog/domain/objectTypes';
 import type { GameMode } from '../../sim/domain/ledger';
-import type { Venue } from '../../sim/domain/venues';
+import { eventRoomOf, type Venue } from '../../sim/domain/venues';
 import type { Weather } from '../../sim/domain/weather';
 import { expectedAudience, type PartyMix } from './audience';
 import {
@@ -74,6 +74,8 @@ export interface ProgrammeFacts {
   readonly beachRoom: number;
   // Places round the fire pit a bonfire is lit at; 0 with none on the beach.
   readonly fireRoom: number;
+  // Receptions that can hold a welcome drink; a tab shows only one that holds it.
+  readonly lobbies?: readonly Venue[];
 }
 
 export interface SiteTab {
@@ -83,6 +85,8 @@ export interface SiteTab {
   readonly capacity: number;
   // A SiteType key: the stage's family, or the beach.
   readonly type: string;
+  // The welcome may be held here.
+  readonly welcomes?: boolean;
 }
 
 // Stages of one kind, so a resort with many can be picked from by kind first.
@@ -204,8 +208,10 @@ function sitesFor(
   tabs: readonly SiteTab[],
 ): readonly ChipSite[] {
   const own = siteKey(booking.site);
+  const kind = EVENT_KINDS[booking.kind];
   const choices = tabs
-    .filter((tab) => EVENT_KINDS[booking.kind].sites.includes(tab.site.kind))
+    .filter((tab) => kind.sites.includes(tab.site.kind))
+    .filter((tab) => kind.greeting === undefined || tab.welcomes === true)
     .map((tab) => ({
       key: tab.key,
       site: tab.site,
@@ -231,7 +237,7 @@ function chipsOn(
       booking: booking.id,
       minute: booking.start,
       time: clockWords(booking.start),
-      label: labelOf(EVENT_KINDS[booking.kind], booking.tier),
+      label: labelOf(EVENT_KINDS[booking.kind], booking.tier, booking.site.kind),
       repeat: repeatWords(booking.repeat),
       builtIn: booking.builtIn !== undefined,
       off: booking.off === true,
@@ -384,7 +390,7 @@ function upcomingOf(facts: ProgrammeFacts, tabs: readonly SiteTab[]): readonly U
     dayName: dayWords(each.day),
     time: clockWords(minuteOf(each.start)),
     kind: each.kind,
-    label: labelOf(EVENT_KINDS[each.kind], each.tier),
+    label: labelOf(EVENT_KINDS[each.kind], each.tier, each.site.kind),
     siteKey: siteKey(each.site),
     site: labels.get(siteKey(each.site)) ?? 'nowhere',
   }));
@@ -446,17 +452,40 @@ const BEACH_LABEL = 'Beach';
 const BEACH_TYPE = 'beach';
 
 // The beach after the stages, as sitesOf lists it, holding as many as the sand does.
-function tabsOf(stages: readonly Venue[], beachRoom: number): readonly SiteTab[] {
+function tabsOf(facts: ProgrammeFacts): readonly SiteTab[] {
+  const { stages, beachRoom } = facts;
   const byKey = new Map(stages.map((stage) => [stage.key, stage]));
-  return sitesOf(stages, KINDS, beachRoom > 0).flatMap((site): SiteTab[] => {
+  const onStages = sitesOf(stages, KINDS, beachRoom > 0).flatMap((site): SiteTab[] => {
     const key = siteKey(site);
     if (site.kind === 'beach') {
       return [{ key, site, label: BEACH_LABEL, capacity: beachRoom, type: BEACH_TYPE }];
     }
     const stage = byKey.get(key);
     if (!stage) return [];
-    return [{ key, site, label: stage.label, capacity: stage.capacity, type: familyOf(stage.id) }];
+    const welcomes = stage.welcomes === true ? { welcomes: true } : {};
+    const type = familyOf(stage.id);
+    return [{ key, site, label: stage.label, capacity: stage.capacity, type, ...welcomes }];
   });
+  return [...onStages, ...lobbyTabsOf(facts)];
+}
+
+// Nothing can be booked at a desk, so a reception has a tab only while the welcome is held there.
+function lobbyTabsOf(facts: ProgrammeFacts): readonly SiteTab[] {
+  const held = new Set(
+    facts.programme.bookings.flatMap((each) =>
+      each.site.kind === 'lobby' ? [each.site.venue] : [],
+    ),
+  );
+  return (facts.lobbies ?? [])
+    .filter((lobby) => held.has(lobby.key))
+    .map((lobby) => ({
+      key: lobby.key,
+      site: { kind: 'lobby', venue: lobby.key },
+      label: lobby.label,
+      capacity: eventRoomOf(lobby),
+      type: familyOf(lobby.id),
+      welcomes: true,
+    }));
 }
 
 // In the order of their first stage, so the kinds read as the stages do: by name, beach last.
@@ -524,7 +553,7 @@ function dayColumn({ facts, tabs, site, forecast }: Week, day: number): DayColum
 
 // `chosen` is a site key; one no longer standing falls back to the first stage.
 export function programmeView(facts: ProgrammeFacts, chosen: string | null): ProgrammeView {
-  const sites = tabsOf(facts.stages, facts.beachRoom);
+  const sites = tabsOf(facts);
   const site = chosenTab(sites, chosen);
   const today = dayAt(facts.now);
   const week: Week = {
@@ -535,7 +564,7 @@ export function programmeView(facts: ProgrammeFacts, chosen: string | null): Pro
   };
   return {
     sites,
-    types: typesOf(sites, facts.stages),
+    types: typesOf(sites, [...facts.stages, ...(facts.lobbies ?? [])]),
     site,
     days: Array.from({ length: DAYS_SHOWN }, (_, offset) => dayColumn(week, today + offset)),
     upcoming: upcomingOf(facts, sites),

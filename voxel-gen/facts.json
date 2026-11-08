@@ -5582,7 +5582,8 @@
               "facing": 0
             }
           ],
-          "receives": true
+          "receives": true,
+          "lobby": 24
         },
         "hire": null,
         "nameplate": null,
@@ -6361,6 +6362,7 @@
             "The Palm Club"
           ],
           "stage": true,
+          "welcomes": true,
           "satisfies": [
             {
               "need": "fun",
@@ -7355,6 +7357,7 @@
           "shelter": "open",
           "sign": "stage",
           "stage": true,
+          "welcomes": true,
           "satisfies": [
             {
               "need": "fun",
@@ -17797,6 +17800,7 @@
           "shelter": "open",
           "sign": "stage",
           "stage": true,
+          "welcomes": true,
           "satisfies": [
             {
               "need": "fun",

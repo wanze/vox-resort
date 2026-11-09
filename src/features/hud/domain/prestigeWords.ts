@@ -1,6 +1,7 @@
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import { familiesUnlockedAt } from '../../catalog/domain/unlocks';
 import { nextTier, starsLabel, type Prestige } from '../../sim/domain/prestige';
+import { fairFactor } from '../../sim/domain/pricing';
 
 export const unlockedLabels = (tier: number): readonly string[] =>
   familiesUnlockedAt(tier).map((id) => objectTypeById(id).label);
@@ -19,5 +20,6 @@ export function reachedWords(reached: readonly number[]): string | null {
   if (top === undefined) return null;
   const labels = reached.flatMap(unlockedLabels);
   const opened = labels.length > 0 ? `: ${labels.join(', ')} can now be built` : '';
-  return `Reached a ${starsLabel(top)} reputation${opened}.`;
+  const dearer = fairFactor(top) > 1 ? ' Guests will now pay more: see Books, Prices.' : '';
+  return `Reached a ${starsLabel(top)} reputation${opened}.${dearer}`;
 }

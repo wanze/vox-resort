@@ -413,6 +413,11 @@ export function drawOf(kind: EventKind, tier: string | undefined): number {
 const inLobby = (kind: EventKind, site: SiteKind | undefined) =>
   site === 'lobby' ? kind.greeting : undefined;
 
+// An animator on duty still hosts it, but the desk pours the glass without one: an auto roster
+// hires animators for stages alone.
+export const needsAnimator = (kind: EventKind, site: SiteKind): boolean =>
+  kind.host === 'animator' && inLobby(kind, site) === undefined;
+
 export function liftFor(
   kind: EventKind,
   tier: string | undefined,

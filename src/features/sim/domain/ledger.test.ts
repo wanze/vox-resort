@@ -18,13 +18,17 @@ describe('createLedger', () => {
     for (const reason of REASONS) expect(ledger.today[reason]).toBe(0);
   });
 
-  it('opens tycoon with about twice what a minimal resort costs', () => {
+  it('opens tycoon with about twice what a resort serving every want costs', () => {
     const minimal =
       buildCostOf('entrance') +
       buildCostOf('reception') +
       30 * buildCostOf('path') +
       3 * buildCostOf('bungalow') +
-      buildCostOf('snack-bar');
+      buildCostOf('snack-bar') +
+      buildCostOf('poolside-bar') +
+      buildCostOf('misting-pavilion') +
+      buildCostOf('restrooms') +
+      buildCostOf('volleyball');
     expect(OPENING_BALANCE.tycoon).toBeGreaterThanOrEqual(1.8 * minimal);
     expect(OPENING_BALANCE.tycoon).toBeLessThanOrEqual(2.5 * minimal);
   });

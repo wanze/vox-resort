@@ -27,6 +27,11 @@ describe('reachedWords', () => {
     expect(words).toContain('Massage');
   });
 
+  it('points to the prices once the stars let guests pay more than list', () => {
+    expect(reachedWords([4])).toContain('Guests will now pay more');
+    expect(reachedWords([3])).not.toContain('pay more');
+  });
+
   it('says nothing for a day that reached nothing', () => {
     expect(reachedWords([])).toBeNull();
   });

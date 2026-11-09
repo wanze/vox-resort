@@ -12,6 +12,7 @@ import {
   feeOf,
   liftFor,
   memoryFor,
+  needsAnimator,
   runsLate,
   type AudienceParty,
   type EventKind,
@@ -209,7 +210,8 @@ function announced(
   const held = weathered(occurrence, programme, runs, facts);
   if (!('booking' in held)) return held;
   const kind = kindOf(occurrence);
-  if (kind.host === 'animator' && !facts.hostOnDuty) return callOff(occurrence, 'no-host', null);
+  if (needsAnimator(kind, held.site.kind) && !facts.hostOnDuty)
+    return callOff(occurrence, 'no-host', null);
   const run = newRun(held);
   return held.site === occurrence.site
     ? { kind: 'announce', run }

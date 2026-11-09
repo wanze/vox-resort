@@ -370,6 +370,18 @@ describe('a welcome in the weather', () => {
     ]);
   });
 
+  it('pours the drink at a lobby with no animator on duty, but not on a stage', () => {
+    const LOBBY: EventSite = { kind: 'lobby', venue: 'reception#0' };
+    const unhosted = facts({ hasSite: () => true, siteOpen: () => true, hostOnDuty: false });
+    const atDesk = stateWith();
+    atDesk.programme = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [LOBBY]);
+    expect(kinds(run(atDesk, announce, announce, unhosted))).toEqual(['announce']);
+    const onStage = welcomed();
+    expect(run(onStage, announce, announce, unhosted)).toMatchObject([
+      { kind: 'call-off', reason: 'no-host' },
+    ]);
+  });
+
   it('never moves a kind whose rule is to cancel', () => {
     const state = stateWith({});
     expect(run(state, start - 60, start - 60, rainy())).toMatchObject([

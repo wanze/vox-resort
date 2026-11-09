@@ -23,6 +23,11 @@ const NEED_ERRANDS: { readonly [need: string]: string } = {
   health: 'first aid',
 };
 
+const remedyWords = (remedies: readonly string[] | undefined): string =>
+  remedies && remedies.length > 0
+    ? `: try ${remedies.map((label) => `the ${label}`).join(' or ')}`
+    : '';
+
 const guests = (count: number): string => (count === 1 ? 'guest has' : 'guests have');
 
 // Each line states what happened, never a cause the number does not support.
@@ -33,8 +38,8 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'no-beds': ({ count }) => `${count} ${guests(count)} nowhere to sleep`,
   unmade: ({ count }) => `${count} ${count === 1 ? 'bed is' : 'beds are'} waiting to be made up`,
   hurt: ({ count }) => `${count} ${guests(count)} been hurt`,
-  'unserved-need': ({ subject, need }) =>
-    `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
+  'unserved-need': ({ subject, need, remedies }) =>
+    `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}${remedyWords(remedies)}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   crowded: () => 'A path is packed with guests: widen it or add another way round',
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
@@ -59,6 +64,10 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'no-events': () => 'Nothing is on the programme for the week ahead',
   'no-welcome': () => 'New guests have no stage or reception to be welcomed at',
   'no-fireworks': () => 'Nothing to celebrate in two weeks',
+  underpriced: ({ subject, count }) =>
+    count === 1
+      ? `${subject} charges less than your stars allow: raise it in Books, Prices`
+      : `${count} kinds of room charge less than your stars allow: raise them in Books, Prices`,
   'weather-closed': ({ subject, need }) =>
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
@@ -91,6 +100,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'no-events': 'Programme',
   'no-welcome': 'Welcome',
   'no-fireworks': 'Fireworks',
+  underpriced: 'Prices',
   'weather-closed': 'Weather',
 };
 
@@ -111,6 +121,7 @@ const ICONS: { readonly [kind in AdviceKind]?: IconName } = {
   'no-events': 'programme',
   'no-welcome': 'stage',
   'no-fireworks': 'programme',
+  underpriced: 'money',
   'weather-closed': 'storm',
 };
 

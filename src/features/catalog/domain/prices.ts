@@ -12,7 +12,7 @@ const REFUND_SHARE = 0.5;
 
 export const DIG_COST = 20;
 
-// Flat on purpose until play says otherwise: a fifth of the tycoon opening balance per parcel.
+// Flat on purpose until play says otherwise: an eighth of the tycoon opening balance per parcel.
 export const LAND_PARCEL_COST = 1_500;
 
 // Capped: a rate driven by flowerbeds would make a bungalow in a garden outearn a hotel.

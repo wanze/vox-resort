@@ -14,6 +14,7 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import { buildCostOf, DIG_COST, landPriceOf } from '../features/catalog/domain/prices';
+import { remediesFor } from '../features/catalog/domain/remedies';
 import { isUnlocked, starsNeededFor } from '../features/catalog/domain/unlocks';
 import { STREAK_DAYS } from '../features/sim/domain/prestige';
 import {
@@ -105,7 +106,7 @@ import {
 import { createWorksPins } from './worksPins';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
 import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
-import { pricesView, setPrice } from '../features/sim/domain/pricing';
+import { pricesView, setPrice, underpricedBeds } from '../features/sim/domain/pricing';
 import { nuisanceLive, venueIndexOf } from '../features/resort-sim/domain/visits';
 import {
   beachTilesFor,
@@ -1948,6 +1949,15 @@ function factsNow(
     idleStage: idleStageOf(resort, now),
     quietBeach: quietBeachOf(resort, now),
     welcomeless: welcomeSitesOf(resort.venues).length === 0 ? resort.today.arrived : 0,
+    remedies: (need) => remediesFor(need, resort.prestige, resort.ledger.mode),
+    underpriced:
+      resort.ledger.mode === 'tycoon'
+        ? underpricedBeds(
+            resort.lodgings.map((lodging) => lodging.id),
+            resort.prices,
+            resort.rating.stars,
+          )
+        : [],
   };
 }
 

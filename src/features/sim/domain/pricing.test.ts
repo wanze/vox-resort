@@ -10,6 +10,7 @@ import {
   pricesView,
   priceVerdict,
   setPrice,
+  underpricedBeds,
   venuePull,
 } from './pricing';
 
@@ -42,6 +43,15 @@ describe('factorOf', () => {
     expect(factorOf(prices, 'villa-b')).toBe(1.4);
     expect(factorOf(prices, 'hotel')).toBe(1);
     expect(factorOf(prices, 'beach')).toBe(1);
+  });
+});
+
+describe('underpricedBeds', () => {
+  it('names beds left at list price once the stars allow more, but no venue', () => {
+    const ids = ['bungalow', 'snack-bar'];
+    expect(underpricedBeds(ids, LIST_PRICES, 3.5)).toEqual([]);
+    expect(underpricedBeds(ids, LIST_PRICES, 4)).toEqual(['Bungalow']);
+    expect(underpricedBeds(ids, setPrice(LIST_PRICES, 'bungalow', 1.2), 4)).toEqual([]);
   });
 });
 

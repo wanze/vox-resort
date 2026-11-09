@@ -37,10 +37,11 @@ export interface Ledger {
   readonly mode: GameMode;
 }
 
-// About twice a minimal start (gate, desk, thirty paths, three bungalows, a snack bar: 3 960).
+// About twice a start that serves every want (5 250), so the first beds after it come out of
+// the purse and not out of days spent waiting for the takings.
 export const OPENING_BALANCE: { readonly [mode in GameMode]: number } = {
   sandbox: 0,
-  tycoon: 8_000,
+  tycoon: 12_000,
 };
 
 const EMPTY: Column = {

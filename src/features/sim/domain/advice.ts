@@ -43,6 +43,7 @@ const KIND_ORDER = [
   'no-events',
   'no-welcome',
   'no-fireworks',
+  'underpriced',
   // Last: the one line the player cannot fix today.
   'weather-closed',
 ] as const;
@@ -59,6 +60,8 @@ export interface Advice {
   readonly need: GuestNeed | null;
   // The venue's placement key, which a rename leaves alone where the subject changes.
   readonly key?: string;
+  // What the player could build about it, cheapest first; absent or empty names nothing.
+  readonly remedies?: readonly string[];
 }
 
 const tileOf = (place: { readonly tileX: number; readonly tileZ: number }) => ({
@@ -133,6 +136,10 @@ export interface ResortFacts {
   // The beach, when two weeks went by with no fireworks and none is booked; absent or null
   // says nothing.
   readonly quietBeach?: Venue | null;
+  // Labels of the beds charging less than the stars would let them; absent means none.
+  readonly underpriced?: readonly string[];
+  // What the player could build today for a need nothing serves; absent names nothing.
+  readonly remedies?: (need: GuestNeed) => readonly string[];
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -196,6 +203,7 @@ export function adviceUnservedNeeds(facts: ResortFacts): readonly Advice[] {
       count: wanting,
       at: null,
       need,
+      ...(facts.remedies ? { remedies: facts.remedies(need) } : {}),
     });
   }
   return advice;
@@ -603,6 +611,19 @@ export function adviceNoFireworks(facts: ResortFacts): Advice | null {
   };
 }
 
+export function adviceUnderpriced(facts: ResortFacts): Advice | null {
+  const beds = facts.underpriced ?? [];
+  if (beds.length === 0) return null;
+  return {
+    kind: 'underpriced',
+    weight: 0.2,
+    subject: beds[0]!,
+    count: beds.length,
+    at: null,
+    need: null,
+  };
+}
+
 // Both halves: a beach building has no door node but is reachable over the sand.
 // Sand routes are not swept per building; that costs too much for too little.
 export function unreachableOn<Place extends { readonly key: string }>(
@@ -705,6 +726,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceNoEvents(facts),
     adviceNoWelcome(facts),
     adviceNoFireworks(facts),
+    adviceUnderpriced(facts),
     ...adviceWeatherClosed(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);
   return found.toSorted(louderFirst);

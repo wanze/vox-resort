@@ -240,6 +240,8 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   'no-events': null,
   'no-welcome': null,
   'no-fireworks': null,
+  // Toasted once, as the Prices tab is easy to miss and the stars that open it come slowly.
+  underpriced: ['warning', 0],
   'weather-closed': null,
 };
 

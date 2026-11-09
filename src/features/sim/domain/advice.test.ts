@@ -19,6 +19,7 @@ import {
   adviceNotStepFree,
   adviceUnmade,
   adviceUnreachable,
+  adviceUnderpriced,
   adviceUnservedNeeds,
   adviceUnvisited,
   adviceNuisance,
@@ -172,6 +173,28 @@ describe('the advice rules', () => {
         need: 'hunger',
       },
     ]);
+  });
+
+  it('passes on what the player could build for a need nothing serves', () => {
+    const [advice] = adviceUnservedNeeds(
+      healthyFacts({
+        venues: [],
+        wanting: { ...NOTHING_WANTED, energy: 10 },
+        remedies: (need) => (need === 'energy' ? ['Misting Pavilion'] : []),
+      }),
+    );
+    expect(advice).toMatchObject({ need: 'energy', remedies: ['Misting Pavilion'] });
+  });
+
+  it('notes beds charging less than the stars allow, naming the first', () => {
+    expect(adviceUnderpriced(healthyFacts())).toBeNull();
+    expect(adviceUnderpriced(healthyFacts({ underpriced: ['Bungalow', 'Cottage'] }))).toMatchObject(
+      {
+        kind: 'underpriced',
+        subject: 'Bungalow',
+        count: 2,
+      },
+    );
   });
 
   it('picks out the place turning most people away, scaled by how many that was', () => {

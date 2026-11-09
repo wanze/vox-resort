@@ -122,6 +122,21 @@ export function priceRowsOf(ids: readonly string[], prices: Prices): readonly Pr
   );
 }
 
+// A step under fair is rounding, not money left on the table; it first bites at about 3.7 stars.
+const UNDERPRICED_MARGIN = 0.1;
+
+// Beds alone: below fair they gain no bookings, while a cheap venue at least draws more visitors.
+export function underpricedBeds(
+  ids: readonly string[],
+  prices: Prices,
+  stars: number,
+): readonly string[] {
+  const fair = fairFactor(stars);
+  return priceRowsOf(ids, prices)
+    .filter((row) => row.role === 'lodging' && row.factor < fair - UNDERPRICED_MARGIN)
+    .map((row) => row.label);
+}
+
 export interface PricesView {
   readonly rows: readonly PriceRow[];
   readonly fair: number;

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Settlement } from './bookings';
-import { groupWords, inDays, offerLine, possessive, settlementLine } from './bookingWords';
+import {
+  groupWords,
+  inDays,
+  offerLine,
+  possessive,
+  remedyWords,
+  settlementLine,
+} from './bookingWords';
 import type { Offer } from './offers';
 
 const settlement = (over: Partial<Settlement>): Settlement => ({
@@ -61,5 +68,21 @@ describe('booking words', () => {
     expect(settlementLine(settlement({ outcome: 'failed', parties: 0, bonus: 0 }))).toBe(
       'Sunshine Tours’ families were turned away at the door: no beds, no bonus.',
     );
+  });
+});
+
+describe('remedyWords', () => {
+  it('names what to build, with its article', () => {
+    expect(remedyWords({ kind: 'flag', value: 'dj' }, ['Night Club', 'Open-Air Bar'])).toBe(
+      'build a Night Club or an Open-Air Bar',
+    );
+  });
+
+  it('says so when nothing unlocked would do', () => {
+    expect(remedyWords({ kind: 'flag', value: 'dj' }, [])).toBe('nothing to build for it yet');
+  });
+
+  it('sends the stars to the rating, not the build menu', () => {
+    expect(remedyWords({ kind: 'stars', value: 4 }, [])).toBe('raise the rating');
   });
 });

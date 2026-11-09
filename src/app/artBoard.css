@@ -1,0 +1,33 @@
+/* The game's sheet stops the page scrolling under the scene; a gallery has no scene to keep. */
+.art-preview {
+  display: grid;
+  gap: var(--section-gap);
+  height: 100%;
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: var(--backdrop);
+  user-select: text;
+}
+
+.art-preview-section {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.art-preview-section > h2 {
+  margin: 0;
+  color: var(--stone-200);
+}
+
+/* At the width a window opens at, so the vouchers wrap as they will in the game. */
+.art-preview-grid {
+  grid-template-columns: repeat(auto-fill, var(--sheet-w));
+  align-items: start;
+}
+
+.art-preview-window {
+  width: var(--sheet-w);
+  padding: var(--space-4);
+  border-radius: var(--radius-pebble);
+}

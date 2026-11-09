@@ -26,6 +26,8 @@ const facts = {
   stars: 3.5,
 };
 
+const remedies = () => ['Play Area'];
+
 describe('bookingsViewOf', () => {
   it('ticks an offer against the resort right now', () => {
     const state = offered(createBookings(), offer(1, 9), 9);
@@ -50,5 +52,11 @@ describe('bookingsViewOf', () => {
     expect(view.booked[1]!.checks.map((check) => check.met)).toEqual([true, false]);
     expect(view.full).toBe(false);
     expect(view.demand).toBe(1);
+  });
+
+  it('names what to build only for a wish still open on a group yet to come', () => {
+    const state = offered(createBookings(), offer(1, 9), 9);
+    const [card] = bookingsViewOf(state, facts, 5, remedies).offers;
+    expect(card!.checks.map((check) => check.builds)).toEqual([[], ['Play Area']]);
   });
 });

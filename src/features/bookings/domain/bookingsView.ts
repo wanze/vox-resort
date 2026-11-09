@@ -5,7 +5,13 @@ import { isMet, type Requirement, type ResortFacts } from './requirements';
 export interface RequirementCheck {
   readonly requirement: Requirement;
   readonly met: boolean;
+  // What could be built to meet it; empty once met, or when it is too late to help.
+  readonly builds: readonly string[];
 }
+
+export type Remedies = (requirement: Requirement) => readonly string[];
+
+const NO_REMEDIES: Remedies = () => [];
 
 export interface OfferCard {
   readonly offer: Offer;
@@ -28,21 +34,28 @@ export interface BookingsView {
   readonly demand: number;
 }
 
-const checksOf = (
+function checksOf(
   requirements: readonly Requirement[],
   met: (requirement: Requirement) => boolean,
-): readonly RequirementCheck[] =>
-  requirements.map((requirement) => ({ requirement, met: met(requirement) }));
+  remedies: Remedies,
+): readonly RequirementCheck[] {
+  return requirements.map((requirement) => {
+    const done = met(requirement);
+    return { requirement, met: done, builds: done ? [] : remedies(requirement) };
+  });
+}
 
 // By value: a load hands back copies of what was the same object.
 const sameRequirement = (a: Requirement, b: Requirement): boolean =>
   a.kind === b.kind && a.value === b.value;
 
-// Ticked against the resort right now; a group already here is judged as it was on arrival.
+// Ticked against the resort right now; a group already here is judged as it was on arrival,
+// and is past helping with a build.
 export function bookingsViewOf(
   state: BookingsState,
   facts: ResortFacts,
   day: number,
+  remedies: Remedies = NO_REMEDIES,
 ): BookingsView {
   const now = (requirement: Requirement) => isMet(requirement, facts);
   return {
@@ -50,18 +63,20 @@ export function bookingsViewOf(
     offers: state.open.map((offer) => ({
       offer,
       people: peopleExpected(offer),
-      checks: checksOf(offer.requirements, now),
+      checks: checksOf(offer.requirements, now, remedies),
     })),
     booked: state.accepted
       .toSorted((a, b) => a.arrivesOn - b.arrivesOn)
       .map((booking) => ({
         booking,
-        checks: checksOf(
-          booking.requirements,
+        checks:
           booking.state === 'staying'
-            ? (requirement) => !booking.unmet.some((each) => sameRequirement(each, requirement))
-            : now,
-        ),
+            ? checksOf(
+                booking.requirements,
+                (requirement) => !booking.unmet.some((each) => sameRequirement(each, requirement)),
+                NO_REMEDIES,
+              )
+            : checksOf(booking.requirements, now, remedies),
       })),
     settled: state.settled,
     full: state.accepted.length >= MAX_ACCEPTED,

@@ -1,5 +1,6 @@
 import type { Settlement } from './bookings';
 import type { Offer, OfferKind } from './offers';
+import type { Requirement } from './requirements';
 
 const GROUPS: { readonly [kind in OfferKind]: readonly [string, string] } = {
   family: ['family', 'families'],
@@ -53,4 +54,13 @@ export function settlementLine(settlement: Settlement): string {
         ? `${who} were turned away at the door: no beds, no bonus.`
         : `${who} did not all find a bed: no bonus.`;
   }
+}
+
+const withArticle = (label: string): string => `${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}`;
+
+// What the player can do about a wish still open: build, or for the stars, earn them.
+export function remedyWords(requirement: Requirement, builds: readonly string[]): string {
+  if (requirement.kind === 'stars') return 'raise the rating';
+  if (builds.length === 0) return 'nothing to build for it yet';
+  return `build ${builds.map(withArticle).join(' or ')}`;
 }

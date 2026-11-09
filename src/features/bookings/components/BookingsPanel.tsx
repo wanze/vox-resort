@@ -1,96 +1,20 @@
-import { useState } from 'react';
-import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { Section } from '../../hud/components/ReportRows';
-import type { OfferRefusal } from '../domain/bookings';
-import {
-  groupWords,
-  inDays,
-  nightsWords,
-  premiumWords,
-  settlementLine,
-} from '../domain/bookingWords';
-import type { BookedRow, BookingsView, OfferCard, RequirementCheck } from '../domain/bookingsView';
-import { requirementNoun } from '../domain/requirements';
+import { groupWords, inDays, settlementLine } from '../domain/bookingWords';
+import type { BookedRow, BookingsView } from '../domain/bookingsView';
+import { leavesOn } from '../domain/stayStrip';
 import type { BookingsControls } from './bookingsControls';
+import { Checks } from './Checks';
+import { OfferVoucher } from './OfferVoucher';
+import { OperatorLogo } from './OperatorLogo';
 
 export interface BookingsPanelProps {
   readonly bookings: BookingsControls;
 }
 
-const REFUSALS: { readonly [refusal in OfferRefusal]: string } = {
-  gone: 'The offer has lapsed.',
-  full: 'The book is full: let a group leave first.',
-};
-
-const percent = (share: number): string => `${Math.round(share * 100)}%`;
-
-function Checks({ checks }: { readonly checks: readonly RequirementCheck[] }) {
-  if (checks.length === 0) return null;
-  return (
-    <ul className="bookings-checks" aria-label="Wants">
-      {checks.map(({ requirement, met }) => (
-        <li key={`${requirement.kind}:${requirement.value}`} data-met={met}>
-          <PixelIcon name={met ? 'check' : 'minus'} scale={1} />
-          <span>
-            {requirementNoun(requirement)}
-            <span className="ui-visually-hidden">{met ? ', in place' : ', missing'}</span>
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Offer({
-  card,
-  today,
-  full,
-  bookings,
-}: {
-  readonly card: OfferCard;
-  readonly today: number;
-  readonly full: boolean;
-  readonly bookings: BookingsControls;
-}) {
-  const [refusal, setRefusal] = useState<OfferRefusal | null>(null);
-  const { offer } = card;
-  return (
-    <li className="ui-panel bookings-card" data-state="offer">
-      <strong>{offer.operator}</strong>
-      <p>
-        {groupWords(offer.kind, offer.parties)}, about {card.people} guests, arriving{' '}
-        {inDays(offer.arrivesOn - today)} for {nightsWords(offer.nights)}, at{' '}
-        {premiumWords(offer.premium)} a night.
-      </p>
-      <p className="ui-note">
-        A bonus of {percent(offer.bonusShare)} of their stay if their reviews average{' '}
-        {offer.promisedStars}★. Answer {inDays(offer.expiresOn - today)}.
-      </p>
-      <Checks checks={card.checks} />
-      <div className="ui-row">
-        <button
-          type="button"
-          className="ui-button ui-button-primary"
-          disabled={full}
-          title={full ? REFUSALS.full : undefined}
-          onClick={() => setRefusal(bookings.accept(offer.id))}
-        >
-          Accept
-        </button>
-        <button type="button" className="ui-button" onClick={() => bookings.decline(offer.id)}>
-          Decline
-        </button>
-      </div>
-      {refusal ? <p role="alert">{REFUSALS[refusal]}</p> : null}
-    </li>
-  );
-}
-
 function bookedLine({ booking }: BookedRow, today: number): string {
   const group = groupWords(booking.kind, booking.parties);
   if (booking.state === 'booked') return `${inDays(booking.arrivesOn - today)}: ${group}`;
-  const leaves = booking.arrivesOn + booking.nights + 1 - today;
-  return `Here: ${groupWords(booking.kind, booking.staying.length)}, leaving ${inDays(leaves)}`;
+  return `Here: ${groupWords(booking.kind, booking.staying.length)}, leaving ${inDays(leavesOn(booking) - today)}`;
 }
 
 function Booked({ row, today }: { readonly row: BookedRow; readonly today: number }) {
@@ -98,7 +22,10 @@ function Booked({ row, today }: { readonly row: BookedRow; readonly today: numbe
   const { booking } = row;
   return (
     <li className="bookings-entry" data-state={booking.state}>
-      <strong>{booking.operator}</strong>
+      <span className="bookings-entry-head">
+        <OperatorLogo operator={booking.operator} scale={1} />
+        <strong>{booking.operator}</strong>
+      </span>
       <p>
         {bookedLine(row, today)}
         {row.checks.length > 0 ? `, ${met} of ${row.checks.length} wishes met` : ''}.
@@ -119,7 +46,7 @@ function Offers({ view, bookings }: { readonly view: BookingsView } & BookingsPa
   return (
     <ul className="bookings-list">
       {view.offers.map((card) => (
-        <Offer
+        <OfferVoucher
           key={card.offer.id}
           card={card}
           today={view.day}

@@ -5,14 +5,13 @@ const ART = Object.fromEntries(
   Object.entries(ICONS).map(([name, rows]) => [name, pixelArt(rows)]),
 ) as { readonly [name in IconName]: PixelArt };
 
-export interface PixelIconProps {
-  readonly name: IconName;
+export interface PixelPictureProps {
+  readonly art: PixelArt;
   // Whole numbers only: anything else lands pixels between screen pixels and blurs them.
   readonly scale?: number;
 }
 
-export function PixelIcon({ name, scale = 2 }: PixelIconProps) {
-  const art = ART[name];
+export function PixelPicture({ art, scale = 2 }: PixelPictureProps) {
   return (
     <svg
       className="ui-pixel-icon"
@@ -36,3 +35,12 @@ export function PixelIcon({ name, scale = 2 }: PixelIconProps) {
     </svg>
   );
 }
+
+export interface PixelIconProps {
+  readonly name: IconName;
+  readonly scale?: number;
+}
+
+export const PixelIcon = ({ name, scale = 2 }: PixelIconProps) => (
+  <PixelPicture art={ART[name]} scale={scale} />
+);

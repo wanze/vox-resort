@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OPERATORS, operatorFor } from './operators';
+import { OPERATORS, operatorFor, operatorNamed } from './operators';
 
 describe('operatorFor', () => {
   it('draws a listed operator at both ends of the roll', () => {
@@ -9,5 +9,17 @@ describe('operatorFor', () => {
 
   it('names no operator twice', () => {
     expect(new Set(OPERATORS).size).toBe(OPERATORS.length);
+  });
+});
+
+describe('operatorNamed', () => {
+  it('gives every listed operator a brand of its own', () => {
+    const brands = OPERATORS.map((name) => operatorNamed(name)?.brand);
+    expect(brands).not.toContain(undefined);
+    expect(new Set(brands).size).toBe(OPERATORS.length);
+  });
+
+  it('knows no operator it does not list', () => {
+    expect(operatorNamed('Gone Travel')).toBeNull();
   });
 });

@@ -14,7 +14,7 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import { buildCostOf, DIG_COST, landPriceOf } from '../features/catalog/domain/prices';
-import { remediesFor } from '../features/catalog/domain/remedies';
+import { remediesFor, requirementRemedies } from '../features/catalog/domain/remedies';
 import { isUnlocked, starsNeededFor } from '../features/catalog/domain/unlocks';
 import { STREAK_DAYS } from '../features/sim/domain/prestige';
 import {
@@ -3033,7 +3033,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const bookingsNow = (): BookingsView => {
     const resort = current();
-    return bookingsViewOf(resort.bookings, resortFactsAt(resort, clock.ticks), clock.day);
+    return bookingsViewOf(
+      resort.bookings,
+      resortFactsAt(resort, clock.ticks),
+      clock.day,
+      (requirement) => requirementRemedies(requirement, resort.prestige, resort.ledger.mode),
+    );
   };
 
   // What the player has heard of: a load or a new game marks what it brings as told.

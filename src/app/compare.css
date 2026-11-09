@@ -54,6 +54,31 @@ body {
   gap: 4px;
 }
 
+.compare-pages {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.compare-pages button {
+  flex: 1;
+  padding: 5px 10px;
+}
+
+.compare-art {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.compare-side[hidden],
+.compare-main[hidden] {
+  display: none;
+}
+
+.compare-pages button,
 .compare-list button,
 .compare-toolbar button {
   font: inherit;
@@ -72,11 +97,13 @@ body {
   text-align: left;
 }
 
+.compare-pages button:hover,
 .compare-list button:hover,
 .compare-toolbar button:hover {
   border-color: var(--line);
 }
 
+.compare-pages button[aria-pressed='true'],
 .compare-list button[aria-pressed='true'],
 .compare-toolbar button[aria-pressed='true'] {
   color: var(--accent-ink);
@@ -188,7 +215,8 @@ body {
     border-bottom: 1px solid var(--line);
   }
 
-  .compare-stage {
+  .compare-stage,
+  .compare-art {
     height: 70vh;
   }
 }

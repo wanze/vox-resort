@@ -1,4 +1,4 @@
-import type { Tone } from './tone';
+import type { Tone } from '../domain/tone';
 
 export interface OutOfProps {
   readonly value: number;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PixelPicture } from '../../../shared/components/PixelIcon';
 import type { OfferRefusal } from '../domain/bookings';
 import { groupWords, inDays, nightsWords, premiumWords } from '../domain/bookingWords';
-import type { OfferCard } from '../domain/bookingsView';
+import type { Answer, OfferCard } from '../domain/bookingsView';
 import { groupFigures } from '../domain/figures';
 import { operatorNamed } from '../domain/operators';
 import { stayStrip, type StayDay } from '../domain/stayStrip';
@@ -16,6 +16,8 @@ export interface OfferVoucherProps {
   readonly today: number;
   readonly full: boolean;
   readonly bookings: BookingsControls;
+  // Set once the desk has answered it: the voucher stays, stamped, in place of the buttons.
+  readonly answer?: Answer | null;
 }
 
 const REFUSALS: { readonly [refusal in OfferRefusal]: string } = {
@@ -116,7 +118,25 @@ function Head({ operator, wedding }: { readonly operator: string; readonly weddi
   );
 }
 
-function Answer({ card, today, full, bookings }: OfferVoucherProps) {
+const STAMPS: { readonly [answer in Answer]: { readonly stamp: string; readonly note: string } } = {
+  confirmed: { stamp: 'Confirmed', note: 'In the book.' },
+  declined: { stamp: 'Declined', note: 'Sent back with regrets.' },
+};
+
+function Stamped({ answer }: { readonly answer: Answer }) {
+  return (
+    <>
+      <p className="bookings-stamp bookings-stamp--answer" data-answer={answer}>
+        {STAMPS[answer].stamp}
+      </p>
+      <footer className="bookings-voucher-foot">
+        <span className="ui-note">{STAMPS[answer].note}</span>
+      </footer>
+    </>
+  );
+}
+
+function AnswerButtons({ card, today, full, bookings }: OfferVoucherProps) {
   const [refusal, setRefusal] = useState<OfferRefusal | null>(null);
   const { offer } = card;
   return (
@@ -142,13 +162,13 @@ function Answer({ card, today, full, bookings }: OfferVoucherProps) {
 }
 
 export function OfferVoucher(props: OfferVoucherProps) {
-  const { card, today } = props;
+  const { card, today, answer = null } = props;
   const { offer } = card;
   return (
     <li
       className="ui-print bookings-voucher"
       data-brand={operatorNamed(offer.operator)?.brand}
-      data-state="offer"
+      data-state={answer ?? 'offer'}
     >
       <Head operator={offer.operator} wedding={offer.kind === 'wedding'} />
       <div className="bookings-voucher-body">
@@ -157,7 +177,7 @@ export function OfferVoucher(props: OfferVoucherProps) {
         <Terms card={card} />
         <Checks checks={card.checks} />
       </div>
-      <Answer {...props} />
+      {answer === null ? <AnswerButtons {...props} /> : <Stamped answer={answer} />}
     </li>
   );
 }

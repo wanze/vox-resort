@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import { Stepper, type StepperProps } from '../../../shared/components/Stepper';
-import type { Tone } from '../../../shared/components/tone';
+import type { Tone } from '../../../shared/domain/tone';
 
 export interface SettingRowProps {
   readonly icon: IconName;

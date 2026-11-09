@@ -31,7 +31,7 @@ export const premiumWords = (premium: number): string => `+${Math.round(premium 
 
 const whole = (amount: number): string => amount.toLocaleString('en-US');
 
-const starsOf = (stars: number): string => `${stars.toFixed(1)}★`;
+export const starsOf = (stars: number): string => `${stars.toFixed(1)}★`;
 
 export function offerLine(offer: Offer, today: number): string {
   const group = groupWords(offer.kind, offer.parties);

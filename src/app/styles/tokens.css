@@ -244,6 +244,10 @@
   --shadow-print: 0 1px 1px rgb(48 32 16 / 30%), 0 5px 12px rgb(48 32 16 / 26%);
   --shadow-print-lift: 0 2px 2px rgb(48 32 16 / 28%), 0 10px 22px rgb(48 32 16 / 30%);
   --print-vignette: inset 0 0 0 1px var(--print-edge), inset 0 0 24px rgb(70 44 14 / 42%);
+  /* A till slip is whiter than the old prints; a filter shadow, so it follows the torn edge. */
+  --till-paper: #fbf7ee;
+  --shadow-till: drop-shadow(0 1px 1px rgb(48 32 16 / 30%))
+    drop-shadow(0 4px 6px rgb(48 32 16 / 22%));
   /* CSS's sepia adds about a tenth to red and green, so the brightness takes that off and more. */
   --print-fade: sepia(0.3) saturate(0.85) brightness(0.85);
   /* The season paper is a printed object, so it keeps these whatever the HUD's theme. */

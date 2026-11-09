@@ -88,8 +88,15 @@
 
 /* An offer is a printed travel voucher: paper, the operator's band, a perforated stub. */
 .bookings-voucher {
+  position: relative;
   display: grid;
   overflow: hidden;
+}
+
+/* A declined voucher fades under its stamp, so the ones still to answer stand out. */
+.bookings-voucher[data-state='declined'] > :not(.bookings-stamp) {
+  opacity: 0.55;
+  filter: grayscale(0.7);
 }
 
 .bookings-voucher-head {
@@ -295,13 +302,11 @@
   margin-top: 0.4em;
 }
 
-.bookings-checks > li[data-met='true'],
-.bookings-last[data-state='bonus'] {
+.bookings-checks > li[data-met='true'] {
   color: var(--ink-good);
 }
 
-.bookings-checks > li[data-met='false'],
-.bookings-last[data-state='failed'] {
+.bookings-checks > li[data-met='false'] {
   color: var(--ink-bad);
 }
 
@@ -322,6 +327,29 @@
   margin: 0;
 }
 
-.bookings-last {
+/* The desk's answer across the whole voucher, as a clerk stamps it: big, crooked, over the print. */
+.bookings-stamp--answer {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: auto;
   margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 4px double var(--bookings-answer);
+  border-radius: var(--radius-sm);
+  aspect-ratio: auto;
+  color: var(--bookings-answer);
+  font: 400 28px / 1 var(--font-title);
+  letter-spacing: 0.14em;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.bookings-stamp--answer[data-answer='confirmed'] {
+  --bookings-answer: var(--ink-good);
+}
+
+.bookings-stamp--answer[data-answer='declined'] {
+  --bookings-answer: var(--ink-bad);
 }

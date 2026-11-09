@@ -20,7 +20,7 @@ import type { PaperControls } from '../../newspaper/components/paperControls';
 import { MoneyRows, ReviewRows } from './DayReportPanel';
 import { PanelSummary } from './PanelSummary';
 import { Row, Rows, Section } from './ReportRows';
-import { signed } from './ledgerWords';
+import { signed } from '../../../shared/domain/till';
 import {
   bookingsLine,
   MIX_LABELS,

@@ -1,5 +1,5 @@
 import type { Reason } from '../../sim/domain/ledger';
-import type { Tone } from '../../../shared/components/tone';
+import type { Tone } from '../../../shared/domain/tone';
 
 export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   build: 'Building',
@@ -14,10 +14,6 @@ export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   renovate: 'Renovation',
   booking: 'Group bonuses',
 };
-
-// A true minus, as wide as the plus, so signed figures line up down a column.
-export const signed = (amount: number): string =>
-  amount.toLocaleString('en-US', { signDisplay: 'exceptZero' }).replace('-', '−');
 
 export const toneOf = (amount: number): Tone | undefined =>
   amount > 0 ? 'good' : amount < 0 ? 'bad' : undefined;

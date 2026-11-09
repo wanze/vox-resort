@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { accept, arrive, createBookings, offered } from './bookings';
-import { bookingsViewOf } from './bookingsView';
+import { bookingsViewOf, deskOf, type OfferCard } from './bookingsView';
 import type { Offer } from './offers';
 import { offeringOf } from './requirements';
 
@@ -58,5 +58,36 @@ describe('bookingsViewOf', () => {
     const state = offered(createBookings(), offer(1, 9), 9);
     const [card] = bookingsViewOf(state, facts, 5, remedies).offers;
     expect(card!.checks.map((check) => check.builds)).toEqual([[], ['Play Area']]);
+  });
+});
+
+describe('deskOf', () => {
+  const card = (id: number): OfferCard => ({ offer: offer(id, 9), people: 12, checks: [] });
+
+  it('keeps a voucher answered today in its place, stamped', () => {
+    const desk = deskOf(
+      [card(1), card(3)],
+      [
+        { card: card(2), answer: 'confirmed', day: 5 },
+        { card: card(4), answer: 'declined', day: 5 },
+      ],
+      5,
+    );
+    expect(desk.map((each) => [each.card.offer.id, each.answer])).toEqual([
+      [1, null],
+      [2, 'confirmed'],
+      [3, null],
+      [4, 'declined'],
+    ]);
+  });
+
+  it('clears the stamped vouchers when the day turns', () => {
+    const desk = deskOf([card(1)], [{ card: card(2), answer: 'confirmed', day: 4 }], 5);
+    expect(desk.map((each) => each.card.offer.id)).toEqual([1]);
+  });
+
+  it('shows an offer still open unstamped, whatever was answered for it', () => {
+    const desk = deskOf([card(1)], [{ card: card(1), answer: 'confirmed', day: 5 }], 5);
+    expect(desk).toEqual([{ card: card(1), answer: null }]);
   });
 });

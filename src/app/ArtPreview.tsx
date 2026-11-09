@@ -2,9 +2,17 @@ import { useMemo } from 'react';
 import { BookingsPanel } from '../features/bookings/components/BookingsPanel';
 import type { BookingsControls } from '../features/bookings/components/bookingsControls';
 import { OfferVoucher } from '../features/bookings/components/OfferVoucher';
+import { SettlementReceipt } from '../features/bookings/components/SettlementReceipt';
 import { EventCards } from '../features/events/components/EventCards';
 import { ProgrammePoster } from '../features/events/components/ProgrammePoster';
-import { sampleDesk, sampleOffers } from './artSamples';
+import { DayReceipt } from '../features/hud/components/DayReceipt';
+import {
+  sampleDays,
+  sampleDesk,
+  sampleOffers,
+  sampleSettlements,
+  sampleStamped,
+} from './artSamples';
 import { sampleFlyers, samplePoster } from './programmeSamples';
 
 // Nothing to book into: the buttons press, and the samples stay as they are.
@@ -19,6 +27,9 @@ export function ArtPreview() {
   const desk = useMemo(() => controlsOf(sampleDesk()), []);
   const flyers = useMemo(() => sampleFlyers(), []);
   const poster = useMemo(() => samplePoster(), []);
+  const stamped = useMemo(() => sampleStamped(), []);
+  const settlements = useMemo(() => sampleSettlements(), []);
+  const days = useMemo(() => sampleDays(), []);
   const { view } = offers;
   return (
     <div className="art-preview">
@@ -35,6 +46,31 @@ export function ArtPreview() {
             />
           ))}
         </ul>
+      </section>
+      <section className="art-preview-section">
+        <h2 className="ui-label">Answered offers, stamped</h2>
+        <ul className="bookings-list art-preview-grid">
+          {view
+            ? stamped.map(({ card, answer }) => (
+                <OfferVoucher
+                  key={card.offer.id}
+                  card={card}
+                  today={view.day}
+                  full={false}
+                  bookings={offers}
+                  answer={answer}
+                />
+              ))
+            : null}
+        </ul>
+      </section>
+      <section className="art-preview-section">
+        <h2 className="ui-label">Settlement receipts, one per outcome</h2>
+        <div className="art-preview-grid art-preview-sheets">
+          {settlements.map((settlement) => (
+            <SettlementReceipt key={settlement.id} settlement={settlement} />
+          ))}
+        </div>
       </section>
       <section className="art-preview-section">
         <h2 className="ui-label">The Bookings window</h2>
@@ -59,6 +95,21 @@ export function ArtPreview() {
         <h2 className="ui-label">The week's poster</h2>
         <div className="ui-panel art-preview-window">
           <ProgrammePoster days={poster} />
+        </div>
+      </section>
+      <section className="art-preview-section">
+        <h2 className="ui-label">The day report, tycoon and sandbox</h2>
+        <div className="art-preview-grid art-preview-sheets">
+          {days.map((day) => (
+            <div key={day.report.day} className="ui-panel art-preview-window">
+              <DayReceipt
+                report={day.report}
+                trend={day.trend}
+                mode={day.mode}
+                resortName="Coral Cove"
+              />
+            </div>
+          ))}
         </div>
       </section>
     </div>

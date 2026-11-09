@@ -1,0 +1,121 @@
+/* A till slip: thermal paper torn off the roll along the bottom, figures in a column. */
+.ui-receipt {
+  justify-self: center;
+  width: min(100%, 320px);
+  filter: var(--shadow-till);
+}
+
+.ui-receipt-paper {
+  --ui-receipt-tooth: 8px;
+
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--ui-receipt-tooth));
+  background: var(--grain), var(--till-paper);
+  color: var(--text);
+  font: 400 var(--size-body) / 1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+
+  /* Only the mask's alpha counts: any opaque token does for the solid part. */
+  mask:
+    linear-gradient(var(--text) 0 0) top / 100% calc(100% - var(--ui-receipt-tooth) / 2) no-repeat,
+    conic-gradient(from -45deg at 50% 100%, var(--text) 90deg, transparent 0) bottom /
+      var(--ui-receipt-tooth) calc(var(--ui-receipt-tooth) / 2) repeat-x;
+}
+
+.ui-receipt-head,
+.ui-receipt-foot {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+  text-align: center;
+}
+
+.ui-receipt-head {
+  padding-bottom: var(--space-2);
+  border-bottom: 2px dashed var(--edge);
+}
+
+.ui-receipt-head > strong {
+  font: 400 var(--size-lead) / 1.1 var(--font-title);
+}
+
+.ui-receipt-head > span,
+.ui-receipt-foot {
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.ui-receipt-foot {
+  padding-top: var(--space-2);
+  border-top: 2px dashed var(--edge);
+}
+
+.ui-receipt-lines {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.ui-receipt-lines + .ui-receipt-lines {
+  padding-top: var(--space-2);
+  border-top: 2px dashed var(--edge);
+}
+
+.ui-receipt-line {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.ui-receipt-line > dt {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.ui-receipt-line > dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.ui-receipt-note {
+  font-size: var(--size-small);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+.ui-receipt-line[data-tone='good'] > dd {
+  color: var(--ink-good);
+}
+
+.ui-receipt-line[data-tone='bad'] > dd {
+  color: var(--ink-bad);
+}
+
+.ui-receipt-line[data-total] {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 3px double var(--edge-strong);
+  font-size: var(--size-lead);
+}
+
+/* Printed bars, not a code: they only say the slip came out of a till. */
+.ui-receipt-barcode {
+  justify-self: stretch;
+  height: 16px;
+  margin-top: var(--space-1);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--text) 0 2px,
+    transparent 2px 3px,
+    var(--text) 3px 4px,
+    transparent 4px 7px,
+    var(--text) 7px 10px,
+    transparent 10px 12px
+  );
+  opacity: 0.75;
+}

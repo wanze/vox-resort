@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { againstYesterday, shortAmount, signed, toneOf } from './ledgerWords';
+import { againstYesterday, shortAmount, toneOf } from './ledgerWords';
 
 describe('againstYesterday', () => {
   it('goes up for more money in and down for more money out', () => {
@@ -19,14 +19,6 @@ describe('toneOf', () => {
     expect(toneOf(120)).toBe('good');
     expect(toneOf(-5)).toBe('bad');
     expect(toneOf(0)).toBeUndefined();
-  });
-});
-
-describe('signed', () => {
-  it('signs a figure but not zero', () => {
-    expect(signed(1240)).toBe('+1,240');
-    expect(signed(-40)).toBe('−40');
-    expect(signed(0)).toBe('0');
   });
 });
 

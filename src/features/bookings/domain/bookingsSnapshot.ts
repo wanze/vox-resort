@@ -45,6 +45,11 @@ export const settlementSchema = z.object({
   kind: kindSchema,
   parties: count,
   day,
+  // Absent in saves from before the settlement receipt.
+  nights: count.default(0),
+  premium: z.number().default(0),
+  takings: z.number().default(0),
+  bonusShare: z.number().default(0),
   meanStars: z.number().nullable(),
   promisedStars: z.number(),
   bonus: z.number(),

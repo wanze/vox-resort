@@ -22,6 +22,11 @@ export interface Settlement {
   readonly kind: OfferKind;
   readonly parties: number;
   readonly day: number;
+  readonly nights: number;
+  readonly premium: number;
+  // What the group's nights took at the premium, and the share of it the bonus was worth.
+  readonly takings: number;
+  readonly bonusShare: number;
   readonly meanStars: number | null;
   readonly promisedStars: number;
   readonly bonus: number;
@@ -144,6 +149,10 @@ function settlementOf(booking: Booking, day: number): Settlement {
     kind: booking.kind,
     parties: booking.arrived,
     day,
+    nights: booking.nights,
+    premium: booking.premium,
+    takings: Math.round(booking.expected),
+    bonusShare: booking.bonusShare,
     meanStars,
     promisedStars: booking.promisedStars,
     bonus: kept ? Math.round(booking.bonusShare * booking.expected) : 0,

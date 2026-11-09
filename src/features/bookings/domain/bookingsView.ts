@@ -83,3 +83,31 @@ export function bookingsViewOf(
     demand: demandOn(state, day),
   };
 }
+
+export type Answer = 'confirmed' | 'declined';
+
+export interface AnsweredCard {
+  readonly card: OfferCard;
+  readonly answer: Answer;
+  readonly day: number;
+}
+
+export interface DeskCard {
+  readonly card: OfferCard;
+  readonly answer: Answer | null;
+}
+
+// An answered voucher stays on the desk where it lay, stamped, until the day turns.
+export function deskOf(
+  offers: readonly OfferCard[],
+  answered: readonly AnsweredCard[],
+  day: number,
+): readonly DeskCard[] {
+  const open = new Set(offers.map((card) => card.offer.id));
+  const stamped = answered
+    .filter((each) => each.day === day && !open.has(each.card.offer.id))
+    .map(({ card, answer }) => ({ card, answer }));
+  return [...offers.map((card) => ({ card, answer: null })), ...stamped].toSorted(
+    (a, b) => a.card.offer.id - b.card.offer.id,
+  );
+}

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Tone } from '../../../shared/components/tone';
+import type { Tone } from '../../../shared/domain/tone';
 
 export interface SummaryFigure {
   readonly label: string;

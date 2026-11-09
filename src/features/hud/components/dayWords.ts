@@ -1,7 +1,7 @@
 import { reachedWords } from '../domain/prestigeWords';
 import { starsTrend, type DayReport } from '../../sim/domain/dayReport';
 import { netOf, type GameMode } from '../../sim/domain/ledger';
-import { signed } from './ledgerWords';
+import { signed } from '../../../shared/domain/till';
 import { shownDay } from '../../../shared/domain/dayNumber';
 
 export const trendArrow = (trend: number | null): string =>

@@ -9,7 +9,7 @@ import {
 import type { ShowcaseStats } from '../domain/views';
 import { PanelSummary } from './PanelSummary';
 import { SettingGroup, SettingRow } from './SettingRows';
-import type { Tone } from '../../../shared/components/tone';
+import type { Tone } from '../../../shared/domain/tone';
 import { SIGN_ICONS } from './signIcons';
 
 export interface PricesPanelProps {

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { HudReadout } from './HudReadout';
-import { shortAmount } from './ledgerWords';
+import { shortAmount } from '../domain/ledgerWords';
 import { OutOf } from '../../../shared/components/OutOf';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { PlayButton, SpeedControl, type FastNights } from './SpeedControl';

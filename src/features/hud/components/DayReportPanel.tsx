@@ -1,14 +1,14 @@
-import { tallyWords, welcomeWords } from '../../events/components/eventWords';
+import { tallyWords } from '../../events/components/eventWords';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { netOf, REASONS, type Column, type GameMode } from '../../sim/domain/ledger';
-import { trendOn, trendWords } from './dayWords';
+import { DayReceipt } from './DayReceipt';
+import { trendOn } from './dayWords';
 import { RemarkList } from './GuestsPanel';
-import { REASON_LABELS, signed, toneOf } from './ledgerWords';
-import { PanelSummary, type SummaryFigure } from './PanelSummary';
+import { REASON_LABELS } from '../domain/ledgerWords';
+import { signed } from '../../../shared/domain/till';
 import { RatingBreakdown } from './RatingControl';
 import { Row, Rows, Section } from './ReportRows';
 import { Sparkline } from './Sparkline';
-import { OutOf } from '../../../shared/components/OutOf';
 import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface DayReportPanelProps {
@@ -70,66 +70,10 @@ function Stepper({
   );
 }
 
-// The day at a glance, as the toast told it: the sections below take each figure apart.
-function DaySummary({
-  report,
-  trend,
-  mode,
-}: {
-  readonly report: DayReport;
-  readonly trend: number | null;
-  readonly mode: GameMode | null;
-}) {
-  const net = netOf(report.money);
-  const figures: SummaryFigure[] = [
-    { label: 'Rating', value: starsOf(report.rating.stars), aside: trendWords(trend) },
-    { label: 'Guests', value: whole(report.present) },
-  ];
-  if (mode === 'tycoon') figures.push({ label: 'Net', value: signed(net), tone: toneOf(net) });
-  return <PanelSummary figures={figures} />;
-}
-
 function RatingSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Rating">
       <RatingBreakdown rating={report.rating} />
-    </Section>
-  );
-}
-
-function WelcomedRow({ report }: { readonly report: DayReport }) {
-  const words = welcomeWords(report);
-  if (words === null) return null;
-  return (
-    <Row label="Welcomed">
-      <dd>{words}</dd>
-    </Row>
-  );
-}
-
-function GuestsSection({ report }: { readonly report: DayReport }) {
-  return (
-    <Section title="Guests">
-      <Rows>
-        <Row label="Arrived">
-          <dd>{whole(report.arrived)}</dd>
-        </Row>
-        {report.turnedAway ? (
-          <Row label="Turned away">
-            <dd>{whole(report.turnedAway)}</dd>
-          </Row>
-        ) : null}
-        <WelcomedRow report={report} />
-        <Row label="Checked out">
-          <dd>{whole(report.left)}</dd>
-        </Row>
-        <Row label="Beds">
-          <dd>
-            <OutOf value={report.beds.taken} total={report.beds.total} />
-          </dd>
-        </Row>
-        <ReviewRows reviews={report.reviews} meanReview={report.meanReview} />
-      </Rows>
     </Section>
   );
 }
@@ -177,16 +121,6 @@ export function MoneyRows({
         <dd>{whole(balance)}</dd>
       </Row>
     </>
-  );
-}
-
-function MoneySection({ report }: { readonly report: DayReport }) {
-  return (
-    <Section title="Money">
-      <Rows>
-        <MoneyRows money={report.money} balance={report.balance} />
-      </Rows>
-    </Section>
   );
 }
 
@@ -295,10 +229,13 @@ export function DayReportPanel({ history, shown, onShow, mode, resortName }: Day
   return (
     <div className="hud-report">
       <Stepper history={history} at={at} onShow={onShow} resortName={resortName} />
-      <DaySummary report={report} trend={trendOn(history, report.day)} mode={mode} />
+      <DayReceipt
+        report={report}
+        trend={trendOn(history, report.day)}
+        mode={mode}
+        resortName={resortName}
+      />
       <RatingSection report={report} />
-      <GuestsSection report={report} />
-      {mode === 'tycoon' ? <MoneySection report={report} /> : null}
       <EventsSection report={report} />
       <PhotosSection report={report} />
       <SaidSection report={report} />

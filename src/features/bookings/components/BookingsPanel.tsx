@@ -1,11 +1,19 @@
+import { useState } from 'react';
 import { Section } from '../../hud/components/ReportRows';
-import { groupWords, inDays, settlementLine } from '../domain/bookingWords';
-import type { BookedRow, BookingsView } from '../domain/bookingsView';
+import { groupWords, inDays } from '../domain/bookingWords';
+import {
+  deskOf,
+  type AnsweredCard,
+  type BookedRow,
+  type BookingsView,
+  type OfferCard,
+} from '../domain/bookingsView';
 import { leavesOn } from '../domain/stayStrip';
 import type { BookingsControls } from './bookingsControls';
 import { Checks } from './Checks';
 import { OfferVoucher } from './OfferVoucher';
 import { OperatorLogo } from './OperatorLogo';
+import { SettlementReceipt } from './SettlementReceipt';
 
 export interface BookingsPanelProps {
   readonly bookings: BookingsControls;
@@ -36,22 +44,42 @@ function Booked({ row, today }: { readonly row: BookedRow; readonly today: numbe
 }
 
 function Offers({ view, bookings }: { readonly view: BookingsView } & BookingsPanelProps) {
-  if (view.offers.length === 0) {
+  const [answered, setAnswered] = useState<readonly AnsweredCard[]>([]);
+  const desk = deskOf(view.offers, answered, view.day);
+  if (desk.length === 0) {
     return (
       <p className="ui-note">
         Nothing on the desk. Tour operators write every few days while the season runs.
       </p>
     );
   }
+  const stamp = (offerCard: OfferCard, answer: AnsweredCard['answer']) =>
+    setAnswered((before) => [...before, { card: offerCard, answer, day: view.day }]);
+  const openCard = (id: number) => view.offers.find((each) => each.offer.id === id);
+  const stamping: BookingsControls = {
+    view: bookings.view,
+    accept: (id) => {
+      const refusal = bookings.accept(id);
+      const accepted = openCard(id);
+      if (refusal === null && accepted) stamp(accepted, 'confirmed');
+      return refusal;
+    },
+    decline: (id) => {
+      const declined = openCard(id);
+      bookings.decline(id);
+      if (declined) stamp(declined, 'declined');
+    },
+  };
   return (
     <ul className="bookings-list">
-      {view.offers.map((card) => (
+      {desk.map(({ card, answer }) => (
         <OfferVoucher
           key={card.offer.id}
           card={card}
           today={view.day}
           full={view.full}
-          bookings={bookings}
+          bookings={stamping}
+          answer={answer}
         />
       ))}
     </ul>
@@ -77,9 +105,7 @@ function LastGroup({ settled }: { readonly settled: BookingsView['settled'] }) {
   if (last === undefined) return null;
   return (
     <Section title="Last group">
-      <p className="bookings-last" data-state={last.outcome}>
-        {settlementLine(last)}
-      </p>
+      <SettlementReceipt settlement={last} />
     </Section>
   );
 }

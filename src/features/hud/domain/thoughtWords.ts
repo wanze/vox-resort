@@ -53,6 +53,7 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   crowded: () => 'The paths were packed',
   promised: (subject) =>
     subject ? `They promised us ${subject}` : 'They promised us more than this',
+  wedding: () => 'What a wedding!',
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -84,6 +85,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   noisy: 'Noise',
   crowded: 'Crowds',
   promised: 'Promises',
+  wedding: 'Wedding',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

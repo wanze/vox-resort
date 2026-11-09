@@ -21,6 +21,7 @@ import {
 import { dimGlow, glowOn } from './glow';
 import {
   ANNOUNCE_LEAD,
+  ceremoniesOn,
   CHANGEOVER,
   dropPast,
   EMPTY_PROGRAMME,
@@ -421,6 +422,23 @@ const onTheWay = (run: EventRun, invitation: Invitation): number => {
   return coming;
 };
 
+const NO_GROUPS: ReadonlySet<number> = new Set();
+
+// The groups whose own ceremony is on about then: another show must not take them away from it.
+function ceremoniesMeeting(state: EventsState, occurrence: Occurrence): ReadonlySet<number> {
+  if (occurrence.group !== undefined) return NO_GROUPS;
+  let groups: Set<number> | null = null;
+  const others = [
+    ...ceremoniesOn(state.programme, occurrence.day),
+    ...state.runs.map((each) => each.occurrence),
+  ];
+  for (const other of others) {
+    if (other.group === undefined || !meets(other, occurrence)) continue;
+    (groups ??= new Set()).add(other.group);
+  }
+  return groups ?? NO_GROUPS;
+}
+
 // At the announcement and topped up at the start. A party invited to any show is never asked
 // again: it would be sent to the second and still be kept up for the first.
 export function inviteAudience(state: EventsState, run: EventRun, invitation: Invitation): void {
@@ -431,8 +449,13 @@ export function inviteAudience(state: EventsState, run: EventRun, invitation: In
   for (const each of state.runs) {
     for (const party of each.parties) invited.add(party);
   }
-  const free = invitation.free().filter((party) => !invited.has(party.party));
   const { occurrence } = run;
+  const busy = ceremoniesMeeting(state, occurrence);
+  const free = invitation
+    .free()
+    .filter(
+      (party) => !invited.has(party.party) && (party.group === undefined || !busy.has(party.group)),
+    );
   const picked = pickAudience({
     parties: free,
     kind: kindOf(occurrence),
@@ -440,6 +463,7 @@ export function inviteAudience(state: EventsState, run: EventRun, invitation: In
     day: occurrence.day,
     room,
     salt: run.salt,
+    group: occurrence.group,
   });
   // On the run before the invitation, so a party invited where it already is can be told the end.
   for (const party of picked) {

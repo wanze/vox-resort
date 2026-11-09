@@ -1,3 +1,4 @@
+import { possessive } from '../../bookings/domain/bookingWords';
 import type { EventNews } from '../../hud/domain/news';
 import type { DayReport, EventTally, WelcomeGap } from '../../sim/domain/dayReport';
 import type { CallOff } from '../domain/eventRuns';
@@ -26,6 +27,12 @@ const REFUSAL_WORDS: { readonly [refusal in BookingRefusal]: string } = {
 
 const at = (news: EventNews): string => (news.venue ? ` at ${news.venue}` : '');
 
+// A group's own show is told as theirs: "Sunshine Tours' wedding".
+const titleOf = (news: EventNews): string =>
+  news.operator === undefined
+    ? news.label
+    : `${possessive(news.operator)} ${news.label.toLowerCase()}`;
+
 const reasonWords = (news: EventNews): string => CALL_OFF_WORDS[news.reason ?? 'weather'];
 
 function whenWords(minute: number): string {
@@ -41,20 +48,26 @@ const SHELTERED_FROM: { readonly [weather in Weather]: string } = {
 };
 
 const movedWords = (news: EventNews): string => {
-  const when = whenWords(minuteOf(news.start)).toLowerCase();
   const to = news.venue ? ` moves to ${news.venue}` : ' moves';
-  return `${SHELTERED_FROM[news.weather ?? 'rain']}: ${when}'s ${news.label}${to}`;
+  const weather = SHELTERED_FROM[news.weather ?? 'rain'];
+  if (news.operator !== undefined) return `${weather}: ${titleOf(news)}${to}`;
+  const when = whenWords(minuteOf(news.start)).toLowerCase();
+  return `${weather}: ${when}'s ${news.label}${to}`;
 };
 
 const LINES: { readonly [kind in EventNews['kind']]: (news: EventNews) => string } = {
   announce: (news) => {
     if (news.movedFrom !== undefined) return movedWords(news);
     const minute = minuteOf(news.start);
-    return `${whenWords(minute)} ${clockWords(minute)}: ${news.label}${at(news)}`;
+    return `${whenWords(minute)} ${clockWords(minute)}: ${titleOf(news)}${at(news)}`;
   },
-  'call-off': (news) => `${news.label}${at(news)} called off: ${reasonWords(news)}`,
-  postpone: (news) => `${news.label} moved to tomorrow: ${reasonWords(news)}`,
-  tonight: (news) => `${news.label} tonight at ${clockWords(minuteOf(news.start))}`,
+  'call-off': (news) => `${titleOf(news)}${at(news)} called off: ${reasonWords(news)}`,
+  postpone: (news) => `${titleOf(news)} moved to tomorrow: ${reasonWords(news)}`,
+  tonight: (news) => `${titleOf(news)} tonight at ${clockWords(minuteOf(news.start))}`,
+  held: (news) =>
+    news.operator === undefined
+      ? `The ${news.label.toLowerCase()} party said yes${at(news)}`
+      : `${titleOf(news)} party said yes${at(news)}`,
 };
 
 export const eventNewsLine = (news: EventNews): string => LINES[news.kind](news);

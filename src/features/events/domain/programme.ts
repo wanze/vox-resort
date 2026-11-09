@@ -24,6 +24,8 @@ export interface Booking {
   // A BUILT_INS id: such a booking is moved or switched off, never removed.
   readonly builtIn?: string;
   readonly off?: boolean;
+  // The tour operator's booking a ceremony is held for: moved like a built-in, never removed.
+  readonly group?: number;
 }
 
 export interface Programme {
@@ -40,6 +42,7 @@ export interface Occurrence {
   readonly start: number;
   readonly end: number;
   readonly tier?: string;
+  readonly group?: number;
 }
 
 export interface BuiltIn {
@@ -67,6 +70,11 @@ export interface BookingResult {
 export const BUILT_INS: readonly BuiltIn[] = [
   { id: 'welcome', kind: 'welcome', repeat: { every: 'day' }, start: 10 * 60 },
 ];
+
+const LONGEST_OWN_LEAD = Math.max(
+  0,
+  ...Object.values(EVENT_KINDS).map((kind) => kind.announceLead ?? 0),
+);
 
 export const EMPTY_PROGRAMME: Programme = { bookings: [], nextId: 1 };
 
@@ -142,8 +150,59 @@ export function book(programme: Programme, draft: BookingDraft, now: number): Bo
 
 export function unbook(programme: Programme, id: number): Programme {
   const booking = programme.bookings.find((each) => each.id === id);
-  if (!booking || booking.builtIn !== undefined) return programme;
+  if (!booking || booking.builtIn !== undefined || booking.group !== undefined) return programme;
   return { ...programme, bookings: programme.bookings.filter((each) => each.id !== id) };
+}
+
+export interface Ceremony {
+  readonly group: number;
+  readonly day: number;
+  readonly site: EventSite;
+  readonly start: number;
+}
+
+export const ceremonyOf = (programme: Programme, group: number): Booking | null =>
+  programme.bookings.find((each) => each.group === group) ?? null;
+
+// Past the player's own refusal, as a built-in is: the kind is never offered to book.
+export function withCeremony(programme: Programme, ceremony: Ceremony): Programme {
+  if (ceremonyOf(programme, ceremony.group)) return programme;
+  const booking: Booking = {
+    id: programme.nextId,
+    kind: 'wedding',
+    site: ceremony.site,
+    repeat: { every: 'once', day: ceremony.day },
+    start: ceremony.start,
+    group: ceremony.group,
+  };
+  return { bookings: [...programme.bookings, booking], nextId: programme.nextId + 1 };
+}
+
+export function withoutCeremony(programme: Programme, group: number): Programme {
+  const bookings = programme.bookings.filter((each) => each.group !== group);
+  return bookings.length === programme.bookings.length ? programme : { ...programme, bookings };
+}
+
+// The kind's own start on the best stage, else the nearest start free there, else the next
+// stage; null when every stage is booked up through the kind's hours.
+export function ceremonySlot(
+  programme: Programme,
+  day: number,
+  stages: readonly EventSite[],
+): { readonly site: EventSite; readonly start: number } | null {
+  const kind = EVENT_KINDS.wedding;
+  const starts: number[] = [];
+  for (let minute = kind.earliest; minute <= kind.latest; minute += START_STEP) {
+    starts.push(minute);
+  }
+  starts.sort((a, b) => Math.abs(a - kind.start) - Math.abs(b - kind.start) || a - b);
+  for (const site of stages) {
+    for (const start of starts) {
+      const draft: BookingDraft = { kind: 'wedding', site, repeat: { every: 'once', day }, start };
+      if (refusalOf(draft, programme.bookings) === null) return { site, start };
+    }
+  }
+  return null;
 }
 
 export function rebook(programme: Programme, id: number, change: BookingChange): BookingResult {
@@ -270,6 +329,7 @@ function occurrenceOf(booking: Booking, day: number): Occurrence {
     start,
     end: start + EVENT_KINDS[booking.kind].duration,
     ...(booking.tier === undefined ? {} : { tier: booking.tier }),
+    ...(booking.group === undefined ? {} : { group: booking.group }),
   };
 }
 
@@ -280,7 +340,18 @@ export function occurrencesOn(programme: Programme, day: number): readonly Occur
     .toSorted((a, b) => a.start - b.start || a.booking - b.booking);
 }
 
+// A group's ceremonies alone, asked on every invitation, so the other bookings are never built.
+export function ceremoniesOn(programme: Programme, day: number): readonly Occurrence[] {
+  const held: Occurrence[] = [];
+  for (const booking of programme.bookings) {
+    if (booking.group === undefined || booking.off === true) continue;
+    if (occursOn(booking.repeat, day)) held.push(occurrenceOf(booking, day));
+  }
+  return held;
+}
+
 // Inclusive at both ends, as the frames hand their ticks over: [from, to] then [to + 1, ...].
+// `lead` for every kind with no announceLead of its own.
 export function eventsDue(
   programme: Programme,
   from: number,
@@ -289,10 +360,11 @@ export function eventsDue(
 ): readonly Occurrence[] {
   const due: Occurrence[] = [];
   if (to < from) return due;
-  const last = Math.floor((to + lead) / TICKS_PER_DAY);
+  const longest = Math.max(lead, LONGEST_OWN_LEAD);
+  const last = Math.floor((to + longest) / TICKS_PER_DAY);
   for (let day = Math.floor((from + lead) / TICKS_PER_DAY); day <= last; day++) {
     for (const occurrence of occurrencesOn(programme, day)) {
-      const at = occurrence.start - lead;
+      const at = occurrence.start - (EVENT_KINDS[occurrence.kind].announceLead ?? lead);
       if (at >= from && at <= to) due.push(occurrence);
     }
   }

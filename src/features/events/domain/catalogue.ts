@@ -17,6 +17,7 @@ export const EVENT_KIND_IDS = [
   'welcome',
   'fireworks',
   'bonfire',
+  'wedding',
 ] as const;
 
 export type EventKindId = (typeof EVENT_KIND_IDS)[number];
@@ -46,6 +47,8 @@ export interface AudienceParty {
   readonly arrivedOn: number;
   // Has a wheelchair along, so needs a way in without steps.
   readonly stepFree?: boolean;
+  // The tour operator's booking the party came with.
+  readonly group?: number;
 }
 
 export interface EventKind {
@@ -85,6 +88,10 @@ export interface EventKind {
   readonly hearth?: boolean;
   // Held only on a stage that welcomes, or at a reception's lobby as something smaller.
   readonly greeting?: { readonly lobbyLabel: string; readonly lobbyLift: number };
+  // Only the parties of the occurrence's group are invited; nobody else is drawn to it.
+  readonly private?: boolean;
+  // Minutes before the start it is announced and its guests are called, when not ANNOUNCE_LEAD.
+  readonly announceLead?: number;
 }
 
 const HOUR = 60;
@@ -390,6 +397,32 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     praise: 'great-show',
     audience: (party) => party.stepFree !== true,
     hearth: true,
+  },
+  // Scheduled by the sim for a wedding group, never by the player; the operator pays for it, and
+  // its memory outweighs any show's, so a ceremony that went well makes the bonus likely.
+  wedding: {
+    id: 'wedding',
+    label: 'Wedding',
+    blurb: 'A couple says yes on the stage, their guests around them.',
+    sites: ['stage'],
+    duration: 1 * HOUR,
+    earliest: 11 * HOUR,
+    latest: 18 * HOUR,
+    start: 15 * HOUR,
+    host: 'animator',
+    fee: 0,
+    appeal: { family: 1, couple: 1, friends: 1, solo: 1 },
+    openAir: true,
+    weather: 'shelter',
+    fun: 0.6,
+    lift: 0.2,
+    memory: 0.1,
+    litter: 0.3,
+    praise: 'wedding',
+    builtIn: true,
+    private: true,
+    // A party is free all at once only now and then, and the walk across a big plot takes an hour.
+    announceLead: 2 * HOUR,
   },
 };
 

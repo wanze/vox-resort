@@ -1,3 +1,4 @@
+import { operatorNamed, type Brand } from '../../bookings/domain/operators';
 import { familyOf, signOf, type SignKind } from '../../catalog/domain/objectTypes';
 import type { GameMode } from '../../sim/domain/ledger';
 import { eventRoomOf, type Venue } from '../../sim/domain/venues';
@@ -77,6 +78,8 @@ export interface ProgrammeFacts {
   readonly fireRoom: number;
   // Receptions that can hold a welcome drink; a tab shows only one that holds it.
   readonly lobbies?: readonly Venue[];
+  // The tour operator of each group staying, by booking id, for its ceremony's chip.
+  readonly operators?: ReadonlyMap<number, string>;
 }
 
 export interface SiteTab {
@@ -124,6 +127,10 @@ export interface Chip {
   readonly canSwitch: boolean;
   // Every site its kind may be held at, its own included; empty when there is nowhere else.
   readonly sites: readonly ChipSite[];
+  // A group's ceremony: moved like a built-in, but never switched off or removed.
+  readonly ceremony?: true;
+  // The colours of the tour operator a group's ceremony is held for.
+  readonly brand?: Brand;
 }
 
 export interface RepeatChoice {
@@ -231,6 +238,39 @@ function sitesFor(
   return choices.length > 1 ? choices : [];
 }
 
+function operatorLabel(chip: Chip, operator: string | undefined): Pick<Chip, 'label' | 'brand'> {
+  if (operator === undefined) return { label: chip.label };
+  const brand = operatorNamed(operator)?.brand;
+  return { label: `${chip.label} · ${operator}`, ...(brand === undefined ? {} : { brand }) };
+}
+
+// A group's ceremony is named for its operator and moved like a built-in, never switched off.
+function chipOf(facts: ProgrammeFacts, booking: Booking, tabs: readonly SiteTab[]): Chip {
+  const { programme } = facts;
+  const chip: Chip = {
+    booking: booking.id,
+    minute: booking.start,
+    time: clockWords(booking.start),
+    label: labelOf(EVENT_KINDS[booking.kind], booking.tier, booking.site.kind),
+    repeat: repeatWords(booking.repeat),
+    fee: bookedFee(feeOf(EVENT_KINDS[booking.kind], booking.tier, facts.mode)),
+    builtIn: booking.builtIn !== undefined || booking.group !== undefined,
+    off: booking.off === true,
+    earlier: movable(programme, booking.id, booking.start - START_STEP),
+    later: movable(programme, booking.id, booking.start + START_STEP),
+    canSwitch:
+      booking.builtIn !== undefined &&
+      switchBuiltIn(programme, booking.id, booking.off === true) !== programme,
+    sites: sitesFor(programme, booking, tabs),
+  };
+  if (booking.group === undefined) return chip;
+  return {
+    ...chip,
+    ...operatorLabel(chip, facts.operators?.get(booking.group)),
+    ceremony: true,
+  };
+}
+
 // Switched-off bookings too, so a built-in can be switched back on from its day.
 function chipsOn(
   facts: ProgrammeFacts,
@@ -242,22 +282,7 @@ function chipsOn(
   return programme.bookings
     .filter((booking) => siteKey(booking.site) === key && occursOn(booking.repeat, day))
     .toSorted((a, b) => a.start - b.start || a.id - b.id)
-    .map((booking) => ({
-      booking: booking.id,
-      minute: booking.start,
-      time: clockWords(booking.start),
-      label: labelOf(EVENT_KINDS[booking.kind], booking.tier, booking.site.kind),
-      repeat: repeatWords(booking.repeat),
-      fee: bookedFee(feeOf(EVENT_KINDS[booking.kind], booking.tier, facts.mode)),
-      builtIn: booking.builtIn !== undefined,
-      off: booking.off === true,
-      earlier: movable(programme, booking.id, booking.start - START_STEP),
-      later: movable(programme, booking.id, booking.start + START_STEP),
-      canSwitch:
-        booking.builtIn !== undefined &&
-        switchBuiltIn(programme, booking.id, booking.off === true) !== programme,
-      sites: sitesFor(programme, booking, tabs),
-    }));
+    .map((booking) => chipOf(facts, booking, tabs));
 }
 
 function minutesIn(kind: EventKind, part: DayPart): readonly number[] {

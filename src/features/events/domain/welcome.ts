@@ -30,6 +30,28 @@ export function latecomersFor(call: LateCall): readonly AudienceParty[] {
   return left.length === 0 ? [] : partiesAmong(call.guests, left, call.isFree, call.urgency);
 }
 
+export interface GroupCall {
+  readonly run: EventRun;
+  // The parties of the run's group still staying.
+  readonly parties: readonly number[];
+  readonly guests: Guests;
+  readonly isFree: (person: number) => boolean;
+  readonly urgency: (person: number) => number;
+  readonly now: number;
+}
+
+// A group's own ceremony asks its parties every frame, not only twice: a party is free only now
+// and then, and nobody else would take its seat.
+export function groupCallFor(call: GroupCall): readonly AudienceParty[] {
+  const { run, now } = call;
+  const { group } = run.occurrence;
+  if (group === undefined || now >= run.occurrence.end - LATE_CALL_CUTOFF) return [];
+  const asked = new Set(run.parties);
+  const left = call.parties.filter((party) => !asked.has(party));
+  if (left.length === 0) return [];
+  return partiesAmong(call.guests, left, call.isFree, call.urgency, () => group);
+}
+
 // For a show the weather moves: every stage, the biggest first, then the lobbies, where only a
 // greeting is ever held.
 export function shelterSitesOf(venues: readonly Venue[]): readonly EventSite[] {

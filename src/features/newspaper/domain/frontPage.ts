@@ -1,4 +1,4 @@
-import { settlementLine } from '../../bookings/domain/bookingWords';
+import { possessive, settlementLine } from '../../bookings/domain/bookingWords';
 import { shownDay } from '../../../shared/domain/dayNumber';
 import { clockWords } from '../../events/domain/week';
 import type { PartyKind } from '../../guests/domain/parties';
@@ -300,6 +300,19 @@ const tourGroupsBrief = ({ settled = [] }: Edition): readonly Brief[] =>
         },
       ];
 
+// The latest wedding held on the season's stages: one is a story, a second is the same story.
+function weddingBrief({ settled = [] }: Edition): readonly Brief[] {
+  const wedding = settled.find((each) => each.ceremonyAt !== undefined);
+  if (wedding?.ceremonyAt === undefined) return [];
+  const glowing = wedding.outcome === 'bonus' ? ', and the operator paid its bonus' : '';
+  return [
+    {
+      title: 'Wedding bells',
+      text: `${possessive(wedding.operator)} wedding party said yes on ${wedding.ceremonyAt}${glowing}.`,
+    },
+  ];
+}
+
 function briefsOf(edition: Edition): readonly Brief[] {
   const { report } = edition;
   const briefs: Brief[] = [];
@@ -327,7 +340,7 @@ function briefsOf(edition: Edition): readonly Brief[] {
       text: `The busiest day was day ${shownDay(report.busiest.day)}, with ${whole(report.busiest.value)} guests on the plot.`,
     });
   }
-  briefs.push(...tourGroupsBrief(edition));
+  briefs.push(...weddingBrief(edition), ...tourGroupsBrief(edition));
   briefs.push({
     title: 'Comings and goings',
     text: `${whole(report.arrived)} guests arrived and ${whole(report.left)} checked out over ${whole(report.days)} days.`,

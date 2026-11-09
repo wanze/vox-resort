@@ -19,10 +19,22 @@ export interface OfferCard {
   readonly checks: readonly RequirementCheck[];
 }
 
+// A wedding group's ceremony still to come; `start` is a minute of the day.
+export interface CeremonyWhen {
+  readonly day: number;
+  readonly start: number;
+  readonly venue: string;
+}
+
 export interface BookedRow {
   readonly booking: Booking;
   readonly checks: readonly RequirementCheck[];
+  readonly ceremony?: CeremonyWhen;
 }
+
+export type CeremonyOf = (booking: number) => CeremonyWhen | null;
+
+const NO_CEREMONIES: CeremonyOf = () => null;
 
 export interface BookingsView {
   readonly day: number;
@@ -49,6 +61,22 @@ function checksOf(
 const sameRequirement = (a: Requirement, b: Requirement): boolean =>
   a.kind === b.kind && a.value === b.value;
 
+function bookedRowOf(
+  booking: Booking,
+  now: (requirement: Requirement) => boolean,
+  ceremonyOf: CeremonyOf,
+  remedies: Remedies,
+): BookedRow {
+  if (booking.state !== 'staying') {
+    return { booking, checks: checksOf(booking.requirements, now, remedies) };
+  }
+  const arrived = (requirement: Requirement) =>
+    !booking.unmet.some((each) => sameRequirement(each, requirement));
+  const checks = checksOf(booking.requirements, arrived, NO_REMEDIES);
+  const ceremony = ceremonyOf(booking.id);
+  return ceremony === null ? { booking, checks } : { booking, checks, ceremony };
+}
+
 // Ticked against the resort right now; a group already here is judged as it was on arrival,
 // and is past helping with a build.
 export function bookingsViewOf(
@@ -56,6 +84,7 @@ export function bookingsViewOf(
   facts: ResortFacts,
   day: number,
   remedies: Remedies = NO_REMEDIES,
+  ceremonyOf: CeremonyOf = NO_CEREMONIES,
 ): BookingsView {
   const now = (requirement: Requirement) => isMet(requirement, facts);
   return {
@@ -67,17 +96,7 @@ export function bookingsViewOf(
     })),
     booked: state.accepted
       .toSorted((a, b) => a.arrivesOn - b.arrivesOn)
-      .map((booking) => ({
-        booking,
-        checks:
-          booking.state === 'staying'
-            ? checksOf(
-                booking.requirements,
-                (requirement) => !booking.unmet.some((each) => sameRequirement(each, requirement)),
-                NO_REMEDIES,
-              )
-            : checksOf(booking.requirements, now, remedies),
-      })),
+      .map((booking) => bookedRowOf(booking, now, ceremonyOf, remedies)),
     settled: state.settled,
     full: state.accepted.length >= MAX_ACCEPTED,
     demand: demandOn(state, day),

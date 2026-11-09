@@ -32,6 +32,8 @@ export const CATEGORY_OF: { readonly [kind in EventKindId]: FlyerCategory } = {
   welcome: 'welcome',
   fireworks: 'fireworks',
   bonfire: 'bonfire',
+  // Its own flyer, in the operator's colours, is still to come.
+  wedding: 'welcome',
 };
 
 // Each is inked for its own flyer's face, not the paper: the poster sets them on that face too.

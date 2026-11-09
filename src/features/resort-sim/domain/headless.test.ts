@@ -9,8 +9,10 @@ import { netOf } from '../../sim/domain/ledger';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { weatherOn } from '../../sim/domain/weather';
 import { accept, offered } from '../../bookings/domain/bookings';
+import { ceremonyOf, withoutCeremony } from '../../events/domain/programme';
+import { stayCount } from '../../sim/domain/thoughts';
 import { WEATHER_SEED } from './eventSteps';
-import { createHeadlessGame, framesPerTickAt, simNowAt } from './headless';
+import { createHeadlessGame, framesPerTickAt, simNowAt, type HeadlessGame } from './headless';
 
 const quiet = { morning: () => {}, hourly: () => {}, heard: () => {} };
 
@@ -150,4 +152,84 @@ describe('a group booked on the reference resort', () => {
     expect(paid.money.booking).toBe(settled!.bonus);
     // A week of the reference resort: about 11s alone, three times that beside the full suite.
   }, 90_000);
+});
+
+const guestsOf = (game: HeadlessGame, booked: boolean): number[] => {
+  const { guests, bookings } = game.state;
+  const people: number[] = [];
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1) continue;
+    if (bookings.partyOf.has(guests.party[person]!) === booked) people.push(person);
+  }
+  return people;
+};
+
+describe('a wedding booked on the reference resort', () => {
+  const weddingGame = () => {
+    const world = referenceWorldOf(referenceJson);
+    const plan = planOfWorld(world);
+    const { placements, props, paths, rails, tilesX, tilesZ } = world;
+    const game = createHeadlessGame({
+      plan,
+      plot: {
+        layout: { placements, props, paths, rails, tilesX, tilesZ },
+        placements: [...placements],
+        props: [...props],
+        paths: [...paths],
+        rails: [...rails],
+      },
+      population: crowdSizeForOwned(ownedArea(plan.land ?? null, plan)),
+      startTick: 8 * 60,
+      forcedWeather: 'clear',
+    });
+    const offer = {
+      id: 1,
+      operator: 'Sunshine Tours',
+      kind: 'wedding' as const,
+      parties: 4,
+      arrivesOn: 3,
+      nights: 2,
+      premium: 0.5,
+      promisedStars: 4,
+      bonusShare: 0.4,
+      requirements: [{ kind: 'flag' as const, value: 'stage' as const }],
+      expiresOn: 1,
+    };
+    game.state.bookings = accept(offered(game.state.bookings, offer, 99), 1).state;
+    const play = (to: number) =>
+      game.play(to, { framesPerTick: framesPerTickAt('normal'), hooks: quiet });
+    return { game, play };
+  };
+
+  it('holds the ceremony for the party alone, and settles better than a group without one', () => {
+    const held = weddingGame();
+    held.play(3 * TICKS_PER_DAY + CHECK_IN_TICK);
+    expect(ceremonyOf(held.game.state.events.programme, 1)).toMatchObject({
+      repeat: { every: 'once', day: 4 },
+      start: 15 * 60,
+    });
+    held.play(4 * TICKS_PER_DAY + 17 * 60);
+    const { thoughts } = held.game.state;
+    const party = guestsOf(held.game, true);
+    const said = party.filter((person) => stayCount(thoughts, person, 'wedding') > 0);
+    expect(said.length).toBeGreaterThan(0);
+    for (const person of guestsOf(held.game, false)) {
+      expect(stayCount(thoughts, person, 'wedding')).toBe(0);
+    }
+    held.play(7 * TICKS_PER_DAY + CHECK_IN_TICK);
+    const [withOne] = held.game.state.bookings.settled;
+
+    const none = weddingGame();
+    none.play(3 * TICKS_PER_DAY + CHECK_IN_TICK);
+    none.game.state.events.programme = withoutCeremony(none.game.state.events.programme, 1);
+    none.play(7 * TICKS_PER_DAY + CHECK_IN_TICK);
+    const [without] = none.game.state.bookings.settled;
+    expect(withOne).toMatchObject({ id: 1 });
+    expect(without).toMatchObject({ id: 1 });
+    expect(withOne!.meanStars!).toBeGreaterThan(without!.meanStars!);
+    expect(withOne!.outcome).toBe('bonus');
+    expect(without!.outcome).toBe('missed');
+    expect(held.game.state.events.programme.bookings.some((each) => each.group === 1)).toBe(false);
+    // Two runs of four days each of the reference resort.
+  }, 120_000);
 });

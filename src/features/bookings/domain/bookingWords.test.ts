@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Settlement } from './bookings';
 import {
+  ceremonyLine,
   groupWords,
   inDays,
   offerLine,
@@ -25,6 +26,16 @@ const settlement = (over: Partial<Settlement>): Settlement => ({
   bonus: 3_200,
   outcome: 'bonus',
   ...over,
+});
+
+describe('ceremonyLine', () => {
+  it('tells when and where a wedding group says yes', () => {
+    const ceremony = { day: 5, start: 15 * 60, venue: 'Plaza Stage' };
+    expect(ceremonyLine(ceremony, 4)).toBe('Ceremony tomorrow at 15:00 on Plaza Stage.');
+    expect(ceremonyLine({ ...ceremony, start: 13.5 * 60 }, 5)).toBe(
+      'Ceremony today at 13:30 on Plaza Stage.',
+    );
+  });
 });
 
 describe('booking words', () => {

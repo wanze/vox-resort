@@ -3,7 +3,11 @@ import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   ANNOUNCE_LEAD,
   book,
+  BUILT_INS,
   bookingRefusal,
+  ceremoniesOn,
+  ceremonyOf,
+  ceremonySlot,
   EMPTY_PROGRAMME,
   eventOn,
   eventsDue,
@@ -16,10 +20,13 @@ import {
   toNewStage,
   unbook,
   withBuiltIns,
+  withCeremony,
+  withoutCeremony,
   type BookingDraft,
   type BuiltIn,
   type EventSite,
   type Programme,
+  siteKey,
 } from './programme';
 import { tickAt } from './week';
 
@@ -212,6 +219,94 @@ describe('keepStanding', () => {
     const programme = withBuiltIns(booked(draft(), draft({ site: OTHER })), [WELCOME], [STAGE]);
     const kept = keepStanding(programme, new Set([OTHER.venue]));
     expect(kept.bookings.map((each) => each.id)).toEqual([2, 3]);
+  });
+});
+
+describe('ceremonies', () => {
+  const ceremony = { group: 4, day: 6, site: STAGE, start: 15 * HOUR };
+
+  it('adds one ceremony a group, held once on its day only', () => {
+    const once = withCeremony(EMPTY_PROGRAMME, ceremony);
+    expect(withCeremony(once, { ...ceremony, site: OTHER })).toBe(once);
+    expect(ceremonyOf(once, 4)).toMatchObject({ kind: 'wedding', group: 4, site: STAGE });
+    expect(occurrencesOn(once, 5)).toEqual([]);
+    expect(occurrencesOn(once, 6)).toEqual([
+      expect.objectContaining({ kind: 'wedding', group: 4, start: tickAt(6, 15 * HOUR) }),
+    ]);
+    expect(occurrencesOn(once, 7)).toEqual([]);
+    expect(ceremoniesOn(once, 6)).toEqual(occurrencesOn(once, 6));
+  });
+
+  it('refuses to remove it, but moves it like a built-in and keeps its group', () => {
+    const once = withCeremony(EMPTY_PROGRAMME, ceremony);
+    expect(unbook(once, 1)).toBe(once);
+    const later = rebook(once, 1, { start: 16 * HOUR, site: OTHER });
+    expect(later.refusal).toBeNull();
+    expect(ceremonyOf(later.programme, 4)).toMatchObject({
+      group: 4,
+      start: 16 * HOUR,
+      site: OTHER,
+    });
+    expect(rebook(once, 1, { start: 19 * HOUR }).refusal).toBe('hours');
+    expect(
+      bookingRefusal(
+        EMPTY_PROGRAMME,
+        { kind: 'wedding', site: STAGE, repeat: { every: 'once', day: 6 }, start: 15 * HOUR },
+        0,
+      ),
+    ).toBe('built-in');
+  });
+
+  it('is removed with its group, and nothing else is', () => {
+    const programme = withCeremony(booked(draft()), ceremony);
+    expect(withoutCeremony(programme, 4).bookings.map((each) => each.kind)).toEqual(['live-music']);
+    expect(withoutCeremony(programme, 9)).toBe(programme);
+  });
+
+  it('keeps its group when a built-in is added or drawn to a new stage', () => {
+    const programme = withCeremony(EMPTY_PROGRAMME, ceremony);
+    const welcomed = withBuiltIns(programme, BUILT_INS, [OTHER]);
+    expect(ceremonyOf(welcomed, 4)).toEqual(ceremonyOf(programme, 4));
+    const drawn = toNewStage(welcomed, [siteKey(OTHER)], [OTHER, STAGE]);
+    expect(ceremonyOf(drawn, 4)).toEqual(ceremonyOf(programme, 4));
+  });
+
+  it('finds the kind’s start on the best stage, or the nearest free one, or another stage', () => {
+    expect(ceremonySlot(EMPTY_PROGRAMME, 6, [STAGE, OTHER])).toEqual({
+      site: STAGE,
+      start: 15 * HOUR,
+    });
+    const jazz = booked(draft({ kind: 'afternoon-jazz', start: 15 * HOUR }));
+    expect(ceremonySlot(jazz, 6, [STAGE])).toEqual({ site: STAGE, start: 13.5 * HOUR });
+    const full = [11, 12.5, 14, 15.5, 17].reduce(
+      (programme, hour, group) =>
+        withCeremony(programme, { ...ceremony, group, start: hour * HOUR }),
+      EMPTY_PROGRAMME,
+    );
+    expect(ceremonySlot(full, 6, [STAGE])).toBeNull();
+    expect(ceremonySlot(full, 6, [STAGE, OTHER])).toEqual({ site: OTHER, start: 15 * HOUR });
+    expect(ceremonySlot(full, 7, [STAGE])).toEqual({ site: STAGE, start: 15 * HOUR });
+    expect(ceremonySlot(EMPTY_PROGRAMME, 6, [])).toBeNull();
+  });
+});
+
+describe('eventsDue for a kind with a lead of its own', () => {
+  it('announces a ceremony two hours ahead, and the rest one', () => {
+    const programme = withCeremony(booked(draft({ start: 15 * HOUR, kind: 'bingo' })), {
+      group: 2,
+      day: 1,
+      site: OTHER,
+      start: 15 * HOUR,
+    });
+    const at = (minute: number) =>
+      eventsDue(programme, tickAt(1, minute), tickAt(1, minute), ANNOUNCE_LEAD).map(
+        (each) => each.kind,
+      );
+    expect(at(13 * HOUR)).toEqual(['wedding']);
+    expect(at(14 * HOUR)).toEqual(['bingo']);
+    expect(
+      eventsDue(programme, tickAt(0, 23 * HOUR), tickAt(1, 14 * HOUR), ANNOUNCE_LEAD),
+    ).toHaveLength(2);
   });
 });
 

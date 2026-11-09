@@ -322,6 +322,8 @@ describe('showBooking', () => {
   });
 });
 
+const operatorOf = (group: number): string | null => (group === 4 ? 'Sunshine Tours' : null);
+
 describe('eventNewsFrom', () => {
   const stage = {
     key: 'beach-club#0',
@@ -394,6 +396,32 @@ describe('eventNewsFrom', () => {
       ['announce', undefined, null, 'storm'],
       ['call-off', undefined, undefined, undefined],
     ]);
+  });
+
+  it('tells of a group’s ceremony held, by its operator, and of none that nobody came to', () => {
+    const wedding = { ...occurrence, kind: 'wedding', group: 4 } as const;
+    const held: EventRun = {
+      ...run,
+      occurrence: wedding,
+      phase: 'running',
+      attended: new Set([7]),
+    };
+    const news = eventNewsFrom(
+      [
+        { kind: 'announce', run: held },
+        { kind: 'end', run: held },
+        { kind: 'end', run: { ...held, attended: new Set() } },
+        { kind: 'end', run },
+      ],
+      [stage],
+      'clear',
+      operatorOf,
+    );
+    expect(news.map((each) => [each.kind, each.operator, each.quiet])).toEqual([
+      ['announce', 'Sunshine Tours', true],
+      ['held', 'Sunshine Tours', undefined],
+    ]);
+    expect(news[1]!.key).toBe(eventKey(1, 3, 'held'));
   });
 
   it('names no stage for a site that is gone', () => {

@@ -29,6 +29,16 @@ const facts = {
 const remedies = () => ['Play Area'];
 
 describe('bookingsViewOf', () => {
+  it('shows a ceremony to come under a group staying, and none under one still to arrive', () => {
+    let state = offered(offered(createBookings(), offer(1, 4), 9), offer(2, 8), 9);
+    state = accept(accept(state, 1).state, 2).state;
+    state = arrive(state, 1, { parties: [3], turnedAway: 0, expected: 100, unmet: [] }, 4).state;
+    const ceremony = { day: 5, start: 15 * 60, venue: 'Plaza Stage' };
+    const view = bookingsViewOf(state, facts, 4, remedies, () => ceremony);
+    expect(view.booked.map((row) => row.ceremony)).toEqual([ceremony, undefined]);
+    expect(bookingsViewOf(state, facts, 4).booked.every((row) => !('ceremony' in row))).toBe(true);
+  });
+
   it('ticks an offer against the resort right now', () => {
     const state = offered(createBookings(), offer(1, 9), 9);
     const [card] = bookingsViewOf(state, facts, 5).offers;

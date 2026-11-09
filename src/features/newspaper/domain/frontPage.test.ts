@@ -61,6 +61,36 @@ describe('the front page', () => {
     );
   });
 
+  it('tells of a wedding held on the resort’s stage, beside the tour groups', () => {
+    const wedding = {
+      id: 2,
+      operator: 'Golden Sands Tours',
+      kind: 'wedding' as const,
+      parties: 6,
+      day: 41,
+      nights: 2,
+      premium: 0.5,
+      takings: 4_000,
+      bonusShare: 0.4,
+      meanStars: 4.5,
+      promisedStars: 4,
+      bonus: 1_600,
+      outcome: 'bonus' as const,
+      ceremonyAt: 'Plaza Stage',
+    };
+    const page = frontPageOf({ ...SAMPLES.good, settled: [wedding] });
+    expect(page.briefs.find((brief) => brief.title === 'Wedding bells')?.text).toBe(
+      'Golden Sands Tours’ wedding party said yes on Plaza Stage, and the operator paid its bonus.',
+    );
+    expect(page.briefs.some((brief) => brief.title === 'Tour groups')).toBe(true);
+    const { ceremonyAt: _at, ...none } = wedding;
+    expect(
+      frontPageOf({ ...SAMPLES.good, settled: [none] }).briefs.some(
+        (brief) => brief.title === 'Wedding bells',
+      ),
+    ).toBe(false);
+  });
+
   it('notes each figure against the season before', () => {
     const page = frontPageOf(SAMPLES.good);
     expect(figure(page, 'Mean rating')).toMatchObject({ value: '4.3 ★', note: '▲ 0.5' });

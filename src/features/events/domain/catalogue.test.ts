@@ -79,6 +79,7 @@ describe('EVENT_KINDS', () => {
       'bingo',
       'afternoon-jazz',
       'welcome',
+      'wedding',
     ]);
   });
 

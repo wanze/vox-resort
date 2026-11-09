@@ -5,8 +5,9 @@ import { shoreFor } from '../../layout/domain/shoreline';
 import type { Venue } from '../../sim/domain/venues';
 import { EVENT_KINDS, type EventKind } from './catalogue';
 import type { EventSite } from './programme';
-import { BUILT_INS, book, EMPTY_PROGRAMME, withBuiltIns } from './programme';
-import { heldAt, siteVenueOf, sitesOf, unwelcomeMove, welcomeSitesOf } from './sites';
+import { BUILT_INS, book, EMPTY_PROGRAMME, withBuiltIns, withCeremony } from './programme';
+import { ceremonyWhen, heldAt, siteVenueOf, sitesOf, unwelcomeMove, welcomeSitesOf } from './sites';
+import { tickAt } from './week';
 
 const venue = (key: string, label: string, stage: boolean): Venue => ({
   key,
@@ -168,5 +169,24 @@ describe('sitesOf', () => {
     expect(sitesOf(VENUES, onStages, true)).toEqual(stages);
     expect(sitesOf(VENUES, [ON_SAND], false)).toEqual(stages);
     expect(sitesOf(VENUES, [ON_SAND], true)).toEqual([...stages, { kind: 'beach' }]);
+  });
+});
+
+describe('ceremonyWhen', () => {
+  const plaza = { key: 'stage-plaza#0', label: 'Plaza Stage', stage: true } as Venue;
+  const programme = withCeremony(EMPTY_PROGRAMME, {
+    group: 3,
+    day: 5,
+    site: { kind: 'stage', venue: plaza.key },
+    start: 15 * 60,
+  });
+
+  it('tells a group’s ceremony to come by day, start and stage, until it is over', () => {
+    const when = { day: 5, start: 15 * 60, venue: 'Plaza Stage' };
+    expect(ceremonyWhen(programme, 3, tickAt(4, 12 * 60), [plaza])).toEqual(when);
+    expect(ceremonyWhen(programme, 3, tickAt(5, 15.5 * 60), [plaza])).toEqual(when);
+    expect(ceremonyWhen(programme, 3, tickAt(5, 16 * 60), [plaza])).toBeNull();
+    expect(ceremonyWhen(programme, 3, tickAt(4, 12 * 60), [])?.venue).toBe('the stage');
+    expect(ceremonyWhen(programme, 4, 0, [plaza])).toBeNull();
   });
 });

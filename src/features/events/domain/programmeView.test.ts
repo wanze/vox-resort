@@ -8,6 +8,7 @@ import {
   rebook,
   switchBuiltIn,
   withBuiltIns,
+  withCeremony,
   type BookingDraft,
   type Programme,
 } from './programme';
@@ -170,6 +171,31 @@ describe('programmeView', () => {
     expect(poor.upcoming[0]).toMatchObject({ unaffordable: true });
     const free = programmeView(facts({ programme, beachRoom: 100, mode: 'sandbox' }), 'beach');
     expect(free.upcoming[0]).toMatchObject({ fee: null, unaffordable: false });
+  });
+
+  it('shows a group’s ceremony as its operator’s, moved but never removed or offered', () => {
+    const programme = withCeremony(EMPTY_PROGRAMME, {
+      group: 2,
+      day: 3,
+      site: { kind: 'stage', venue: 'beach-club#0' },
+      start: 15 * HOUR,
+    });
+    const operators = new Map([[2, 'Sunshine Tours']]);
+    const view = programmeView(facts({ programme, operators }), null);
+    expect(view.days[0]!.parts.afternoon[0]).toMatchObject({
+      label: 'Wedding · Sunshine Tours',
+      brand: 'sunshine',
+      ceremony: true,
+      builtIn: true,
+      canSwitch: false,
+      later: true,
+    });
+    const unknown = programmeView(facts({ programme }), null).days[0]!.parts.afternoon[0]!;
+    expect(unknown.label).toBe('Wedding');
+    expect('brand' in unknown).toBe(false);
+    const kinds = cardsOf(facts(), null, 'afternoon').map((card) => card.kind);
+    expect(kinds.length).toBeGreaterThan(0);
+    expect(kinds).not.toContain('wedding');
   });
 
   it('shows the welcome in the morning, where nothing else can be booked', () => {

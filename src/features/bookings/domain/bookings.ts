@@ -12,6 +12,8 @@ export interface Booking extends Offer {
   // What the group's nights should take at the premium, which the bonus is a share of.
   readonly expected: number;
   readonly unmet: readonly Requirement[];
+  // The stage a wedding group's ceremony was held on, once it has been.
+  readonly ceremonyAt?: string;
 }
 
 export type Outcome = 'bonus' | 'missed' | 'failed';
@@ -31,6 +33,7 @@ export interface Settlement {
   readonly promisedStars: number;
   readonly bonus: number;
   readonly outcome: Outcome;
+  readonly ceremonyAt?: string;
 }
 
 export interface DemandShift {
@@ -157,6 +160,7 @@ function settlementOf(booking: Booking, day: number): Settlement {
     promisedStars: booking.promisedStars,
     bonus: kept ? Math.round(booking.bonusShare * booking.expected) : 0,
     outcome: failed ? 'failed' : kept ? 'bonus' : 'missed',
+    ...(booking.ceremonyAt === undefined ? {} : { ceremonyAt: booking.ceremonyAt }),
   };
 }
 
@@ -234,6 +238,15 @@ export function arrive(state: BookingsState, id: number, arrival: Arrival, day: 
     demand: failed ? shifted(-1, day) : state.demand,
   };
   return here.staying.length === 0 ? settled(next, here, day) : { state: next, settlement: null };
+}
+
+export function heldCeremony(state: BookingsState, id: number, at: string): BookingsState {
+  const booking = state.accepted.find((each) => each.id === id);
+  if (!booking || booking.ceremonyAt !== undefined) return state;
+  const accepted = state.accepted.map((each) =>
+    each === booking ? { ...each, ceremonyAt: at } : each,
+  );
+  return { ...state, accepted };
 }
 
 // Stars null for a party that left without a review; it still leaves.

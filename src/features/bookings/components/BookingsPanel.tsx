@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Section } from '../../hud/components/ReportRows';
-import { groupWords, inDays } from '../domain/bookingWords';
+import { ceremonyLine, groupWords, inDays } from '../domain/bookingWords';
 import {
   deskOf,
   type AnsweredCard,
@@ -38,6 +38,7 @@ function Booked({ row, today }: { readonly row: BookedRow; readonly today: numbe
         {bookedLine(row, today)}
         {row.checks.length > 0 ? `, ${met} of ${row.checks.length} wishes met` : ''}.
       </p>
+      {row.ceremony ? <p>{ceremonyLine(row.ceremony, today)}</p> : null}
       <Checks checks={row.checks} />
     </li>
   );

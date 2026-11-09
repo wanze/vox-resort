@@ -306,28 +306,28 @@ describe('widenThoughts', () => {
   it('pads a save from before venues closed for renovation, and hears one as a complaint', () => {
     const { widened, old } = widenedFrom('renovating');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-7)).toBe('renovating');
+    expect(THOUGHT_KINDS.at(-8)).toBe('renovating');
     expect(isComplaint('renovating')).toBe(true);
   });
 
   it('pads a save from before the dark, and hears an unlit path as a complaint', () => {
     const { widened, old } = widenedFrom('dark');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-6)).toBe('dark');
+    expect(THOUGHT_KINDS.at(-7)).toBe('dark');
     expect(isComplaint('dark')).toBe(true);
   });
 
   it('pads a save from before nervous swimmers, and hears unwatched water as a complaint', () => {
     const { widened, old } = widenedFrom('unwatched');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-5)).toBe('unwatched');
+    expect(THOUGHT_KINDS.at(-6)).toBe('unwatched');
     expect(isComplaint('unwatched')).toBe(true);
   });
 
   it('pads a save from before smell and noise, and hears both as complaints', () => {
     const { widened, old } = widenedFrom('smelly');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.slice(-4, -2)).toEqual(['smelly', 'noisy']);
+    expect(THOUGHT_KINDS.slice(-5, -3)).toEqual(['smelly', 'noisy']);
     expect(isComplaint('smelly')).toBe(true);
     expect(isComplaint('noisy')).toBe(true);
   });
@@ -335,14 +335,21 @@ describe('widenThoughts', () => {
   it('pads a save from before crowded paths, and hears a packed one as a complaint', () => {
     const { widened, old } = widenedFrom('crowded');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-2)).toBe('crowded');
+    expect(THOUGHT_KINDS.at(-3)).toBe('crowded');
     expect(isComplaint('crowded')).toBe(true);
   });
 
   it('pads a save from before group bookings, and hears a broken promise as a complaint', () => {
     const { widened, old } = widenedFrom('promised');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-1)).toBe('promised');
+    expect(THOUGHT_KINDS.at(-2)).toBe('promised');
     expect(isComplaint('promised')).toBe(true);
+  });
+
+  it('pads a save from before weddings, and hears a ceremony as praise', () => {
+    const { widened, old } = widenedFrom('wedding');
+    expect(widened.stay).toEqual(old.stay);
+    expect(THOUGHT_KINDS.at(-1)).toBe('wedding');
+    expect(isComplaint('wedding')).toBe(false);
   });
 });

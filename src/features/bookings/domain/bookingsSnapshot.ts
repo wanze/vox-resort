@@ -37,6 +37,7 @@ const bookingSchema = offerSchema.extend({
   turnedAway: count,
   expected: z.number(),
   unmet: z.array(requirementSchema),
+  ceremonyAt: z.string().exactOptional(),
 });
 
 export const settlementSchema = z.object({
@@ -54,6 +55,7 @@ export const settlementSchema = z.object({
   promisedStars: z.number(),
   bonus: z.number(),
   outcome: z.enum(['bonus', 'missed', 'failed']),
+  ceremonyAt: z.string().exactOptional(),
 });
 
 export const bookingsSnapshotSchema = z.object({

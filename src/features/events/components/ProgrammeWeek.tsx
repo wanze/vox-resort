@@ -52,6 +52,7 @@ function ChipButton({
       className="events-programme-chip"
       aria-pressed={chosen}
       data-off={chip.off ? '' : undefined}
+      data-brand={chip.brand}
       title={[chip.label, chip.repeat.toLowerCase(), chip.fee && `${chip.fee} a show`]
         .filter(Boolean)
         .join(', ')}

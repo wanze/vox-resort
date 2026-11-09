@@ -1,4 +1,6 @@
+import { clockWords } from '../../events/domain/week';
 import type { Settlement } from './bookings';
+import type { CeremonyWhen } from './bookingsView';
 import type { Offer, OfferKind } from './offers';
 import type { Requirement } from './requirements';
 
@@ -23,6 +25,9 @@ export function inDays(days: number): string {
   if (days <= 0) return 'today';
   return days === 1 ? 'tomorrow' : `in ${days} days`;
 }
+
+export const ceremonyLine = (ceremony: CeremonyWhen, today: number): string =>
+  `Ceremony ${inDays(ceremony.day - today)} at ${clockWords(ceremony.start)} on ${ceremony.venue}.`;
 
 export const nightsWords = (nights: number): string =>
   nights === 1 ? '1 night' : `${nights} nights`;

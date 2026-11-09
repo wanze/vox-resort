@@ -137,6 +137,60 @@ describe('partiesAmong', () => {
   });
 });
 
+describe('pickAudience for a private kind', () => {
+  const wedding = EVENT_KINDS.wedding;
+  const grouped = MANY.map((each) =>
+    each.party % 4 === 0
+      ? { ...each, group: 3 }
+      : each.party % 4 === 1
+        ? { ...each, group: 5 }
+        : each,
+  );
+  const ofThree = grouped.filter((each) => each.group === 3).map((each) => each.party);
+
+  it('picks every party of the group while room lasts, and none of another', () => {
+    const picked = pickAudience(ask({ parties: grouped, kind: wedding, group: 3 }));
+    expect(picked.toSorted((a, b) => a - b)).toEqual(ofThree);
+  });
+
+  it('seats what fits in a stage too small', () => {
+    const picked = pickAudience(ask({ parties: grouped, kind: wedding, group: 3, room: 7 }));
+    const people = picked.reduce((sum, at) => sum + MANY[at]!.people, 0);
+    expect(picked.length).toBeGreaterThan(0);
+    expect(picked.length).toBeLessThan(ofThree.length);
+    expect(people).toBeLessThanOrEqual(7);
+    expect(picked.every((at) => ofThree.includes(at))).toBe(true);
+  });
+
+  it('invites nobody without a group', () => {
+    expect(pickAudience(ask({ parties: grouped, kind: wedding }))).toEqual([]);
+  });
+
+  it('is never guessed at for the other guests', () => {
+    const counts: PartyMix = {
+      family: { people: 40, withChildren: 40 },
+      couple: { people: 20, withChildren: 0 },
+      friends: { people: 0, withChildren: 0 },
+      solo: { people: 0, withChildren: 0 },
+    };
+    expect(expectedAudience(wedding, counts, 100)).toBe(0);
+  });
+});
+
+describe('partiesOf with groups', () => {
+  it('tells each party its group, and leaves the rest without one', () => {
+    const all = partiesOf(
+      guests,
+      () => true,
+      () => 0,
+      (index) => (index === 1 ? 8 : undefined),
+    );
+    expect(all.find((each) => each.party === 1)?.group).toBe(8);
+    expect(all.filter((each) => each.group !== undefined)).toHaveLength(1);
+    expect('group' in all.find((each) => each.party === 0)!).toBe(false);
+  });
+});
+
 describe('pickAudience', () => {
   it('never overfills the room, and lets a smaller party into a gap', () => {
     const picked = pickAudience(ask({ parties: [party(0, 3), party(1, 3), party(2, 1)], room: 4 }));

@@ -42,7 +42,7 @@ export interface ArrivalsState {
   readonly closing: ReadonlyMap<string, number>;
   readonly renovating: ReadonlyMap<string, number>;
   readonly constructing: ReadonlyMap<string, number>;
-  events: Pick<EventsState, 'tired' | 'glow'>;
+  events: Pick<EventsState, 'tired' | 'glow' | 'programme'>;
   readonly homeEarly: Set<number>;
   readonly nightOwls: Set<number>;
   readonly carrying: Carrying;

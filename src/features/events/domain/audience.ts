@@ -23,7 +23,12 @@ export interface AudienceAsk {
   // People, not parties.
   readonly room: number;
   readonly salt: number;
+  // The occurrence's group: a private kind asks only that group's parties.
+  readonly group?: number | undefined;
 }
+
+// The tour operator's booking a party came with, if any.
+export type GroupOf = (party: number) => number | undefined;
 
 const presentIn = (guests: Guests, index: number, person: number): boolean =>
   guests.present[person] === 1 && guests.party[person] === index;
@@ -43,6 +48,7 @@ function freeParty(
   index: number,
   isFree: (person: number) => boolean,
   urgency: (person: number) => number,
+  groupOf: GroupOf | undefined,
 ): AudienceParty | null {
   const party = guests.parties[index];
   if (!party) return null;
@@ -55,22 +61,29 @@ function freeParty(
     children += guests.child[person]!;
   }
   if (people === 0 || anyUrgent(guests, index, party.members, urgency)) return null;
-  return {
-    party: index,
-    kind: party.kind,
-    people,
-    children,
-    arrivedOn: guests.arrivedOn[party.members[0]!]!,
-    ...(party.wheelchair >= 0 ? { stepFree: true } : {}),
-  };
+  return withGroup(
+    {
+      party: index,
+      kind: party.kind,
+      people,
+      children,
+      arrivedOn: guests.arrivedOn[party.members[0]!]!,
+      ...(party.wheelchair >= 0 ? { stepFree: true } : {}),
+    },
+    groupOf?.(index),
+  );
 }
+
+const withGroup = (party: AudienceParty, group: number | undefined): AudienceParty =>
+  group === undefined ? party : { ...party, group };
 
 export function partiesOf(
   guests: Guests,
   isFree: (person: number) => boolean,
   urgency: (person: number) => number,
+  groupOf?: GroupOf,
 ): readonly AudienceParty[] {
-  return partiesAmong(guests, guests.parties.keys(), isFree, urgency);
+  return partiesAmong(guests, guests.parties.keys(), isFree, urgency, groupOf);
 }
 
 export function partiesAmong(
@@ -78,10 +91,11 @@ export function partiesAmong(
   parties: Iterable<number>,
   isFree: (person: number) => boolean,
   urgency: (person: number) => number,
+  groupOf?: GroupOf,
 ): readonly AudienceParty[] {
   const free: AudienceParty[] = [];
   for (const index of parties) {
-    const party = freeParty(guests, index, isFree, urgency);
+    const party = freeParty(guests, index, isFree, urgency, groupOf);
     if (party) free.push(party);
   }
   return free;
@@ -113,6 +127,7 @@ export function pickAudience(ask: AudienceAsk): readonly number[] {
   const share = drawOf(kind, ask.tier);
   const keen: { party: AudienceParty; at: number }[] = [];
   for (const party of ask.parties) {
+    if (kind.private === true && (ask.group === undefined || party.group !== ask.group)) continue;
     const at = keenness(party.party, salt);
     if (keenEnough(party, kind, share, day, at)) keen.push({ party, at });
   }
@@ -150,6 +165,7 @@ export function expectedAudience(
   capacity: number,
   draw = 1,
 ): number {
+  if (kind.private === true) return 0;
   let people = 0;
   for (const partyKind of PARTY_KINDS) {
     const { people: all, withChildren } = partyMix[partyKind];

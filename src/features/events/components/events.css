@@ -135,6 +135,44 @@
   }
 }
 
+/* A group's ceremony wears its tour operator's colour, as its voucher does. */
+.events-programme-chip[data-brand] {
+  border-color: var(--events-brand);
+  box-shadow: inset 3px 0 0 var(--events-brand);
+}
+
+.events-programme-chip[data-brand='sunshine'] {
+  --events-brand: var(--brand-sunshine);
+}
+
+.events-programme-chip[data-brand='lagoon'] {
+  --events-brand: var(--brand-lagoon);
+}
+
+.events-programme-chip[data-brand='coral'] {
+  --events-brand: var(--brand-coral);
+}
+
+.events-programme-chip[data-brand='seagull'] {
+  --events-brand: var(--brand-seagull);
+}
+
+.events-programme-chip[data-brand='palm'] {
+  --events-brand: var(--brand-palm);
+}
+
+.events-programme-chip[data-brand='tidewater'] {
+  --events-brand: var(--brand-tidewater);
+}
+
+.events-programme-chip[data-brand='sands'] {
+  --events-brand: var(--brand-sands);
+}
+
+.events-programme-chip[data-brand='starfish'] {
+  --events-brand: var(--brand-starfish);
+}
+
 .events-programme-chip[data-off] {
   color: var(--text-faint);
   text-decoration: line-through;

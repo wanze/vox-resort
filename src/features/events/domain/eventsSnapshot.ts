@@ -27,6 +27,7 @@ const bookingSchema = z.object({
   tier: z.string().exactOptional(),
   builtIn: z.string().exactOptional(),
   off: z.boolean().exactOptional(),
+  group: count.exactOptional(),
 });
 
 const occurrenceSchema = z.object({
@@ -37,6 +38,7 @@ const occurrenceSchema = z.object({
   start: z.number().int(),
   end: z.number().int(),
   tier: z.string().exactOptional(),
+  group: count.exactOptional(),
 });
 
 const runSchema = z.object({

@@ -4,9 +4,18 @@ import type { Home } from '../../guests/domain/homes';
 import type { Venue } from '../../sim/domain/venues';
 import { EVENT_KINDS } from './catalogue';
 import { createEvents, inviteAudience, type EventRun, type Invitation } from './eventRuns';
-import { BUILT_INS, EMPTY_PROGRAMME, switchBuiltIn, withBuiltIns } from './programme';
+import { partiesOf } from './audience';
+import {
+  BUILT_INS,
+  EMPTY_PROGRAMME,
+  switchBuiltIn,
+  withBuiltIns,
+  withCeremony,
+  type Occurrence,
+} from './programme';
 import { tickAt } from './week';
 import {
+  groupCallFor,
   LATE_CALL_CUTOFF,
   latecomersFor,
   shelterSitesOf,
@@ -151,5 +160,92 @@ describe('welcomeGapOf', () => {
     expect(welcomeGapOf({ ...day, called: true })).toBe('called-off');
     expect(withoutBuiltIns(programme).bookings).toEqual([]);
     expect(withoutBuiltIns(EMPTY_PROGRAMME)).toBe(EMPTY_PROGRAMME);
+  });
+});
+
+const runOn = (occurrence: Occurrence): EventRun => ({
+  occurrence,
+  phase: 'announced',
+  parties: [],
+  attended: new Set(),
+  paid: 0,
+  salt: 99,
+});
+
+describe('a group’s ceremony', () => {
+  const GROUP = [0, 1, 2, 3];
+  const groupOf = (party: number): number | undefined => (GROUP.includes(party) ? 7 : undefined);
+  const free = () =>
+    partiesOf(
+      guests,
+      () => true,
+      () => 0,
+      groupOf,
+    );
+  const START_AT = tickAt(3, 15 * 60);
+  const ceremony: Occurrence = {
+    booking: 1,
+    kind: 'wedding',
+    site: { kind: 'stage', venue: 'stage-plaza#0' },
+    day: 3,
+    start: START_AT,
+    end: START_AT + 60,
+    group: 7,
+  };
+  const { group: _group, ...open } = ceremony;
+
+  it('invites its own group alone, every party while there is room', () => {
+    const state = createEvents(guests.count);
+    const run = runOn(ceremony);
+    inviteAudience(state, run, invitation(free, 1000));
+    expect(run.parties.toSorted((a, b) => a - b)).toEqual(GROUP);
+  });
+
+  it('keeps its group from another show then, and leaves the rest to it', () => {
+    const state = createEvents(guests.count);
+    state.programme = withCeremony(EMPTY_PROGRAMME, {
+      group: 7,
+      day: 3,
+      site: ceremony.site,
+      start: 15 * 60,
+    });
+    const ordinary: Occurrence = {
+      ...open,
+      booking: 2,
+      kind: 'afternoon-jazz',
+      site: { kind: 'stage', venue: 'beach-club#0' },
+    };
+    const show = runOn(ordinary);
+    inviteAudience(state, show, invitation(free, 1000));
+    expect(show.parties.length).toBeGreaterThan(0);
+    expect(show.parties.some((party) => GROUP.includes(party))).toBe(false);
+    const later = runOn({ ...ordinary, start: START_AT + 4 * 60, end: START_AT + 5 * 60 });
+    inviteAudience(state, later, invitation(free, 1000));
+    expect(later.parties.some((party) => GROUP.includes(party))).toBe(true);
+  });
+
+  it('calls the parties of its group not yet asked, until it is too late to walk over', () => {
+    const run = runOn(ceremony);
+    run.parties.push(0);
+    const asked = (now: number) =>
+      groupCallFor({ run, parties: GROUP, guests, isFree: () => true, urgency: () => 0, now }).map(
+        (party) => [party.party, party.group],
+      );
+    expect(asked(START_AT)).toEqual([
+      [1, 7],
+      [2, 7],
+      [3, 7],
+    ]);
+    expect(asked(ceremony.end - LATE_CALL_CUTOFF)).toEqual([]);
+    expect(
+      groupCallFor({
+        run: runOn(open),
+        parties: GROUP,
+        guests,
+        isFree: () => true,
+        urgency: () => 0,
+        now: START_AT,
+      }),
+    ).toEqual([]);
   });
 });

@@ -8,11 +8,13 @@ import {
 } from '../../bookings/domain/bookings';
 import type { Offer } from '../../bookings/domain/offers';
 import { createEvents } from '../../events/domain/eventRuns';
+import { ceremonyOf, occurrencesOn } from '../../events/domain/programme';
 import { createGuests, presentCount } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { arrivalsDueBy, ARRIVAL_WAVES, bedsOn, CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import { startDay } from '../../sim/domain/dayReport';
 import { createHappiness } from '../../sim/domain/happiness';
+import { createLedger } from '../../sim/domain/ledger';
 import { createCarrying } from '../../sim/domain/litter';
 import { createNeeds } from '../../sim/domain/needs';
 import { arrivalsFor, bookingsWanted, ratingFor } from '../../sim/domain/rating';
@@ -26,7 +28,9 @@ import {
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { expectationFor } from '../../sim/domain/expectations';
 import { createDay, createThoughts, stayCount } from '../../sim/domain/thoughts';
+import type { Venue } from '../../sim/domain/venues';
 import { admitLaterWaves, admitWave, runDay, sendDepartures, type ArrivalsState } from './arrivals';
+import { bookedPartyLeft } from './bookingSteps';
 import type { SimNow } from './simNow';
 
 const HOMES = [
@@ -352,5 +356,70 @@ describe('runDay with a group booked', () => {
     expect(booked.length).toBeGreaterThan(0);
     for (const person of booked) expect(stayCount(state.thoughts, person, 'promised')).toBe(1);
     expect(state.thoughtDay.get('promised|a stage')?.count).toBe(booked.length);
+  });
+});
+
+const stageVenue = (key: string, capacity: number): Venue =>
+  ({ key, id: key.split('#')[0], label: key, role: 'activity', capacity, stage: true }) as Venue;
+
+describe('runDay with a wedding booked', () => {
+  const wedding = (
+    venues: readonly Venue[] = [],
+    constructing: ReadonlyMap<string, number> = new Map(),
+  ) => {
+    const state: ArrivalsState = { ...stateOf(true).state, venues, constructing };
+    state.season = firstSeason(0);
+    state.bookings = bookedWith(
+      groupOffer({ kind: 'wedding', parties: 3, requirements: [{ kind: 'flag', value: 'stage' }] }),
+    );
+    return state;
+  };
+
+  it('holds the ceremony the next afternoon, on the biggest stage standing', () => {
+    const state = wedding([stageVenue('kids-club#1', 20), stageVenue('stage-plaza#2', 80)]);
+    runDay(state, 3);
+    expect(ceremonyOf(state.events.programme, 1)).toMatchObject({
+      kind: 'wedding',
+      site: { kind: 'stage', venue: 'stage-plaza#2' },
+      repeat: { every: 'once', day: 4 },
+      start: 15 * 60,
+      group: 1,
+    });
+    expect(occurrencesOn(state.events.programme, 3)).toEqual([]);
+  });
+
+  it('holds none on a stage still building, or with no stage at all', () => {
+    const building = wedding(
+      [stageVenue('stage-plaza#2', 80)],
+      new Map([['stage-plaza#2', 4 * TICKS_PER_DAY]]),
+    );
+    runDay(building, 3);
+    expect(building.events.programme.bookings).toEqual([]);
+    const bare = wedding();
+    runDay(bare, 3);
+    expect(bare.events.programme.bookings).toEqual([]);
+  });
+
+  it('holds none for a group turned away at the door', () => {
+    const state = wedding([stageVenue('stage-plaza#2', 80)]);
+    state.open = false;
+    runDay(state, 3);
+    expect(state.events.programme.bookings).toEqual([]);
+  });
+
+  it('takes the ceremony off the programme once the group has settled', () => {
+    const state = wedding([stageVenue('stage-plaza#2', 80)]);
+    runDay(state, 3);
+    const resort = {
+      bookings: state.bookings,
+      ledger: createLedger('tycoon', 0),
+      events: state.events,
+    };
+    const parties = [...state.bookings.accepted[0]!.staying];
+    bookedPartyLeft(resort, parties[0]!, 4, 4);
+    expect(ceremonyOf(resort.events.programme, 1)).not.toBeNull();
+    for (const party of parties.slice(1)) bookedPartyLeft(resort, party, 4, 4);
+    expect(resort.bookings.settled[0]?.id).toBe(1);
+    expect(resort.events.programme.bookings).toEqual([]);
   });
 });

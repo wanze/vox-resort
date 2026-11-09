@@ -35,6 +35,21 @@ describe('eventNewsLine', () => {
   });
 });
 
+describe('eventNewsLine for a group’s wedding', () => {
+  it('tells it as the operator’s, held or moved by the rain', () => {
+    const wedding = news({ label: 'Wedding', venue: 'Plaza Stage', operator: 'Sunshine Tours' });
+    expect(eventNewsLine({ ...wedding, kind: 'held' })).toBe(
+      'Sunshine Tours’ wedding party said yes at Plaza Stage',
+    );
+    expect(
+      eventNewsLine({ ...wedding, venue: 'Game Hall', movedFrom: 'Plaza Stage', weather: 'rain' }),
+    ).toBe('Rain: Sunshine Tours’ wedding moves to Game Hall');
+    expect(eventNewsLine({ ...news({ label: 'Wedding' }), kind: 'held' })).toBe(
+      'The wedding party said yes at Sunset Stage',
+    );
+  });
+});
+
 describe('eventNewsLine for fireworks', () => {
   it('tells of them by size, at the beach', () => {
     const grand = news({

@@ -181,6 +181,7 @@ import {
 } from '../features/events/domain/programme';
 import { type DayForecast, type ProgrammeFacts } from '../features/events/domain/programmeView';
 import {
+  ceremonyWhen,
   heldAt,
   stageKeysOf,
   unwelcomeMove,
@@ -1817,6 +1818,7 @@ function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
     animators: resort.roster.animator,
     beachRoom: beachIndexOf(resort) >= 0 ? watchRoom(resort.beachTiles) : 0,
     fireRoom: resort.venues[heldAt({ kind: 'beach' }, 'bonfire', resort.venues)]?.capacity ?? 0,
+    operators: new Map(resort.bookings.accepted.map((booking) => [booking.id, booking.operator])),
   };
 }
 
@@ -3038,6 +3040,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resortFactsAt(resort, clock.ticks),
       clock.day,
       (requirement) => requirementRemedies(requirement, resort.prestige, resort.ledger.mode),
+      (group) => ceremonyWhen(resort.events.programme, group, clock.ticks, resort.venues),
     );
   };
 
@@ -3059,7 +3062,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   };
 
   const heardEvents = (steps: readonly EventStep[]): void => {
-    for (const news of eventNewsFrom(steps, current().siteVenues, clock.weather)) {
+    const { bookings, siteVenues } = current();
+    const operatorOf = (group: number): string | null =>
+      bookings.accepted.find((booking) => booking.id === group)?.operator ?? null;
+    for (const news of eventNewsFrom(steps, siteVenues, clock.weather, operatorOf)) {
       options.onEventNews?.(news);
     }
     // A fee or a refund may have moved the money, and a show put off moved the programme.
@@ -3077,7 +3083,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     refreshNightOut(resort, clock);
     // A stage open in the inspector says what is on next there.
     selection.reword();
-    hud.publish({ programme: programmeNow(), advice: advise() });
+    // The bookings too: a staying wedding group's row says when its ceremony now is.
+    hud.publish({ programme: programmeNow(), advice: advise(), bookings: bookingsNow() });
     options.onDirty?.();
   };
 

@@ -1,4 +1,5 @@
-import { partiesOf } from '../../events/domain/audience';
+import { heldCeremony } from '../../bookings/domain/bookings';
+import { type GroupOf, partiesOf } from '../../events/domain/audience';
 import { type AudienceParty, labelOf as eventLabelOf } from '../../events/domain/catalogue';
 import {
   type CallOffStep,
@@ -22,7 +23,7 @@ import {
 import { fadeGlow } from '../../events/domain/glow';
 import { heldAt, welcomeSitesOf } from '../../events/domain/sites';
 import { bookingDayKey, keenParties, tonightsShow } from '../../events/domain/stayingUp';
-import { latecomersFor } from '../../events/domain/welcome';
+import { groupCallFor, latecomersFor } from '../../events/domain/welcome';
 import { watchRoom } from '../../fireworks/domain/launch';
 import { isFireworksNight } from '../../fireworks/domain/nights';
 import { presentCount } from '../../guests/domain/guests';
@@ -103,6 +104,12 @@ function urgencyBesidesFun(resort: SimState, person: number): number {
   return want && want.need !== 'fun' ? want.urgency : 0;
 }
 
+// Undefined with no group staying, so an ordinary day lists its parties as it always did.
+function groupOfParty(resort: SimState): GroupOf | undefined {
+  const { partyOf } = resort.bookings;
+  return partyOf.size === 0 ? undefined : (party) => partyOf.get(party);
+}
+
 function freePartiesOf(resort: SimState): () => readonly AudienceParty[] {
   let free: readonly AudienceParty[] | null = null;
   return () =>
@@ -110,6 +117,7 @@ function freePartiesOf(resort: SimState): () => readonly AudienceParty[] {
       resort.guests,
       (person) => resort.router.isFree(person),
       (person) => urgencyBesidesFun(resort, person),
+      groupOfParty(resort),
     ));
 }
 
@@ -122,6 +130,7 @@ function freeOnTheSandOf(resort: SimState): () => readonly AudienceParty[] {
       resort.guests,
       (person) => router.isFree(person) || router.stayOf(person) === 'resting',
       (person) => urgencyBesidesFun(resort, person),
+      groupOfParty(resort),
     ));
 }
 
@@ -218,6 +227,11 @@ function endEvent(resort: SimState, run: EventRun, now: number): void {
   if (kind.id === 'welcome' && ended.tally.held > 0) {
     resort.today = countWelcomed(resort.today, ended.tally.audience);
   }
+  const { group } = run.occurrence;
+  if (group !== undefined && ended.people.length > 0) {
+    const stage = resort.siteVenues[runVenueOf(resort, run)]?.label ?? 'the stage';
+    resort.bookings = heldCeremony(resort.bookings, group, stage);
+  }
 }
 
 // Its site gone only when none stands: one pulled down mid-meeting leaves others to use.
@@ -309,6 +323,30 @@ function callLatecomers(resort: SimState, now: number, sand: () => readonly Audi
   }
 }
 
+function callTheGroups(resort: SimState, now: number, sand: () => readonly AudienceParty[]): void {
+  if (resort.bookings.accepted.length === 0) return;
+  for (const run of resort.events.runs) {
+    const { group } = run.occurrence;
+    if (group === undefined) continue;
+    const booking = resort.bookings.accepted.find((each) => each.id === group);
+    if (!booking) continue;
+    inviteTo(
+      resort,
+      run,
+      () =>
+        groupCallFor({
+          run,
+          parties: booking.staying,
+          guests: resort.guests,
+          isFree: (person) => resort.router.isFree(person),
+          urgency: (person) => urgencyBesidesFun(resort, person),
+          now,
+        }),
+      sand,
+    );
+  }
+}
+
 // After the routers' ticks: the invitations and the end of a show act on where everybody now is.
 export function runEvents(
   resort: SimState,
@@ -326,6 +364,7 @@ export function runEvents(
   const sand = freeOnTheSandOf(resort);
   applyEventSteps(resort, advance.steps, now, sand);
   callLatecomers(resort, now, sand);
+  callTheGroups(resort, now, sand);
   topUpTheSand(resort, sand);
   refreshInvited(resort);
   if (advance.steps.some(settles)) refreshKeen(resort, clock);

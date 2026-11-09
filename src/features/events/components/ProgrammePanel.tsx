@@ -121,6 +121,7 @@ function ActionButton(props: {
 const BLOCKED = 'Something else is on then, or it would run past its hours';
 
 function EndButton({ chip, programme }: { readonly chip: Chip } & ProgrammePanelProps) {
+  if (chip.ceremony) return null;
   if (!chip.builtIn) {
     return (
       <ActionButton label="Remove" allowed why="" onPress={() => programme.unbook(chip.booking)} />

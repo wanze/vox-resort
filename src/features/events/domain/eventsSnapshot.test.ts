@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEvents } from './eventRuns';
 import { eventsSnapshotSchema, restoreEvents, snapshotEvents } from './eventsSnapshot';
-import { BUILT_INS, book, occurrencesOn, withBuiltIns } from './programme';
+import { BUILT_INS, book, occurrencesOn, withBuiltIns, withCeremony } from './programme';
 
 const played = () => {
   const state = createEvents(6);
@@ -47,6 +47,39 @@ describe('events snapshots', () => {
     ]);
     const saved = eventsSnapshotSchema.parse(structuredClone(snapshotEvents(state)));
     expect(restoreEvents(saved, 6).programme).toEqual(state.programme);
+  });
+
+  it('keeps a ceremony with its group, and its run', () => {
+    const state = createEvents(6);
+    state.programme = withCeremony(state.programme, {
+      group: 7,
+      day: 4,
+      site: { kind: 'stage', venue: 'stage-plaza#0' },
+      start: 15 * 60,
+    });
+    const [occurrence] = occurrencesOn(state.programme, 4);
+    state.runs = [
+      {
+        occurrence: occurrence!,
+        phase: 'announced',
+        parties: [],
+        attended: new Set(),
+        paid: 0,
+        salt: 1,
+      },
+    ];
+    const saved = eventsSnapshotSchema.parse(structuredClone(snapshotEvents(state)));
+    const restored = restoreEvents(saved, 6);
+    expect(restored.programme.bookings[0]!.group).toBe(7);
+    expect(restored.runs[0]!.occurrence.group).toBe(7);
+    expect(restored).toEqual(state);
+  });
+
+  it('loads a save from before ceremonies, whose bookings have no group', () => {
+    const saved = snapshotEvents(played());
+    expect('group' in saved.programme.bookings[0]!).toBe(false);
+    const restored = restoreEvents(eventsSnapshotSchema.parse(structuredClone(saved)), 6);
+    expect(restored.programme.bookings[0]!.group).toBeUndefined();
   });
 
   it('drops a kind it does not know, from a later version', () => {

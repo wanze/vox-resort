@@ -30,8 +30,9 @@ export interface News {
 export interface EventNews {
   // `event:<booking>:<day>:<kind>`, so an announcement and its calling off are two messages.
   readonly key: string;
-  // 'tonight' is told at the morning check-in, for a show that keeps its audience up.
-  readonly kind: 'announce' | 'call-off' | 'postpone' | 'tonight';
+  // 'tonight' is told at the morning check-in, for a show that keeps its audience up; 'held' only
+  // of a group's own ceremony, the one show whose end is news.
+  readonly kind: 'announce' | 'call-off' | 'postpone' | 'tonight' | 'held';
   readonly label: string;
   // The stage's name; null for a site with no venue.
   readonly venue: string | null;
@@ -44,6 +45,8 @@ export interface EventNews {
   readonly weather?: Weather;
   // Logged and not toasted: a built-in's daily announcement would be a toast every evening.
   readonly quiet?: boolean;
+  // The tour operator whose group the show is held for.
+  readonly operator?: string;
 }
 
 // `at` is the absolute tick it was heard at, which the log dates it by.
@@ -124,12 +127,15 @@ export const toastKey = (shown: Message | Toast): string => {
 export const eventKey = (booking: number, day: number, kind: EventNews['kind']): string =>
   `event:${booking}:${day}:${kind}`;
 
-type TellingStep = Extract<EventStep, { readonly kind: EventNews['kind'] }>;
+type TellingStep = Exclude<EventStep, { readonly kind: 'start' }>;
 
 // A built-in with no stage left is the advice's to tell, once, and not the toasts' every day.
 const isTelling = (step: EventStep): step is TellingStep =>
   step.kind !== 'start' &&
-  step.kind !== 'end' &&
+  (step.kind !== 'end' ||
+    (step.run.occurrence.group !== undefined &&
+      step.run.phase === 'running' &&
+      step.run.attended.size > 0)) &&
   !(
     step.kind === 'call-off' &&
     step.reason === 'no-site' &&
@@ -137,11 +143,14 @@ const isTelling = (step: EventStep): step is TellingStep =>
   );
 
 const occurrenceOf = (step: TellingStep): Occurrence =>
-  step.kind === 'announce' ? step.run.occurrence : step.occurrence;
+  step.kind === 'announce' || step.kind === 'end' ? step.run.occurrence : step.occurrence;
+
+const newsKindOf = (step: TellingStep): EventNews['kind'] =>
+  step.kind === 'end' ? 'held' : step.kind;
 
 // A show is only ever put off for the weather.
 const reasonOf = (step: TellingStep): CallOff | null => {
-  if (step.kind === 'announce') return null;
+  if (step.kind === 'announce' || step.kind === 'end') return null;
   return step.kind === 'call-off' ? step.reason : 'weather';
 };
 
@@ -166,19 +175,34 @@ function announceExtras(
   return EVENT_KINDS[step.run.occurrence.kind].builtIn === true ? { quiet: true } : {};
 }
 
+// The tour operator a group's show is held for; null once the group has gone.
+export type OperatorOfGroup = (group: number) => string | null;
+
+function operatorOn(occurrence: Occurrence, operatorOf: OperatorOfGroup | undefined) {
+  const operator = occurrence.group === undefined ? null : (operatorOf?.(occurrence.group) ?? null);
+  return operator === null ? {} : { operator };
+}
+
 // The start and the end of a show are not news: the announcement said it all.
-function newsOf(step: TellingStep, venues: readonly Venue[], weather: Weather): EventNews {
+function newsOf(
+  step: TellingStep,
+  venues: readonly Venue[],
+  weather: Weather,
+  operatorOf: OperatorOfGroup | undefined,
+): EventNews {
   const occurrence = occurrenceOf(step);
   const venue = venues[heldAt(occurrence.site, occurrence.kind, venues)];
+  const kind = newsKindOf(step);
   return {
-    key: eventKey(occurrence.booking, occurrence.day, step.kind),
-    kind: step.kind,
+    key: eventKey(occurrence.booking, occurrence.day, kind),
+    kind,
     label: showLabelOf(occurrence),
     venue: venueWords(venue),
     start: occurrence.start,
     reason: reasonOf(step),
     at: venue ? { tileX: venue.tileX, tileZ: venue.tileZ } : null,
     ...announceExtras(step, venues, weather),
+    ...operatorOn(occurrence, operatorOf),
   };
 }
 
@@ -187,8 +211,9 @@ export function eventNewsFrom(
   steps: readonly EventStep[],
   venues: readonly Venue[],
   weather: Weather = 'rain',
+  operatorOf?: OperatorOfGroup,
 ): readonly EventNews[] {
-  return steps.filter(isTelling).map((step) => newsOf(step, venues, weather));
+  return steps.filter(isTelling).map((step) => newsOf(step, venues, weather, operatorOf));
 }
 
 export function tonightNewsOf(occurrence: Occurrence, venues: readonly Venue[]): EventNews {

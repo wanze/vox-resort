@@ -1,7 +1,15 @@
 import { isBeach } from '../../sim/domain/beach';
 import { eventRoomOf, type Venue } from '../../sim/domain/venues';
 import { EVENT_KINDS, type EventKind, type EventKindId } from './catalogue';
-import type { BookingChange, EventSite, Programme } from './programme';
+import type { CeremonyWhen } from '../../bookings/domain/bookingsView';
+import {
+  ceremonyOf,
+  siteKey,
+  type BookingChange,
+  type EventSite,
+  type Programme,
+} from './programme';
+import { tickAt } from './week';
 
 const isLobby = (venue: Venue): boolean => venue.receives === true && (venue.lobby ?? 0) > 0;
 
@@ -75,4 +83,19 @@ export function sitesOf(
     .map((venue) => ({ kind: 'stage', venue: venue.key }));
   const onSand = beach && kinds.some((kind) => kind.sites.includes('beach'));
   return onSand ? [...stages, { kind: 'beach' }] : stages;
+}
+
+// Null once it is over: the run keeps its own copy, and the booking lingers until the day turns.
+export function ceremonyWhen(
+  programme: Programme,
+  group: number,
+  now: number,
+  venues: readonly Venue[],
+): CeremonyWhen | null {
+  const booking = ceremonyOf(programme, group);
+  if (booking?.repeat.every !== 'once') return null;
+  const { day } = booking.repeat;
+  if (tickAt(day, booking.start) + EVENT_KINDS[booking.kind].duration <= now) return null;
+  const venue = venues.find((each) => each.key === siteKey(booking.site));
+  return { day, start: booking.start, venue: venue?.label ?? 'the stage' };
 }

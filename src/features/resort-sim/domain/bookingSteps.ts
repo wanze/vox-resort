@@ -23,6 +23,14 @@ import {
   type ResortFacts,
 } from '../../bookings/domain/requirements';
 import { familyOf, OBJECT_TYPES, venueOf } from '../../catalog/domain/objectTypes';
+import {
+  ceremonySlot,
+  withCeremony,
+  withoutCeremony,
+  type EventSite,
+  type Programme,
+} from '../../events/domain/programme';
+import { byEventRoom } from '../../events/domain/sites';
 import { priceOf } from '../../catalog/domain/prices';
 import { isUnlocked } from '../../catalog/domain/unlocks';
 import type { PartyKind, PartyMix } from '../../guests/domain/parties';
@@ -70,10 +78,14 @@ interface StandingState {
   readonly rating: { readonly stars: number };
 }
 
+const standingAt =
+  (resort: Pick<StandingState, 'unreachable' | 'constructing'>, tick: number) =>
+  (key: string): boolean =>
+    !resort.unreachable.has(key) && (resort.constructing.get(key) ?? -1) <= tick;
+
 // Only what a guest could walk into this morning: a site still building or out of reach is not there.
 export function resortFactsAt(resort: StandingState, tick: number): ResortFacts {
-  const standing = (key: string) =>
-    !resort.unreachable.has(key) && (resort.constructing.get(key) ?? -1) <= tick;
+  const standing = standingAt(resort, tick);
   return {
     ...offeringOf([
       ...resort.venues.filter((venue) => standing(venue.key)),
@@ -130,6 +142,24 @@ function checkInGroup(
   return { parties, turnedAway, arrived };
 }
 
+// The afternoon after arrival, on the biggest stage standing; with none, there is no ceremony, and
+// the missing stage is already the group's broken promise.
+function planCeremony(resort: ArrivalsState, booking: Booking, day: number, tick: number): void {
+  const standing = standingAt(resort, tick);
+  const stages = resort.venues
+    .filter((venue) => venue.stage === true && standing(venue.key))
+    .toSorted(byEventRoom)
+    .map((venue): EventSite => ({ kind: 'stage', venue: venue.key }));
+  const held = day + 1;
+  const slot = ceremonySlot(resort.events.programme, held, stages);
+  if (!slot) return;
+  resort.events.programme = withCeremony(resort.events.programme, {
+    group: booking.id,
+    day: held,
+    ...slot,
+  });
+}
+
 // Before the day's ordinary arrivals are sized, so a group costs walk-in guests rather than adding
 // to them. Short of beds, the rest are turned away and the booking fails at the door.
 export function admitBookedGroups(
@@ -163,6 +193,9 @@ export function admitBookedGroups(
     }, 0);
     const arrival = { parties: group.parties, turnedAway: group.turnedAway, expected, unmet };
     resort.bookings = arrive(resort.bookings, booking.id, arrival, day).state;
+    if (booking.kind === 'wedding' && group.parties.length > 0) {
+      planCeremony(resort, booking, day, tick);
+    }
   }
 }
 
@@ -194,8 +227,9 @@ export function offerTheDay(resort: OfferingState, day: number): readonly Settle
 }
 
 // The bonus is paid the moment the last booked party leaves, on the reviews the group left.
+// A ceremony not yet held goes with its group; one running keeps the run's own copy.
 export function bookedPartyLeft(
-  resort: { bookings: BookingsState; ledger: Ledger },
+  resort: { bookings: BookingsState; ledger: Ledger; events: { programme: Programme } },
   party: number,
   stars: number | null,
   day: number,
@@ -203,6 +237,7 @@ export function bookedPartyLeft(
   if (!resort.bookings.partyOf.has(party)) return null;
   const { state, settlement } = left(resort.bookings, party, stars, day);
   resort.bookings = state;
+  if (settlement) resort.events.programme = withoutCeremony(resort.events.programme, settlement.id);
   if (settlement && settlement.bonus > 0) {
     resort.ledger = record(resort.ledger, 'booking', settlement.bonus);
   }

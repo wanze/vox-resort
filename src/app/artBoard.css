@@ -31,3 +31,9 @@
   padding: var(--space-4);
   border-radius: var(--radius-pebble);
 }
+
+/* Each site's flyers as one column, the width the Programme window gives them. */
+.art-preview-sheets {
+  display: grid;
+  gap: var(--space-4);
+}

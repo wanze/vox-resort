@@ -1,7 +1,7 @@
 import type { RefCallback, RefObject } from 'react';
 import { ClockHub } from './ClockHub';
 import { DemandMeter } from './DemandMeter';
-import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
+import { MainMenu, type PauseToggles, type ShortcutToggle, type ViewToggles } from './MainMenu';
 import { RatingControl } from './RatingControl';
 import type { FastNights } from './SpeedControl';
 import { WindowDock } from './WindowDock';
@@ -37,6 +37,7 @@ export interface TopBarProps {
   readonly onFind: () => void;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
+  readonly pauses: PauseToggles;
   // A touch layout: no field takes focus by itself there.
   readonly compact: boolean;
   readonly sound: SoundControls;
@@ -155,6 +156,7 @@ export function TopBar(props: TopBarProps) {
             sound={props.sound}
             view={props.view}
             shortcuts={props.shortcuts}
+            pauses={props.pauses}
             highlights={props.highlights}
             overlay={overlay}
             gates={{ open: resort.open, onOpenChange: resort.setOpen }}

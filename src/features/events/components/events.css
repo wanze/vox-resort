@@ -160,7 +160,7 @@
 }
 
 .events-programme-upcoming,
-.events-cards {
+.events-flyers {
   display: grid;
   gap: var(--space-2);
   margin: 0;
@@ -168,38 +168,10 @@
   list-style: none;
 }
 
-.events-card {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border-radius: var(--radius-pebble);
-  background: var(--sunken);
-  box-shadow: var(--bevel-in);
-}
-
-.events-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.events-blurb {
-  margin: 0;
-  color: var(--text-dim);
-}
-
-.events-card .ui-stat-note {
-  margin: 0;
-}
-
 .events-warning {
   margin: 0;
   color: var(--text-bad);
   font-size: var(--size-small);
-}
-
-.events-card[data-full] {
-  opacity: 0.6;
 }
 
 .events-notes {
@@ -217,4 +189,490 @@
   background: var(--alert);
   color: var(--text-on-accent);
   font-size: var(--size-small);
+}
+
+.events-flyers {
+  gap: var(--space-3);
+}
+
+/* A category's colours, read by its flyer and by its sticker on the week's poster. */
+.events-flyer,
+.events-poster-event {
+  --events-face: var(--stone-700);
+  --events-accent: var(--stone-200);
+  --events-ink: var(--text-on-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='music'] {
+  --events-face: var(--flyer-music);
+  --events-accent: var(--flyer-music-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='dance'] {
+  --events-face: var(--flyer-dance);
+  --events-accent: var(--flyer-dance-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='kids'] {
+  --events-face: var(--flyer-kids);
+  --events-accent: var(--flyer-kids-accent);
+  --events-ink: var(--text);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='quiz'] {
+  --events-face: var(--flyer-quiz);
+  --events-accent: var(--flyer-quiz-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='cinema'] {
+  --events-face: var(--flyer-cinema);
+  --events-accent: var(--flyer-cinema-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='painting'] {
+  --events-face: var(--flyer-painting);
+  --events-accent: var(--flyer-painting-accent);
+  --events-ink: var(--text);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='bingo'] {
+  --events-face: var(--flyer-bingo);
+  --events-accent: var(--flyer-bingo-accent);
+  --events-ink: var(--text);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='jazz'] {
+  --events-face: var(--flyer-jazz);
+  --events-accent: var(--flyer-jazz-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='fireworks'] {
+  --events-face: var(--flyer-fireworks);
+  --events-accent: var(--flyer-fireworks-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='bonfire'] {
+  --events-face: var(--flyer-bonfire);
+  --events-accent: var(--flyer-bonfire-accent);
+}
+
+:is(.events-flyer, .events-poster-event)[data-category='welcome'] {
+  --events-face: var(--flyer-welcome);
+  --events-accent: var(--flyer-welcome-accent);
+}
+
+/* A printed flyer: the act's own face over the paper, and a stub to book it torn off below. */
+.events-flyer {
+  --events-align: start;
+  --events-title-font: var(--font-title);
+
+  position: relative;
+  display: grid;
+  overflow: hidden;
+}
+
+.events-flyer-face {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template:
+    'motif title' auto
+    'motif tier' auto
+    'motif when' auto / auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--events-face);
+  color: var(--events-ink);
+  text-align: var(--events-align);
+}
+
+/* The category's pattern in its accent, faint enough that the title prints over it. */
+.events-flyer-face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--events-pattern, none);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.events-flyer-motif {
+  grid-area: motif;
+  display: grid;
+  place-items: center;
+}
+
+.events-flyer-title {
+  grid-area: title;
+  margin: 0;
+  font: 400 22px / 1.05 var(--events-title-font);
+  overflow-wrap: anywhere;
+}
+
+.events-flyer-tier {
+  grid-area: tier;
+  justify-self: var(--events-align);
+  padding: 1px var(--space-2);
+  background: var(--events-accent);
+  color: var(--events-face);
+  font: 400 var(--size-label) / 1.3 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.events-flyer-when {
+  grid-area: when;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  align-items: baseline;
+  justify-content: var(--events-align);
+  margin: 0;
+}
+
+.events-flyer-when > strong {
+  color: var(--events-accent);
+  font: 400 var(--size-lead) / 1 var(--font-pixel);
+}
+
+.events-flyer-when > span {
+  font-size: var(--size-small);
+  opacity: 0.9;
+}
+
+.events-flyer-body {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.events-flyer-body > p {
+  margin: 0;
+}
+
+.events-flyer-blurb {
+  color: var(--text-dim);
+  font-family: var(--font-paper);
+  font-style: italic;
+}
+
+.events-flyer-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.events-flyer-fee {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--price);
+  color: var(--text);
+  font: 400 var(--size-body) / 1.2 var(--font-title);
+}
+
+/* The tear-off stub: the dashes are the perforation the booking is torn along. */
+.events-flyer-stub {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 2px dashed var(--edge);
+  background: var(--wash-key);
+}
+
+.events-flyer[data-full] .events-flyer-face {
+  filter: grayscale(0.7);
+}
+
+.events-flyer-stamp {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-2);
+  margin: 0;
+  padding: 1px var(--space-2);
+  border: 3px double var(--ink-bad);
+  color: var(--ink-bad);
+  font: 400 var(--size-lead) / 1.1 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  transform: rotate(-10deg);
+  mix-blend-mode: multiply;
+}
+
+/* A gig poster: diagonal stripes behind the notes. */
+.events-flyer[data-category='music'] {
+  --events-pattern: repeating-linear-gradient(
+    135deg,
+    var(--events-accent) 0 4px,
+    transparent 4px 16px
+  );
+}
+
+/* A club night: the picture on the right over a checked dance floor. */
+.events-flyer[data-category='dance'] {
+  --events-pattern: repeating-conic-gradient(var(--events-accent) 0 25%, transparent 0 50%) 0 0 /
+    16px 16px;
+}
+
+.events-flyer:is([data-category='dance'], [data-category='jazz']) .events-flyer-face {
+  grid-template:
+    'title motif' auto
+    'tier motif' auto
+    'when motif' auto / minmax(0, 1fr) auto;
+}
+
+/* Hand-made for the children: polka dots and a title stuck on askew. */
+.events-flyer[data-category='kids'] {
+  --events-pattern: radial-gradient(circle, var(--events-accent) 3px, transparent 3.5px) 0 0 / 18px
+    18px;
+}
+
+.events-flyer[data-category='kids'] .events-flyer-title {
+  transform: rotate(-3deg);
+  transform-origin: left center;
+}
+
+.events-flyer[data-category='kids'] .events-flyer-motif {
+  transform: rotate(6deg);
+}
+
+/* Chalked on the board: a pixel hand and a dashed chalk frame. */
+.events-flyer[data-category='quiz'] {
+  --events-title-font: var(--font-pixel);
+}
+
+.events-flyer:is([data-category='quiz'], [data-category='cinema']) .events-flyer-face::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border: 2px dashed var(--events-accent);
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* A velvet marquee ringed with bulbs, its bill centred under the clapper. */
+.events-flyer[data-category='cinema'] .events-flyer-face::after {
+  border: 4px dotted var(--events-accent);
+  opacity: 1;
+}
+
+.events-flyer:is([data-category='cinema'], [data-category='fireworks'], [data-category='welcome']) {
+  --events-align: center;
+}
+
+.events-flyer:is([data-category='cinema'], [data-category='fireworks'], [data-category='welcome'])
+  .events-flyer-face {
+  grid-template: 'motif' auto 'title' auto 'tier' auto 'when' auto / minmax(0, 1fr);
+  justify-items: center;
+  padding: var(--space-4) var(--space-3) var(--space-3);
+}
+
+/* Paint splashed on the canvas, and the palette hung at a slant. */
+.events-flyer[data-category='painting'] {
+  --events-title-font: var(--font-paper);
+  --events-pattern:
+    radial-gradient(circle at 88% 20%, var(--events-accent) 0 14px, transparent 15px),
+    radial-gradient(circle at 70% 85%, var(--events-accent) 0 9px, transparent 10px),
+    radial-gradient(circle at 96% 70%, var(--events-accent) 0 5px, transparent 6px);
+}
+
+.events-flyer[data-category='painting'] .events-flyer-title {
+  font-style: italic;
+}
+
+.events-flyer[data-category='painting'] .events-flyer-motif {
+  transform: rotate(-8deg);
+}
+
+/* A bingo card's ruled squares. */
+.events-flyer[data-category='bingo'] {
+  --events-title-font: var(--font-pixel);
+  --events-pattern:
+    linear-gradient(var(--events-accent) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(90deg, var(--events-accent) 1px, transparent 1px) 0 0 / 14px 14px;
+}
+
+/* A smoky club: one spotlight from above, and the name in a printed italic. */
+.events-flyer[data-category='jazz'] {
+  --events-title-font: var(--font-paper);
+  --events-pattern: radial-gradient(ellipse at 80% -10%, var(--events-accent), transparent 65%);
+}
+
+.events-flyer[data-category='jazz'] .events-flyer-title {
+  font-style: italic;
+}
+
+/* A night sky of scattered stars. */
+.events-flyer[data-category='fireworks'] {
+  --events-pattern:
+    radial-gradient(circle, var(--events-accent) 1px, transparent 1.5px) 0 0 / 23px 19px,
+    radial-gradient(circle, var(--events-accent) 1px, transparent 1.5px) 11px 7px / 31px 27px;
+}
+
+/* The fire's glow rising from the foot of the sheet. */
+.events-flyer[data-category='bonfire'] {
+  --events-pattern: linear-gradient(0deg, var(--events-accent), transparent 75%);
+}
+
+.events-flyer[data-category='bonfire'] .events-flyer-face {
+  align-items: end;
+}
+
+/* Bunting strung along the top for the new arrivals. */
+.events-flyer[data-category='welcome'] {
+  --events-pattern: conic-gradient(from 135deg at 50% 0, var(--events-accent) 90deg, transparent 0)
+    0 0 / 16px 10px repeat-x;
+}
+
+/* The reception's notice board: one printed sheet, pinned up a little crooked. */
+.events-poster {
+  position: relative;
+  margin: 0;
+  padding: var(--space-4) var(--space-2) var(--space-3);
+  transform: rotate(-0.5deg);
+}
+
+.events-poster::before,
+.events-poster::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--stone-50) 0 1.5px, var(--notice-pin) 2px);
+  box-shadow: var(--shadow-print);
+}
+
+.events-poster::before {
+  left: 10px;
+}
+
+.events-poster::after {
+  right: 10px;
+}
+
+.events-poster-head {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--text);
+  text-align: center;
+}
+
+.events-poster-head > span {
+  color: var(--text-dim);
+  font: 400 var(--size-label) / 1.2 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.events-poster-head > strong {
+  font: 400 22px / 1.05 var(--font-title);
+}
+
+.events-poster-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-poster-day {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-1) 2px var(--space-2);
+  text-align: center;
+}
+
+.events-poster-day + .events-poster-day {
+  border-left: 1px dotted var(--edge);
+}
+
+.events-poster-weekday {
+  color: var(--text-dim);
+  font: 400 var(--size-label) / 1 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.events-poster-date {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  aspect-ratio: 1;
+  font: 400 var(--size-lead) / 1 var(--font-title);
+}
+
+/* Today ringed in pen, as staff mark the board each morning. */
+.events-poster-day[data-today] .events-poster-date {
+  border: 2px solid var(--terracotta);
+  border-radius: 50%;
+  color: var(--terracotta-deep);
+}
+
+/* Ruled off as part of the day's heading, so the sky is not read as one of the events. */
+.events-poster-weather {
+  display: grid;
+  place-items: center;
+  justify-self: stretch;
+  box-sizing: content-box;
+  /* A weather icon's height, so a day with no forecast rules off level with the rest. */
+  height: 24px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--edge);
+  color: var(--text-faint);
+}
+
+.events-poster-events {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-poster-event {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.events-poster-icon {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 3px;
+  background: var(--events-face);
+}
+
+.events-poster-time {
+  font: 400 10px / 1 var(--font-pixel);
+}
+
+.events-poster-event[data-over] {
+  opacity: 0.45;
+}
+
+.events-poster-event[data-over] .events-poster-time {
+  text-decoration: line-through;
+}
+
+.events-poster-none {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-style: italic;
 }

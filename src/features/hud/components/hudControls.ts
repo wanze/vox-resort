@@ -14,6 +14,7 @@ import type { HeardScene } from '../../sound/domain/hearing';
 import type { SoundPrefs } from '../../sound/domain/soundPrefs';
 import type { NewGame } from '../../welcome/domain/newGame';
 import type { HudPrefs } from '../domain/hudPrefs';
+import type { PausePrefs } from '../domain/stops';
 import type {
   BookingNews,
   EventNews,
@@ -85,6 +86,7 @@ export interface NewsControls {
   setSigns(shown: boolean): void;
   setSingleKeys(on: boolean): void;
   setFastNights(on: boolean): void;
+  setPause(pause: keyof PausePrefs, on: boolean): void;
   setUpdate(phase: UpdatePhase | null): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;

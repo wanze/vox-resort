@@ -33,6 +33,15 @@
   box-shadow: var(--shadow-slab), var(--bevel);
 }
 
+/* A printed sheet laid on the panel: a voucher, a flyer, a notice. */
+.ui-print {
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: var(--grain), var(--print-paper);
+  box-shadow: var(--shadow-print);
+  color: var(--text);
+}
+
 .ui-stat dt,
 .ui-label {
   font: 400 var(--size-label) / 1.2 var(--font-label);

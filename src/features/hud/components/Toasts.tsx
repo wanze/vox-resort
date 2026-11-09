@@ -1,5 +1,6 @@
 import { useEffect, useState, type FocusEvent } from 'react';
 import { bookingNewsLine, bookingNewsTitle } from '../../bookings/components/bookingNews';
+import { OperatorLogo } from '../../bookings/components/OperatorLogo';
 import { eventNewsLine } from '../../events/components/eventWords';
 import {
   isUrgentToast,
@@ -27,6 +28,10 @@ interface NewsToastsProps {
   readonly onOpenAdvice: () => void;
   readonly onOpenReport: (day: number) => void;
   readonly onOpenBookings: () => void;
+  readonly offers: {
+    isOpen(id: number): boolean;
+    answer(id: number, accept: boolean): void;
+  };
   readonly onDismiss: (key: string) => void;
 }
 
@@ -160,19 +165,55 @@ function EventPlate({
   );
 }
 
+function OfferAnswers({
+  news,
+  offers,
+  onDismiss,
+}: { readonly news: BookingNews } & Pick<NewsToastsProps, 'offers' | 'onDismiss'>) {
+  if (news.kind !== 'offer' || !offers.isOpen(news.offer.id)) return null;
+  const { id } = news.offer;
+  const answered = (accept: boolean) => () => {
+    offers.answer(id, accept);
+    onDismiss(news.key);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="ui-button ui-button-primary hud-advice-show"
+        onClick={answered(true)}
+      >
+        Accept
+      </button>
+      <button type="button" className="ui-button hud-advice-show" onClick={answered(false)}>
+        Decline
+      </button>
+    </>
+  );
+}
+
 function BookingPlate({
   news,
   onDismiss,
   onOpenBookings,
-}: { readonly news: BookingNews } & Pick<NewsToastsProps, 'onDismiss' | 'onOpenBookings'>) {
+  offers,
+}: { readonly news: BookingNews } & Pick<
+  NewsToastsProps,
+  'onDismiss' | 'onOpenBookings' | 'offers'
+>) {
   const title = bookingNewsTitle(news);
   return (
     <div className="ui-panel hud-toast" data-severity="event">
-      <PixelIcon name="bookings" />
+      {news.kind === 'offer' ? (
+        <OperatorLogo operator={news.offer.operator} scale={1} />
+      ) : (
+        <PixelIcon name="bookings" />
+      )}
       <div className="hud-toast-body">
         <strong>{title}</strong>
         <p>{bookingNewsLine(news)}</p>
         <div className="hud-toast-actions">
+          <OfferAnswers news={news} offers={offers} onDismiss={onDismiss} />
           <button type="button" className="ui-button hud-advice-show" onClick={onOpenBookings}>
             Bookings
           </button>

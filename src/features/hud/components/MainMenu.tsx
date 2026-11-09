@@ -25,6 +25,7 @@ import type { ClockControls, SoundControls, WindowControls } from './hudControls
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { DayForecast } from '../../events/domain/programmeView';
+import type { PausePrefs } from '../domain/stops';
 
 const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '');
 export const SAVE_SHORTCUT = keyLabel('save', MAC);
@@ -43,6 +44,11 @@ export interface ShortcutToggle {
   readonly onSingleKeysChange: (on: boolean) => void;
 }
 
+export interface PauseToggles {
+  readonly prefs: PausePrefs;
+  readonly onChange: (pause: keyof PausePrefs, on: boolean) => void;
+}
+
 export interface MainMenuProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -57,6 +63,7 @@ export interface MainMenuProps {
   readonly sound: SoundControls;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
+  readonly pauses: PauseToggles;
   readonly highlights: HighlightControls;
   readonly overlay: OverlayControls;
   readonly gates: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void };
@@ -89,6 +96,11 @@ const weatherNote = ({ weather, forcedWeather }: ClockControls): string =>
 
 const settingsNote = (sound: SoundControls, shortcuts: ShortcutToggle): string =>
   `${sound.prefs.on ? 'sound on' : 'sound muted'}, ${shortcuts.singleKeys ? 'all shortcuts' : 'no single-key shortcuts'}`;
+
+const PAUSES: readonly (readonly [keyof PausePrefs, string, string])[] = [
+  ['pauseWeek', 'For the week ahead', "each Monday, with the week's poster"],
+  ['pauseOffers', 'For booking offers', 'each is open for a day, with the voucher to answer'],
+];
 
 // The heading is for the eye; the group carries the same name for a screen reader.
 function MenuGroup({ label, children }: { readonly label: string; readonly children: ReactNode }) {
@@ -367,7 +379,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         onSelect={run(() => windows.show('programme', true))}
       />
     )),
-  settings: ({ sound, shortcuts }) => (
+  settings: ({ sound, shortcuts, pauses }) => (
     <>
       <MenuGroup label="Sound">
         <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
@@ -380,6 +392,18 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
           many
           onSelect={() => shortcuts.onSingleKeysChange(!shortcuts.singleKeys)}
         />
+      </MenuGroup>
+      <MenuGroup label="Pause the game">
+        {PAUSES.map(([pause, label, note]) => (
+          <MenuOption
+            key={pause}
+            label={label}
+            note={note}
+            checked={pauses.prefs[pause]}
+            many
+            onSelect={() => pauses.onChange(pause, !pauses.prefs[pause])}
+          />
+        ))}
       </MenuGroup>
     </>
   ),

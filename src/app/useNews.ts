@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { loadPrefs, savePrefs } from '../features/hud/adapters/prefsStore';
 import type { HudPrefs } from '../features/hud/domain/hudPrefs';
+import type { PausePrefs } from '../features/hud/domain/stops';
 import {
   expireToasts,
   logBooking,
@@ -74,6 +75,10 @@ function usePrefs() {
     ),
     setFastNights: useCallback(
       (on: boolean) => change((was) => ({ ...was, fastNights: on })),
+      [change],
+    ),
+    setPause: useCallback(
+      (pause: keyof PausePrefs, on: boolean) => change((was) => ({ ...was, [pause]: on })),
       [change],
     ),
   };
@@ -146,8 +151,16 @@ function useTold(
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
-  const { prefs, change, setMarkers, setStaffPins, setSigns, setSingleKeys, setFastNights } =
-    usePrefs();
+  const {
+    prefs,
+    change,
+    setMarkers,
+    setStaffPins,
+    setSigns,
+    setSingleKeys,
+    setFastNights,
+    setPause,
+  } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
   // Read through refs so `hear` stays stable: a watch on the HUD store holds it.
@@ -198,6 +211,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setMarkers,
     setStaffPins,
     setFastNights,
+    setPause,
     setSigns,
     setSingleKeys,
     setUpdate: useCallback(

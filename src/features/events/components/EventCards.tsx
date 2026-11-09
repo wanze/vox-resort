@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import { PixelPicture } from '../../../shared/components/PixelIcon';
 import type { EventKindId } from '../domain/catalogue';
 import type { BookingRefusal, Repeat } from '../domain/programme';
 import type { Card, StartChoice, TierChoice } from '../domain/programmeView';
+import { CATEGORY_OF, motifOf } from './eventArt';
 import { refusalWords } from './eventWords';
 
 export interface EventCardsProps {
   readonly cards: readonly Card[];
+  readonly stage: string;
   // Answers why the booking was refused, or null once it is made.
   readonly onBook: (
     kind: EventKindId,
@@ -61,17 +64,18 @@ function RepeatNotes({ start }: { readonly start: StartChoice }) {
 
 function BookingForm({
   card,
+  start,
   tier,
+  onStart,
   onBook,
 }: {
   readonly card: Card;
+  readonly start: StartChoice;
   readonly tier: TierChoice | undefined;
+  readonly onStart: (minute: number) => void;
   readonly onBook: EventCardsProps['onBook'];
 }) {
-  const [minute, setMinute] = useState(card.starts[0]!.minute);
   const [refusal, setRefusal] = useState<BookingRefusal | null>(null);
-  // A start booked up since it was picked falls back to the first one still free.
-  const start = card.starts.find((each) => each.minute === minute) ?? card.starts[0]!;
   return (
     <>
       <div className="ui-row ui-row--wrap">
@@ -79,7 +83,7 @@ function BookingForm({
           className="ui-select"
           aria-label={`When the ${card.label} starts`}
           value={start.minute}
-          onChange={(event) => setMinute(Number(event.target.value))}
+          onChange={(event) => onStart(Number(event.target.value))}
         >
           {card.starts.map((each) => (
             <option key={each.minute} value={each.minute}>
@@ -110,48 +114,107 @@ function BookingForm({
   );
 }
 
-// Still listed, so the player sees the kind exists and why it cannot go on.
-function FullCard({ card }: { readonly card: Card }) {
+// The motif grows with the size booked, so a grand show is a bigger picture as well as a word.
+const TIER_SCALES: { readonly [tier: string]: number } = { small: 2, medium: 3, grand: 4 };
+
+const MOTIF_SCALE = 3;
+
+function Face({
+  card,
+  time,
+  tier,
+  stage,
+}: {
+  readonly card: Card;
+  readonly time: string;
+  readonly tier: TierChoice | undefined;
+  readonly stage: string;
+}) {
   return (
-    <li className="events-card" data-full="">
-      <div className="events-card-head">
-        <strong>{card.label}</strong>
-        <span className="ui-stat-note">No free time</span>
-      </div>
-      <p className="ui-stat-note">Something else is on at every time it could start.</p>
-    </li>
+    <div className="events-flyer-face">
+      <span className="events-flyer-motif">
+        <PixelPicture
+          art={motifOf(card.kind)}
+          scale={tier ? (TIER_SCALES[tier.id] ?? MOTIF_SCALE) : MOTIF_SCALE}
+        />
+      </span>
+      <h4 className="events-flyer-title">{card.label}</h4>
+      {tier ? <span className="events-flyer-tier">{tier.label}</span> : null}
+      <p className="events-flyer-when">
+        <strong>{time}</strong>
+        <span>at {stage}</span>
+      </p>
+    </div>
   );
 }
 
-function EventCard({ card, onBook }: { readonly card: Card } & Pick<EventCardsProps, 'onBook'>) {
-  const [tierId, setTierId] = useState(DEFAULT_TIER);
-  const tier = card.tiers?.find((each) => each.id === tierId);
-  const shown = tier ?? card;
+function Details({ card, shown }: { readonly card: Card; readonly shown: Card | TierChoice }) {
   return (
-    <li className="events-card">
-      <div className="events-card-head">
-        <strong>{card.label}</strong>
-        <span className="ui-stat-note">{shown.fee}</span>
-      </div>
-      <p className="events-blurb">{card.blurb}</p>
-      <p className="ui-stat-note">
-        {card.host} · about {shown.audience} guests
+    <div className="events-flyer-body">
+      <p className="events-flyer-blurb">{card.blurb}</p>
+      <p className="events-flyer-facts">
+        <span className="events-flyer-fee">{shown.fee}</span>
+        <span>
+          {card.host}, about {shown.audience} guests
+        </span>
       </p>
       {shown.warning ? <p className="events-warning">{shown.warning}</p> : null}
-      {tier ? <TierRow card={card} tier={tier} onTier={setTierId} /> : null}
-      <BookingForm card={card} tier={tier} onBook={onBook} />
+    </div>
+  );
+}
+
+// Still pinned up, so the player sees the kind exists and why it cannot go on.
+function FullCard({ card, stage }: { readonly card: Card; readonly stage: string }) {
+  return (
+    <li className="ui-print events-flyer" data-category={CATEGORY_OF[card.kind]} data-full="">
+      <Face card={card} time="No free time" tier={undefined} stage={stage} />
+      <div className="events-flyer-body">
+        <p className="events-flyer-blurb">Something else is on at every time it could start.</p>
+      </div>
+      <p className="events-flyer-stamp" aria-hidden="true">
+        Booked up
+      </p>
     </li>
   );
 }
 
-export function EventCards({ cards, onBook }: EventCardsProps) {
+// A start booked up since it was picked falls back to the first one still free.
+const startAt = (card: Card, minute: number): StartChoice =>
+  card.starts.find((each) => each.minute === minute) ?? card.starts[0]!;
+
+function EventCard({
+  card,
+  stage,
+  onBook,
+}: { readonly card: Card } & Pick<EventCardsProps, 'stage' | 'onBook'>) {
+  const [tierId, setTierId] = useState(DEFAULT_TIER);
+  const [minute, setMinute] = useState(card.starts[0]!.minute);
+  const tier = card.tiers?.find((each) => each.id === tierId);
+  const start = startAt(card, minute);
   return (
-    <ul className="events-cards">
+    <li
+      className="ui-print events-flyer"
+      data-category={CATEGORY_OF[card.kind]}
+      data-tier={tier?.id}
+    >
+      <Face card={card} time={start.words} tier={tier} stage={stage} />
+      <Details card={card} shown={tier ?? card} />
+      <div className="events-flyer-stub">
+        {tier ? <TierRow card={card} tier={tier} onTier={setTierId} /> : null}
+        <BookingForm card={card} start={start} tier={tier} onStart={setMinute} onBook={onBook} />
+      </div>
+    </li>
+  );
+}
+
+export function EventCards({ cards, stage, onBook }: EventCardsProps) {
+  return (
+    <ul className="events-flyers">
       {cards.map((card) =>
         card.starts.length === 0 ? (
-          <FullCard key={card.kind} card={card} />
+          <FullCard key={card.kind} card={card} stage={stage} />
         ) : (
-          <EventCard key={card.kind} card={card} onBook={onBook} />
+          <EventCard key={card.kind} card={card} stage={stage} onBook={onBook} />
         ),
       )}
     </ul>

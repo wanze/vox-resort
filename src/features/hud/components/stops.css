@@ -1,0 +1,31 @@
+/* The week's poster and an offer each stop the game, so the scene behind is veiled as for the paper. */
+.hud-stop-scrim {
+  background: var(--veil);
+}
+
+.hud-stop {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  width: min(460px, 100%);
+  max-height: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-pebble);
+  animation: ui-pop var(--pop);
+}
+
+.hud-stop-body {
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+.hud-stop-text {
+  margin: 0;
+  font: 400 var(--size-body) / 1.4 var(--font-ui);
+}
+
+.hud-stop .ui-actions {
+  margin-top: 0;
+}

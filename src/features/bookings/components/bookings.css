@@ -90,11 +90,6 @@
 .bookings-voucher {
   display: grid;
   overflow: hidden;
-  border: 1px solid var(--edge);
-  border-radius: var(--radius-sm);
-  background: var(--grain), var(--print-paper);
-  box-shadow: var(--shadow-print);
-  color: var(--text);
 }
 
 .bookings-voucher-head {

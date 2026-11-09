@@ -149,6 +149,13 @@ describe('programmeView', () => {
     expect(view.upcoming[0]).toMatchObject({ label: 'Live music', site: 'Coral Stage' });
   });
 
+  it('pins up the whole resort on the poster, whichever stage is chosen', () => {
+    const view = programmeView(facts({ programme: booked({}) }), 'kids-club#0');
+    expect(view.poster).toHaveLength(7);
+    expect(view.poster[0]).toMatchObject({ today: true, weather: 'rain' });
+    expect(view.poster[0]!.events).toMatchObject([{ time: '20:00', site: 'Coral Stage' }]);
+  });
+
   it('says what a booked show costs, and which the money will not reach', () => {
     const programme = booked({
       kind: 'fireworks',

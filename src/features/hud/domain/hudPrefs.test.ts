@@ -16,6 +16,8 @@ describe('parsePrefs', () => {
       signs: false,
       singleKeys: false,
       fastNights: false,
+      pauseWeek: false,
+      pauseOffers: false,
     };
     expect(parsePrefs(JSON.parse(JSON.stringify(prefs)))).toEqual(prefs);
   });
@@ -55,5 +57,13 @@ describe('parsePrefs', () => {
     expect(parsePrefs({ muted: [], markers: true, singleKeys: true }).fastNights).toBe(true);
     expect(parsePrefs({ muted: [], fastNights: 'no' }).fastNights).toBe(true);
     expect(parsePrefs({ muted: [], fastNights: false }).fastNights).toBe(false);
+  });
+
+  it('stops for the week and for each offer, in a store from before them', () => {
+    expect(parsePrefs({ muted: [] })).toMatchObject({ pauseWeek: true, pauseOffers: true });
+    expect(parsePrefs({ muted: [], pauseOffers: false, pauseWeek: 'no' })).toMatchObject({
+      pauseWeek: true,
+      pauseOffers: false,
+    });
   });
 });

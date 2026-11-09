@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
+import type { PosterDay } from '../domain/poster';
 import { DAY_PARTS, type Chip, type DayColumn, type DayPart } from '../domain/programmeView';
+import { ProgrammePoster } from './ProgrammePoster';
 
 export interface Cell {
   readonly day: number;
@@ -8,6 +11,7 @@ export interface Cell {
 
 export interface ProgrammeWeekProps {
   readonly days: readonly DayColumn[];
+  readonly poster: readonly PosterDay[];
   readonly cell: Cell | null;
   readonly chip: number | null;
   readonly onCell: (cell: Cell) => void;
@@ -62,7 +66,7 @@ function PartCell({
   day,
   part,
   ...props
-}: { readonly day: DayColumn; readonly part: DayPart } & Omit<ProgrammeWeekProps, 'days'>) {
+}: { readonly day: DayColumn; readonly part: DayPart } & GridProps) {
   const chosen = props.cell?.day === day.day && props.cell.part === part;
   return (
     <div className="events-programme-cell" data-part={part}>
@@ -90,8 +94,10 @@ function PartCell({
   );
 }
 
+type GridProps = Omit<ProgrammeWeekProps, 'days' | 'poster'>;
+
 // Days as rows and the parts of the day as columns, so a phone's sheet shows it as a desk does.
-export function ProgrammeWeek({ days, ...props }: ProgrammeWeekProps) {
+function WeekGrid({ days, ...props }: GridProps & { readonly days: readonly DayColumn[] }) {
   return (
     <div className="events-programme-week">
       <span className="events-programme-part-head" aria-hidden="true" />
@@ -109,5 +115,34 @@ export function ProgrammeWeek({ days, ...props }: ProgrammeWeekProps) {
         </div>
       ))}
     </div>
+  );
+}
+
+type Shown = 'grid' | 'poster';
+
+const SHOWN_NAMES: { readonly [shown in Shown]: string } = {
+  grid: 'Plan',
+  poster: 'Poster',
+};
+
+export function ProgrammeWeek({ days, poster, ...props }: ProgrammeWeekProps) {
+  const [shown, setShown] = useState<Shown>('grid');
+  return (
+    <>
+      <div className="ui-row" role="group" aria-label="Show the week as">
+        {(['grid', 'poster'] as const).map((each) => (
+          <button
+            key={each}
+            type="button"
+            className="ui-button"
+            aria-pressed={shown === each}
+            onClick={() => setShown(each)}
+          >
+            {SHOWN_NAMES[each]}
+          </button>
+        ))}
+      </div>
+      {shown === 'grid' ? <WeekGrid days={days} {...props} /> : <ProgrammePoster days={poster} />}
+    </>
   );
 }

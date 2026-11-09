@@ -56,7 +56,12 @@ import type { OverlayKind } from '../features/overlays/domain/overlays';
 import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 import type { SimSpeed } from '../features/sim/domain/simClock';
-import type { Toast } from '../features/hud/domain/news';
+import type { BookingNews, Toast } from '../features/hud/domain/news';
+import type { PosterDay } from '../features/events/domain/poster';
+import type { ProgrammeControls } from '../features/events/components/programmeControls';
+import type { BookingsControls } from '../features/bookings/components/bookingsControls';
+import { StopSheet } from '../features/hud/components/StopSheet';
+import { useStops, type StopControls } from './useStops';
 import type {
   ClockControls,
   GuestViewControls,
@@ -319,6 +324,62 @@ function useSoundCues(
   return { onRefused, onMorning };
 }
 
+// The showcase's callbacks, with the sounds they cue and the stops they make beside what they do.
+function useStopsHeard(
+  stopsFor: Parameters<typeof useStops>,
+  cuesFor: Parameters<typeof useSoundCues>,
+  told: {
+    readonly hearBooking: (news: BookingNews) => void;
+    readonly replaced: () => void;
+  },
+) {
+  const stops = useStops(...stopsFor);
+  const { onRefused, onMorning } = useSoundCues(...cuesFor);
+  const { hearMorning, hearBooking: stopForBooking, clear } = stops;
+  const { hearBooking, replaced } = told;
+  return {
+    stops,
+    onRefused,
+    onMorningStops: useCallback(() => {
+      onMorning();
+      hearMorning();
+    }, [onMorning, hearMorning]),
+    hearBooking: useCallback(
+      (news: BookingNews) => {
+        hearBooking(news);
+        stopForBooking(news);
+      },
+      [hearBooking, stopForBooking],
+    ),
+    onResortReplaced: useCallback(() => {
+      replaced();
+      clear();
+    }, [replaced, clear]),
+  };
+}
+
+const NO_POSTER: readonly PosterDay[] = [];
+
+// Over the HUD, as the paper is: a stop pauses the game until it is answered.
+function StopLayer(props: {
+  readonly stops: StopControls;
+  readonly programme: ProgrammeControls;
+  readonly bookings: BookingsControls;
+  readonly playing: boolean;
+}) {
+  const { stops } = props;
+  if (!props.playing) return null;
+  return (
+    <StopSheet
+      stop={stops.shown}
+      poster={props.programme.view?.poster ?? NO_POSTER}
+      bookings={props.bookings}
+      onAnswer={stops.answer}
+      onPlan={stops.plan}
+    />
+  );
+}
+
 // None while nothing is for sale, so the key does nothing on a plot that owns all of itself.
 function landToggle(
   land: LandView | null,
@@ -437,8 +498,12 @@ export function App() {
   const { adoptSpeed } = clock;
   const { note } = money;
   const { markDirty, morning } = saves;
-  const { hearEvent, hearBooking } = news;
-  const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
+  const { hearEvent } = news;
+  const { stops, onRefused, onMorningStops, hearBooking, onResortReplaced } = useStopsHeard(
+    [hud, { clock, prefs: news.prefs, playing }, windows, programme],
+    [sound, { note, morning }, news.toasts],
+    { hearBooking: news.hearBooking, replaced },
+  );
   const { onSeasonEnded, onPhotoCall } = newspaper;
   const { cue: onCue, hear: onHear } = sound;
 
@@ -455,13 +520,13 @@ export function App() {
       canvas,
       hud,
       onToolChange: selectTool,
-      onResortReplaced: replaced,
+      onResortReplaced,
       onRefused,
       onBuildNote: note,
       onFrame: overlay.update,
       onLoading: adoptLoading,
       onDirty: markDirty,
-      onMorning,
+      onMorning: onMorningStops,
       onSeasonEnded,
       onPhotoCall,
       onCue,
@@ -505,11 +570,11 @@ export function App() {
     toolRef,
     adoptParams,
     adoptLoading,
-    replaced,
+    onResortReplaced,
     note,
     onRefused,
     markDirty,
-    onMorning,
+    onMorningStops,
     onSeasonEnded,
     onPhotoCall,
     onCue,
@@ -591,6 +656,7 @@ export function App() {
         />
       </Screen>
       <PhotoLayer photo={photo} layout={layout} />
+      <StopLayer stops={stops} programme={programme} bookings={bookings} playing={playing} />
       <PaperLayer newspaper={newspaper} playing={playing} />
     </div>
   );

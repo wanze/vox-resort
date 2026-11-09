@@ -220,6 +220,7 @@ function CellCards({
       <EventCards
         key={`${site.key}:${cell.day}:${cell.part}`}
         cards={programme.cardsAt(cell.day, cell.part)}
+        stage={site.label}
         onBook={(kind, start, repeat, tier) => {
           const refusal = programme.book({
             kind,
@@ -264,6 +265,7 @@ function Booking({ view, programme }: ViewProps) {
     <>
       <ProgrammeWeek
         days={view.days}
+        poster={view.poster}
         cell={cell}
         chip={booking}
         onCell={(next) => {

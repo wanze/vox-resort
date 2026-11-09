@@ -27,6 +27,7 @@ import {
   type Programme,
   type Repeat,
 } from './programme';
+import { posterWeek, type PosterDay } from './poster';
 import { sitesOf } from './sites';
 import {
   clockWords,
@@ -191,6 +192,8 @@ export interface ProgrammeView {
   readonly site: SiteTab | null;
   readonly days: readonly DayColumn[];
   readonly upcoming: readonly Upcoming[];
+  // Every stage's week, not only the chosen one's.
+  readonly poster: readonly PosterDay[];
 }
 
 const KINDS: readonly EventKind[] = EVENT_KIND_IDS.map((id) => EVENT_KINDS[id]);
@@ -391,8 +394,11 @@ export function cardsAt(
     .toSorted((a, b) => Number(a.starts.length === 0) - Number(b.starts.length === 0));
 }
 
+const labelsOf = (tabs: readonly SiteTab[]): ReadonlyMap<string, string> =>
+  new Map(tabs.map((tab) => [tab.key, tab.label]));
+
 function upcomingOf(facts: ProgrammeFacts, tabs: readonly SiteTab[]): readonly Upcoming[] {
-  const labels = new Map(tabs.map((tab) => [tab.key, tab.label]));
+  const labels = labelsOf(tabs);
   return nextEvents(facts.programme, facts.now, UPCOMING).map((each: Occurrence) => {
     const fee = feeOf(EVENT_KINDS[each.kind], each.tier, facts.mode);
     return {
@@ -582,6 +588,7 @@ export function programmeView(facts: ProgrammeFacts, chosen: string | null): Pro
     site,
     days: Array.from({ length: DAYS_SHOWN }, (_, offset) => dayColumn(week, today + offset)),
     upcoming: upcomingOf(facts, sites),
+    poster: posterWeek(facts.programme, facts.now, DAYS_SHOWN, facts.forecast, labelsOf(sites)),
   };
 }
 

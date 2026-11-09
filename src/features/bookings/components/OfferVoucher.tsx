@@ -146,7 +146,7 @@ export function OfferVoucher(props: OfferVoucherProps) {
   const { offer } = card;
   return (
     <li
-      className="bookings-voucher"
+      className="ui-print bookings-voucher"
       data-brand={operatorNamed(offer.operator)?.brand}
       data-state="offer"
     >

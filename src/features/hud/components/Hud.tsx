@@ -168,6 +168,15 @@ const openReport = (props: Pick<HudView, 'history' | 'windows'>, day: number | n
   props.windows.show('report', true);
 };
 
+// A refusal, such as a full book, opens the Bookings window, which says why.
+const offerAnswers = (props: Pick<HudView, 'bookings' | 'windows'>) => ({
+  isOpen: (id: number) => props.bookings.view?.offers.some((card) => card.offer.id === id) ?? false,
+  answer: (id: number, accept: boolean) => {
+    if (!accept) return props.bookings.decline(id);
+    if (props.bookings.accept(id) !== null) props.windows.show('bookings', true);
+  },
+});
+
 // Null when a window has nothing to show yet, such as the generator before the first resort.
 const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   build: (props) => (
@@ -534,6 +543,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           singleKeys: props.news.prefs.singleKeys,
           onSingleKeysChange: props.news.setSingleKeys,
         }}
+        pauses={{ prefs: props.news.prefs, onChange: props.news.setPause }}
         sound={props.sound}
         forecast={props.programme.forecast}
         onPhoto={props.photo.enter}
@@ -573,6 +583,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           onOpenAdvice: () => props.windows.show('advice', true),
           onOpenReport: (day) => openReport(props, day),
           onOpenBookings: () => props.windows.show('bookings', true),
+          offers: offerAnswers(props),
           onDismiss: props.news.dismiss,
         }}
         onHold={props.news.hold}

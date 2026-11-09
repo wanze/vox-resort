@@ -7,7 +7,11 @@ import type { Showcase } from './showcase';
 export function useBookings(showcase: RefObject<Showcase | null>, hud: HudStore): BookingsControls {
   return {
     view: useHudSlice(hud, (state) => state.bookings),
-    accept: useCallback((id: number) => showcase.current?.acceptOffer(id) ?? 'gone', [showcase]),
+    // Not `??`: a null refusal is the acceptance, not a missing scene.
+    accept: useCallback(
+      (id: number) => (showcase.current ? showcase.current.acceptOffer(id) : 'gone'),
+      [showcase],
+    ),
     decline: useCallback((id: number) => showcase.current?.declineOffer(id), [showcase]),
   };
 }

@@ -1,4 +1,5 @@
 import { clockWords } from '../../events/domain/week';
+import type { BedsHeld } from './bedHolds';
 import type { Settlement } from './bookings';
 import type { CeremonyWhen } from './bookingsView';
 import type { Offer, OfferKind } from './offers';
@@ -28,6 +29,21 @@ export function inDays(days: number): string {
 
 export const ceremonyLine = (ceremony: CeremonyWhen, today: number): string =>
   `Ceremony ${inDays(ceremony.day - today)} at ${clockWords(ceremony.start)} on ${ceremony.venue}.`;
+
+const article = (noun: string): string => (/^[aeiou]/i.test(noun) ? 'an' : 'a');
+
+export function bedsLine(beds: BedsHeld): string {
+  if (beds.unhoused > 0) {
+    const who = beds.unhoused === 1 ? '1 of them' : `${beds.unhoused} of them`;
+    return `Short of beds: ${who} would have nowhere to sleep. A party sleeps under one roof.`;
+  }
+  const [only] = beds.lodgings;
+  const where =
+    beds.lodgings.length === 1 && only !== undefined
+      ? `${article(only)} ${only}`
+      : `${beds.lodgings.length} lodgings`;
+  return `${beds.held} beds held for them in ${where}.`;
+}
 
 export const nightsWords = (nights: number): string =>
   nights === 1 ? '1 night' : `${nights} nights`;

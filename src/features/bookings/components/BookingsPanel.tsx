@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Section } from '../../hud/components/ReportRows';
-import { ceremonyLine, groupWords, inDays } from '../domain/bookingWords';
+import { bedsLine, ceremonyLine, groupWords, inDays } from '../domain/bookingWords';
 import {
   deskOf,
   type AnsweredCard,
@@ -38,6 +38,11 @@ function Booked({ row, today }: { readonly row: BookedRow; readonly today: numbe
         {bookedLine(row, today)}
         {row.checks.length > 0 ? `, ${met} of ${row.checks.length} wishes met` : ''}.
       </p>
+      {row.beds ? (
+        <p className="bookings-entry-beds" data-short={row.beds.unhoused > 0}>
+          {bedsLine(row.beds)}
+        </p>
+      ) : null}
       {row.ceremony ? <p>{ceremonyLine(row.ceremony, today)}</p> : null}
       <Checks checks={row.checks} />
     </li>
@@ -89,7 +94,7 @@ function Offers({ view, bookings }: { readonly view: BookingsView } & BookingsPa
 
 function Book({ view }: { readonly view: BookingsView }) {
   if (view.booked.length === 0) {
-    return <p className="ui-note">No groups booked. Keep beds free for the ones you take.</p>;
+    return <p className="ui-note">No groups booked. Beds are held for the ones you take.</p>;
   }
   return (
     <ul className="bookings-list">

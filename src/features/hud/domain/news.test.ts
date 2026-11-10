@@ -3,9 +3,11 @@ import type { EventRun } from '../../events/domain/eventRuns';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import { startDay, reportOf, type DayReport } from '../../sim/domain/dayReport';
 import { createLedger } from '../../sim/domain/ledger';
+import { createBookings, type Settlement } from '../../bookings/domain/bookings';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   adviceKey,
+  bookingNewsSince,
   eventKey,
   logBooking,
   offerNews,
@@ -30,10 +32,27 @@ import {
   type Toast,
   toastKey,
   type ToastKind,
+  toldOf,
   tonightNewsOf,
   withoutResolved,
   withUpdate,
 } from './news';
+
+const failedSettlement = (id: number): Settlement => ({
+  id,
+  operator: 'Sunshine Tours',
+  kind: 'couple',
+  parties: 0,
+  day: 13,
+  nights: 2,
+  premium: 0.2,
+  takings: 0,
+  bonusShare: 0.3,
+  meanStars: null,
+  promisedStars: 3,
+  bonus: 0,
+  outcome: 'failed',
+});
 
 const advice = (kind: AdviceKind, weight = 0.9, tileX = 0): Advice => ({
   kind,
@@ -311,6 +330,16 @@ describe('showBooking', () => {
     };
     const both = showBooking(offered, settledNews(settlement, 200), normally);
     expect(both.map(toastKey)).toEqual(['booking:4:offer', 'booking:4:settled']);
+  });
+
+  it('tells an older booking settling after a newer one once, and the newer one never again', () => {
+    const turnedAway = { ...createBookings(), nextId: 8, settled: [failedSettlement(7)] };
+    const told = toldOf(turnedAway);
+    const later = { ...turnedAway, settled: [failedSettlement(5), failedSettlement(7)] };
+    expect(bookingNewsSince(later, told, 300).map((news) => news.key)).toEqual([
+      'booking:5:settled',
+    ]);
+    expect(bookingNewsSince(later, toldOf(later), 400)).toEqual([]);
   });
 
   it('logs a muted offer but does not toast it', () => {

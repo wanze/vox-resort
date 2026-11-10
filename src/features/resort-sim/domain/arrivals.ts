@@ -25,7 +25,7 @@ import {
 } from '../../sim/domain/season';
 import { forgetStay, type ThoughtTally, type Thoughts } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
-import { admitBookedGroups } from './bookingSteps';
+import { admitBookedGroups, bedHoldsOf, spareBedsFor } from './bookingSteps';
 import { paidShareFor } from './dayClose';
 import type { SimNow } from './simNow';
 
@@ -175,6 +175,7 @@ export function admitWave(resort: ArrivalsState, day: number, wave: number): voi
     // The rating runDay sized the coach by, which is the resort these guests booked.
     expectationOf: (home) => expectationFor(resort.rating.stars, paidShareFor(resort, home)),
     ...seasonalDraws(resort.season, day),
+    spare: spareBedsFor(resort, day, bedHoldsOf(resort, day)),
   });
   settleIn(resort, arrived);
   resort.arrivalsAdmitted += arrived.length;

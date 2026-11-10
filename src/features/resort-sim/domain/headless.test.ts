@@ -164,6 +164,12 @@ const guestsOf = (game: HeadlessGame, booked: boolean): number[] => {
   return people;
 };
 
+const meanStay = (game: HeadlessGame): number => {
+  const party = guestsOf(game, true);
+  const stay = party.reduce((sum, person) => sum + game.state.happiness.stay[person]!, 0);
+  return stay / party.length;
+};
+
 describe('a wedding booked on the reference resort', () => {
   const weddingGame = () => {
     const world = referenceWorldOf(referenceJson);
@@ -201,7 +207,9 @@ describe('a wedding booked on the reference resort', () => {
     return { game, play };
   };
 
-  it('holds the ceremony for the party alone, and settles better than a group without one', () => {
+  // Reviews are whole stars, so the party's mood on its last evening is what the ceremony moves.
+  it('holds the ceremony for the party alone, and sends them home happier than without one', () => {
+    const lastEvening = 5 * TICKS_PER_DAY + 20 * 60;
     const held = weddingGame();
     held.play(3 * TICKS_PER_DAY + CHECK_IN_TICK);
     expect(ceremonyOf(held.game.state.events.programme, 1)).toMatchObject({
@@ -216,20 +224,18 @@ describe('a wedding booked on the reference resort', () => {
     for (const person of guestsOf(held.game, false)) {
       expect(stayCount(thoughts, person, 'wedding')).toBe(0);
     }
+    held.play(lastEvening);
+    const withMood = meanStay(held.game);
     held.play(7 * TICKS_PER_DAY + CHECK_IN_TICK);
     const [withOne] = held.game.state.bookings.settled;
 
     const none = weddingGame();
     none.play(3 * TICKS_PER_DAY + CHECK_IN_TICK);
     none.game.state.events.programme = withoutCeremony(none.game.state.events.programme, 1);
-    none.play(7 * TICKS_PER_DAY + CHECK_IN_TICK);
-    const [without] = none.game.state.bookings.settled;
-    expect(withOne).toMatchObject({ id: 1 });
-    expect(without).toMatchObject({ id: 1 });
-    expect(withOne!.meanStars!).toBeGreaterThan(without!.meanStars!);
-    expect(withOne!.outcome).toBe('bonus');
-    expect(without!.outcome).toBe('missed');
+    none.play(lastEvening);
+    expect(withMood).toBeGreaterThan(meanStay(none.game));
+    expect(withOne).toMatchObject({ id: 1, outcome: 'bonus' });
     expect(held.game.state.events.programme.bookings.some((each) => each.group === 1)).toBe(false);
-    // Two runs of four days each of the reference resort.
+    // Two runs of the reference resort, of four days and of three.
   }, 120_000);
 });

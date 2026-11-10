@@ -6,6 +6,7 @@ import {
   offered,
   type BookingsState,
 } from '../../bookings/domain/bookings';
+import { planHolds } from '../../bookings/domain/bedHolds';
 import type { Offer } from '../../bookings/domain/offers';
 import { createEvents } from '../../events/domain/eventRuns';
 import { ceremonyOf, occurrencesOn } from '../../events/domain/programme';
@@ -305,6 +306,14 @@ const groupOffer = (over: Partial<Offer> = {}): Offer => ({
 const bookedWith = (offer: Offer): BookingsState =>
   accept(offered(createBookings(), offer, 9), offer.id).state;
 
+function fillUntil(state: ArrivalsState, last: number): void {
+  for (let day = 0; day <= last; day++) {
+    runDay(state, day);
+    admitWave(state, day, 1);
+    admitWave(state, day, 2);
+  }
+}
+
 describe('runDay with a group booked', () => {
   it('checks the group in first, for its nights, and shrinks the ordinary arrivals', () => {
     // Fewer free beds than the opening morning's advance bookings want.
@@ -343,6 +352,23 @@ describe('runDay with a group booked', () => {
     expect(booking!.arrived + booking!.turnedAway).toBe(12);
     expect(state.today.turnedAway ?? 0).toBeGreaterThan(0);
     expect(demandOn(state.bookings, 3)).toBeCloseTo(0.9);
+  });
+
+  it('keeps the beds a booked group needs from the walk-ins in the days before it', () => {
+    const offer = groupOffer({ arrivesOn: 3, parties: 3 });
+    const unheld = stateOf(true).state;
+    unheld.season = firstSeason(0);
+    fillUntil(unheld, 2);
+    const [unplanned] = planHolds(unheld.guests, bookedWith(offer).accepted, 3, {
+      openOn: () => true,
+    });
+    expect(unplanned!.unhoused.length).toBeGreaterThan(0);
+
+    const held = stateOf(true).state;
+    held.season = firstSeason(0);
+    held.bookings = bookedWith(offer);
+    fillUntil(held, 3);
+    expect(held.bookings.accepted[0]).toMatchObject({ arrived: 3, turnedAway: 0 });
   });
 
   it('has every booked guest complain of a promise the resort did not keep', () => {

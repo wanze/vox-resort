@@ -39,6 +39,15 @@ describe('bookingsViewOf', () => {
     expect(bookingsViewOf(state, facts, 4).booked.every((row) => !('ceremony' in row))).toBe(true);
   });
 
+  it('shows the beds held under a group still to come, and none under one here', () => {
+    let state = offered(offered(createBookings(), offer(1, 4), 9), offer(2, 8), 9);
+    state = accept(accept(state, 1).state, 2).state;
+    state = arrive(state, 1, { parties: [3], turnedAway: 0, expected: 100, unmet: [] }, 4).state;
+    const beds = { held: 12, lodgings: ['Villa'], unhoused: 0 };
+    const view = bookingsViewOf(state, facts, 4, remedies, undefined, () => beds);
+    expect(view.booked.map((row) => row.beds)).toEqual([undefined, beds]);
+  });
+
   it('ticks an offer against the resort right now', () => {
     const state = offered(createBookings(), offer(1, 9), 9);
     const [card] = bookingsViewOf(state, facts, 5).offers;

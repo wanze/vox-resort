@@ -9,17 +9,20 @@ import {
   type Settlement,
 } from '../../bookings/domain/bookings';
 import {
-  drawOffer,
-  nextOfferAfter,
-  offerDue,
-  partyKindsOf,
-  peopleExpected,
-} from '../../bookings/domain/offers';
+  groupLeavesOn,
+  groupShapesOf,
+  planHolds,
+  spareUntil,
+  type BedHold,
+  type HoldOptions,
+} from '../../bookings/domain/bedHolds';
+import { drawOffer, nextOfferAfter, offerDue, peopleExpected } from '../../bookings/domain/offers';
 import {
   offeringOf,
   requirementNoun,
   unmetOn,
   type Offering,
+  type Requirement,
   type ResortFacts,
 } from '../../bookings/domain/requirements';
 import { familyOf, OBJECT_TYPES, venueOf } from '../../catalog/domain/objectTypes';
@@ -33,7 +36,6 @@ import {
 import { byEventRoom } from '../../events/domain/sites';
 import { priceOf } from '../../catalog/domain/prices';
 import { isUnlocked } from '../../catalog/domain/unlocks';
-import type { PartyKind, PartyMix } from '../../guests/domain/parties';
 import { createRandom } from '../../layout/domain/random';
 import { CHECK_IN_TICK, runCheckIn } from '../../sim/domain/checkIn';
 import { countTurnedAway } from '../../sim/domain/dayReport';
@@ -56,9 +58,6 @@ const GOLDEN = 0x9e3779b1;
 
 const offerRandom = (day: number) => createRandom(OFFER_SALT ^ Math.imul(day + 1, GOLDEN));
 const groupRandom = (booking: number) => createRandom(GROUP_SALT ^ Math.imul(booking + 1, GOLDEN));
-
-const NO_ONE: PartyMix = { family: 0, couple: 0, friends: 0, solo: 0 };
-const onlyOf = (kind: PartyKind): PartyMix => ({ ...NO_ONE, [kind]: 1 });
 
 // Calm is the family's, as the sim's own venues read it: a variant only looks different.
 function catalogueOffering(prestige: Prestige, mode: Ledger['mode']): Offering {
@@ -97,12 +96,53 @@ export function resortFactsAt(resort: StandingState, tick: number): ResortFacts 
   };
 }
 
-// One party a call, as a one-kind mix: runCheckIn's draw order is untouched, only its stream is
-// the group's own.
+type HoldingResort = Pick<
+  ArrivalsState,
+  'guests' | 'bookings' | 'season' | 'closing' | 'renovating' | 'constructing'
+>;
+
+function holdOptions(resort: HoldingResort): HoldOptions {
+  const lastNight = resort.season ? lastNightOf(resort.season) : undefined;
+  return {
+    lastNight,
+    openOn: (key, day) => {
+      const tick = day * TICKS_PER_DAY + CHECK_IN_TICK;
+      return (
+        !resort.closing.has(key) &&
+        (resort.renovating.get(key) ?? -1) <= tick &&
+        (resort.constructing.get(key) ?? -1) <= tick
+      );
+    },
+  };
+}
+
+export const bedHoldsOf = (resort: HoldingResort, day: number): readonly BedHold[] =>
+  planHolds(resort.guests, resort.bookings.accepted, day, holdOptions(resort));
+
+// Undefined with nothing held, so a resort with no group due checks in exactly as before.
+export function spareBedsFor(
+  resort: HoldingResort,
+  day: number,
+  holds: readonly BedHold[],
+  except?: number,
+): ((leavesOn: number) => ArrayLike<number> | undefined) | undefined {
+  if (holds.every((hold) => hold.booking === except)) return undefined;
+  const options = holdOptions(resort);
+  return (leavesOn) =>
+    spareUntil(resort.guests, holds, day, {
+      ...options,
+      leavesOn,
+      ...(except === undefined ? {} : { except }),
+    });
+}
+
+// One party a call, in the shape its beds were held for: runCheckIn's draw order is untouched,
+// only its stream is the group's own.
 function checkInGroup(
   resort: ArrivalsState,
   booking: Booking,
   day: number,
+  holds: readonly BedHold[],
   admit: (arrived: readonly number[]) => void,
 ): {
   readonly parties: readonly number[];
@@ -115,7 +155,10 @@ function checkInGroup(
   const parties: number[] = [];
   const arrived: number[] = [];
   let turnedAway = 0;
-  for (const kind of partyKindsOf(booking)) {
+  // A group's nights are its booking's, not the draw's, so it asks to the morning it really goes.
+  const spare = spareBedsFor(resort, day, holds, booking.id);
+  const leavesOn = groupLeavesOn(booking, lastNight);
+  for (const shape of groupShapesOf(booking)) {
     const people = runCheckIn({
       guests,
       needs: resort.needs,
@@ -125,8 +168,9 @@ function checkInGroup(
       random,
       room: 1,
       expectationOf: (home) => expectationFor(booking.promisedStars, paidShareFor(resort, home)),
-      mix: onlyOf(kind),
+      shape,
       lastNight,
+      spare: spare && (() => spare(leavesOn)),
     });
     if (people.length === 0) {
       turnedAway++;
@@ -160,6 +204,20 @@ function planCeremony(resort: ArrivalsState, booking: Booking, day: number, tick
   });
 }
 
+function brokenPromise(
+  resort: ArrivalsState,
+  requirement: Requirement,
+  arrived: readonly number[],
+  tick: number,
+): void {
+  const noun = requirementNoun(requirement);
+  for (const person of arrived) {
+    if (think(resort.thoughts, person, 'promised', noun, tick)) {
+      tallyInto(resort.thoughtDay, 'promised', noun);
+    }
+  }
+}
+
 // Before the day's ordinary arrivals are sized, so a group costs walk-in guests rather than adding
 // to them. Short of beds, the rest are turned away and the booking fails at the door.
 export function admitBookedGroups(
@@ -169,21 +227,15 @@ export function admitBookedGroups(
   admit: (arrived: readonly number[]) => void,
 ): void {
   const tick = day * TICKS_PER_DAY + CHECK_IN_TICK;
+  const holds = open ? bedHoldsOf(resort, day) : [];
   for (const booking of arrivingOn(resort.bookings, day)) {
     const group = open
-      ? checkInGroup(resort, booking, day, admit)
+      ? checkInGroup(resort, booking, day, holds, admit)
       : { parties: [], turnedAway: booking.parties, arrived: [] };
     const turnedPeople = peopleExpected({ kind: booking.kind, parties: group.turnedAway });
     resort.today = countTurnedAway(resort.today, turnedPeople);
     const unmet = unmetOn(booking.requirements, resortFactsAt(resort, tick));
-    for (const requirement of unmet) {
-      const noun = requirementNoun(requirement);
-      for (const person of group.arrived) {
-        if (think(resort.thoughts, person, 'promised', noun, tick)) {
-          tallyInto(resort.thoughtDay, 'promised', noun);
-        }
-      }
-    }
+    for (const requirement of unmet) brokenPromise(resort, requirement, group.arrived, tick);
     const factor = 1 + booking.premium;
     const expected = group.arrived.reduce((sum, person) => {
       const home = resort.guests.home[person]!;

@@ -73,15 +73,16 @@ export const settledNews = (settlement: Settlement, at: number): BookingNews => 
   settlement,
 });
 
-// The newest offer and settlement the player has heard of.
+// The newest offer, and every settlement, the player has heard of. Settlements go by the day
+// they settled, not by id: a group turned away at the door settles before one booked earlier.
 export interface BookingsTold {
   readonly offer: number;
-  readonly settled: number;
+  readonly settled: ReadonlySet<number>;
 }
 
 export const toldOf = (bookings: BookingsState): BookingsTold => ({
   offer: bookings.nextId - 1,
-  settled: bookings.settled[0]?.id ?? 0,
+  settled: new Set(bookings.settled.map((each) => each.id)),
 });
 
 // Payouts first, oldest first, then the offers: a group leaving makes room for the next.
@@ -90,7 +91,7 @@ export function bookingNewsSince(
   told: BookingsTold,
   at: number,
 ): readonly BookingNews[] {
-  const settled = bookings.settled.filter((each) => each.id > told.settled).toReversed();
+  const settled = bookings.settled.filter((each) => !told.settled.has(each.id)).toReversed();
   const offers = bookings.open.filter((each) => each.id > told.offer);
   return [
     ...settled.map((settlement) => settledNews(settlement, at)),

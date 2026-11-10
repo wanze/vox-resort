@@ -12,6 +12,7 @@ import {
   wheelchairFor,
   type Party,
   type PartyMix,
+  type PartyShape,
 } from './parties';
 
 export interface GuestRecord {
@@ -194,10 +195,15 @@ export function checkInParty(
     readonly mix?: PartyMix | undefined;
     // The last night anybody may stay, which a season's closing morning sets.
     readonly lastNight?: number | undefined;
+    // Drawn ahead, so the beds a booked group needs are known before it comes.
+    readonly shape?: PartyShape | undefined;
+    // Beds per lodging the party may take and still leave every booked group arriving by the
+    // morning it goes its own; undefined where no group is due.
+    readonly spare?: ((leavesOn: number) => ArrayLike<number> | undefined) | undefined;
   },
 ): Party | null {
   const { random, day, free } = options;
-  const shape = partyShapeFor(random, options.mix);
+  const shape = options.shape ?? partyShapeFor(random, options.mix);
   // Adults first, so a party cut to one person is never a child on holiday alone.
   const members = [
     ...free.adults.splice(0, Math.min(shape.adults, free.adults.length)),
@@ -217,9 +223,11 @@ export function checkInParty(
   };
   (guests.parties as Party[]).push(party);
 
-  const home = homeWithRoom(guests.freeBeds, members.length);
-  if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! - members.length;
+  // Drawn before the bed is chosen, which takes no draw, so the stream's order is unchanged.
   const nights = capStay(stayNights(random), day, options.lastNight);
+  const spare = options.spare?.(day + nights + 1);
+  const home = homeWithRoom(guests.freeBeds, members.length, spare);
+  if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! - members.length;
   const people = guests.people as GuestRecord[];
   for (const person of members) {
     guests.party[person] = index;

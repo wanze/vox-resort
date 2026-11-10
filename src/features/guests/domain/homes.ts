@@ -38,9 +38,14 @@ export function assignHomes(
 }
 
 // Shared with the opening assignment so a late arrival is housed by the same greedy rule.
-export function homeWithRoom(freeBeds: Int32Array, size: number): number {
+// `spare` caps the free beds where some are promised to a booked group coming later.
+export function homeWithRoom(
+  freeBeds: ArrayLike<number>,
+  size: number,
+  spare?: ArrayLike<number>,
+): number {
   for (let home = 0; home < freeBeds.length; home++) {
-    if (freeBeds[home]! >= size) return home;
+    if (freeBeds[home]! >= size && (spare?.[home] ?? size) >= size) return home;
   }
   return NO_HOME;
 }

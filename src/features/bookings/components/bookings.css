@@ -31,6 +31,10 @@
   margin: 0;
 }
 
+.bookings-entry-beds[data-short='true'] {
+  color: var(--ink-bad);
+}
+
 .bookings-entry-head {
   display: flex;
   gap: var(--space-2);

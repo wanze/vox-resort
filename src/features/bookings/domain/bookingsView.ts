@@ -1,3 +1,4 @@
+import type { BedsHeld } from './bedHolds';
 import { MAX_ACCEPTED, peopleExpected, type Offer } from './offers';
 import { demandOn, type Booking, type BookingsState, type Settlement } from './bookings';
 import { isMet, type Requirement, type ResortFacts } from './requirements';
@@ -30,11 +31,17 @@ export interface BookedRow {
   readonly booking: Booking;
   readonly checks: readonly RequirementCheck[];
   readonly ceremony?: CeremonyWhen;
+  // Only for a group still to come: one here already has its beds.
+  readonly beds?: BedsHeld;
 }
 
 export type CeremonyOf = (booking: number) => CeremonyWhen | null;
 
 const NO_CEREMONIES: CeremonyOf = () => null;
+
+export type BedsOf = (booking: number) => BedsHeld | null;
+
+const NO_BEDS: BedsOf = () => null;
 
 export interface BookingsView {
   readonly day: number;
@@ -66,9 +73,12 @@ function bookedRowOf(
   now: (requirement: Requirement) => boolean,
   ceremonyOf: CeremonyOf,
   remedies: Remedies,
+  bedsOf: BedsOf,
 ): BookedRow {
   if (booking.state !== 'staying') {
-    return { booking, checks: checksOf(booking.requirements, now, remedies) };
+    const checks = checksOf(booking.requirements, now, remedies);
+    const beds = bedsOf(booking.id);
+    return beds === null ? { booking, checks } : { booking, checks, beds };
   }
   const arrived = (requirement: Requirement) =>
     !booking.unmet.some((each) => sameRequirement(each, requirement));
@@ -85,6 +95,7 @@ export function bookingsViewOf(
   day: number,
   remedies: Remedies = NO_REMEDIES,
   ceremonyOf: CeremonyOf = NO_CEREMONIES,
+  bedsOf: BedsOf = NO_BEDS,
 ): BookingsView {
   const now = (requirement: Requirement) => isMet(requirement, facts);
   return {
@@ -96,7 +107,7 @@ export function bookingsViewOf(
     })),
     booked: state.accepted
       .toSorted((a, b) => a.arrivesOn - b.arrivesOn)
-      .map((booking) => bookedRowOf(booking, now, ceremonyOf, remedies)),
+      .map((booking) => bookedRowOf(booking, now, ceremonyOf, remedies, bedsOf)),
     settled: state.settled,
     full: state.accepted.length >= MAX_ACCEPTED,
     demand: demandOn(state, day),

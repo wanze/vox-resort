@@ -160,7 +160,8 @@ import {
   type OfferRefusal,
 } from '../features/bookings/domain/bookings';
 import { bookingsViewOf, type BookingsView } from '../features/bookings/domain/bookingsView';
-import { resortFactsAt } from '../features/resort-sim/domain/bookingSteps';
+import { bedHoldsOf, resortFactsAt } from '../features/resort-sim/domain/bookingSteps';
+import { bedsOfHolds } from '../features/bookings/domain/bedHolds';
 import { restoreBookings } from '../features/bookings/domain/bookingsSnapshot';
 import {
   book,
@@ -3041,11 +3042,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       clock.day,
       (requirement) => requirementRemedies(requirement, resort.prestige, resort.ledger.mode),
       (group) => ceremonyWhen(resort.events.programme, group, clock.ticks, resort.venues),
+      bedsOfHolds(bedHoldsOf(resort, clock.day), resort.guests.homes),
     );
   };
 
   // What the player has heard of: a load or a new game marks what it brings as told.
-  let told: BookingsTold = { offer: 0, settled: 0 };
+  let told: BookingsTold = { offer: 0, settled: new Set() };
   const hearNoBookings = (): void => {
     told = toldOf(current().bookings);
   };

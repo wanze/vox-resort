@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Settlement } from './bookings';
 import {
+  bedsLine,
   ceremonyLine,
   groupWords,
   inDays,
@@ -26,6 +27,23 @@ const settlement = (over: Partial<Settlement>): Settlement => ({
   bonus: 3_200,
   outcome: 'bonus',
   ...over,
+});
+
+describe('bedsLine', () => {
+  it('says where the beds are held, or how many of the group are short of one', () => {
+    expect(bedsLine({ held: 4, lodgings: ['Cottage'], unhoused: 0 })).toBe(
+      '4 beds held for them in a Cottage.',
+    );
+    expect(bedsLine({ held: 2, lodgings: ['Apartment'], unhoused: 0 })).toBe(
+      '2 beds held for them in an Apartment.',
+    );
+    expect(bedsLine({ held: 8, lodgings: ['Cottage', 'Bungalow'], unhoused: 0 })).toBe(
+      '8 beds held for them in 2 lodgings.',
+    );
+    expect(bedsLine({ held: 4, lodgings: ['Cottage'], unhoused: 5 })).toBe(
+      'Short of beds: 5 of them would have nowhere to sleep. A party sleeps under one roof.',
+    );
+  });
 });
 
 describe('ceremonyLine', () => {

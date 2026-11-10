@@ -6,7 +6,7 @@ import {
   type Guests,
 } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
-import type { PartyMix } from '../../guests/domain/parties';
+import type { PartyMix, PartyShape } from '../../guests/domain/parties';
 import { welcome, type Happiness } from './happiness';
 import { resetNeeds, type Needs } from './needs';
 import { arrivalsFor, type Rating } from './rating';
@@ -77,14 +77,17 @@ export function runCheckIn(parts: {
   readonly expectationOf?: (home: number) => number;
   readonly mix?: PartyMix | undefined;
   readonly lastNight?: number | undefined;
+  readonly shape?: PartyShape | undefined;
+  readonly spare?: ((leavesOn: number) => ArrayLike<number> | undefined) | undefined;
 }): readonly number[] {
   const { guests, needs, happiness, rating, day, random, expectationOf, mix, lastNight } = parts;
+  const { shape, spare } = parts;
   const free = freeBodiesOf(guests);
   let room = parts.room ?? arrivalsFor(rating, bedsOn(guests));
   const arrived: number[] = [];
 
   while (room > 0) {
-    const party = checkInParty(guests, { random, day, free, mix, lastNight });
+    const party = checkInParty(guests, { random, day, free, mix, lastNight, shape, spare });
     if (!party) break;
     if (guests.home[party.members[0]!] === NO_HOME) {
       // No coach after them: whatever is left free would not fit them either.

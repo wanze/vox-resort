@@ -1,0 +1,374 @@
+/* The game's sheet stops the page scrolling under the scene; a styleguide has no scene to keep. */
+.styleguide {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-5);
+  height: 100%;
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: var(--styleguide-ground);
+  user-select: text;
+}
+
+/* Every list on the page is a layout of samples, not a run of bullets. */
+.styleguide ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.styleguide-nav {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  max-height: calc(100dvh - 2 * var(--space-5));
+  padding: var(--space-4);
+  overflow-y: auto;
+  border-radius: var(--radius-pebble);
+}
+
+.styleguide-nav ul {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.styleguide-nav a {
+  color: var(--text);
+}
+
+.styleguide-title {
+  margin: 0;
+  font: 700 var(--size-lead) / 1.2 var(--font-title);
+  color: var(--stone-800);
+}
+
+.styleguide-toolbar {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-pebble);
+}
+
+.styleguide-toolbar .ui-form-choices {
+  flex-wrap: wrap;
+}
+
+.styleguide-toolbar .ui-form-choice {
+  min-width: 0;
+}
+
+/* The kit's slider keeps 4ch for a percentage; a width in pixels needs more. */
+.styleguide-toolbar .ui-slider {
+  grid-template-columns: auto minmax(0, 1fr) 6ch;
+  padding: 0;
+}
+
+/* A tab strip bleeds into a window's padding, so its host gives it that padding back. */
+.styleguide-tab-host {
+  width: 100%;
+  padding: var(--space-1) var(--space-4) 0;
+  background: var(--stone-100);
+}
+
+.styleguide-main {
+  display: grid;
+  gap: var(--section-gap);
+  align-content: start;
+  min-width: 0;
+}
+
+.styleguide-section {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border-radius: var(--radius-pebble);
+  scroll-margin-top: var(--space-5);
+}
+
+.styleguide-section > .ui-window-title {
+  overflow: visible;
+}
+
+.styleguide-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.styleguide-value {
+  overflow-wrap: anywhere;
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}
+
+.styleguide code {
+  font:
+    var(--size-small) / 1.3 ui-monospace,
+    monospace;
+}
+
+.styleguide-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.styleguide-swatch {
+  display: grid;
+  grid-template: auto auto / 36px 1fr auto;
+  column-gap: var(--space-2);
+  align-items: center;
+}
+
+.styleguide-swatch-chip {
+  grid-row: span 2;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.styleguide-swatch .styleguide-value {
+  grid-column: 2;
+}
+
+.styleguide-ratios {
+  display: flex;
+  grid-area: 1 / 3 / 3 / 4;
+  gap: 2px;
+}
+
+.styleguide-ratio {
+  min-width: 30px;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--size-small);
+  text-align: center;
+  color: var(--text-on-accent);
+}
+
+.styleguide-ratio[data-grade='text'] {
+  background: var(--text-good);
+}
+
+.styleguide-ratio[data-grade='large'] {
+  background: var(--text-figure);
+}
+
+.styleguide-ratio[data-grade='fail'] {
+  background: var(--alert);
+}
+
+.styleguide-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-4);
+}
+
+.styleguide-tiles li {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.styleguide-tile {
+  display: grid;
+  place-items: center;
+  height: 72px;
+  border-radius: var(--radius-pebble);
+  font: 700 28px / 1 var(--font-title);
+  color: var(--stone-800);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.styleguide-tile--lifted {
+  background: var(--stone-100);
+}
+
+.styleguide-fonts {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.styleguide-fonts > div {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.styleguide-fonts dt {
+  display: grid;
+}
+
+.styleguide-fonts dd {
+  display: grid;
+  margin: 0;
+}
+
+.styleguide-specimen {
+  font-size: 22px;
+}
+
+.styleguide-roles {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.styleguide-roles > * {
+  margin: 0;
+}
+
+.styleguide-tone[data-tone='good'] {
+  color: var(--text-good);
+}
+
+.styleguide-tone[data-tone='bad'] {
+  color: var(--text-bad);
+}
+
+.styleguide-lengths {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.styleguide-lengths li {
+  display: grid;
+  grid-template-columns: 180px 220px 1fr;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.styleguide-length {
+  height: 10px;
+  background: var(--terracotta);
+}
+
+.styleguide-radius {
+  width: 80px;
+  height: 40px;
+  background: var(--slab-raised);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.styleguide-control {
+  max-width: 360px;
+}
+
+.styleguide-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-3);
+}
+
+.styleguide-icons li {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--wash-key);
+}
+
+/* A cell is never narrower than the window-wide samples it may hold, or they spill over. */
+.styleguide-specimens {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, calc(var(--styleguide-window-w) + 2 * var(--space-3))), 1fr)
+  );
+  gap: var(--space-4);
+}
+
+.styleguide-specimen-box {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+  align-content: start;
+  margin: 0;
+}
+
+.styleguide-specimen-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+}
+
+.styleguide-column {
+  width: var(--styleguide-window-w);
+  max-width: 100%;
+}
+
+.styleguide-stack {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.styleguide-meter-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 80px;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.styleguide-plate {
+  display: inline-flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+}
+
+.styleguide-badged {
+  position: relative;
+  display: inline-grid;
+  padding: var(--space-2);
+}
+
+.styleguide-badged > .ui-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+}
+
+.styleguide-menu.ui-dropdown-panel {
+  position: static;
+  animation: none;
+}
+
+.styleguide-windows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.styleguide-window {
+  width: var(--styleguide-window-w);
+  max-width: 100%;
+}
+
+/* In the game a window floats over the scene; here it stands in the page's flow. */
+.styleguide-window > .ui-window {
+  position: static;
+  max-height: 720px;
+  animation: none;
+}
+
+@media (width < 900px) {
+  .styleguide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .styleguide-nav {
+    position: static;
+    max-height: none;
+  }
+}

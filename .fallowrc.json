@@ -6,6 +6,7 @@
     "src/app/compare.tsx",
     "src/app/artBoard.tsx",
     "src/app/soundBoard.tsx",
+    "src/app/styleBoard.tsx",
     "src/features/voxel-world/adapters/meshWorker.ts",
     "src/features/resort-prep/adapters/prepWorker.ts",
     "scripts/simReport.test.ts"

@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { SIGN_ICONS } from '../../hud/components/signIcons';
 import type { BookingRefusal } from '../domain/programme';
@@ -393,28 +392,26 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
   const { view } = programme;
   if (!view) return null;
   if (!view.site) {
-    return (
-      <div className="ui-inset">
-        <p className="ui-loading">Build somewhere with a stage to put on events.</p>
-      </div>
-    );
+    return <p className="ui-loading">Build somewhere with a stage to put on events.</p>;
   }
+  // A switch rather than a second strip of tabs: it sits inside the Calendar's own tab.
   return (
     <div className="events-programme">
-      <Tabs
-        tabs={TABS}
-        current={programme.tab}
-        onPick={programme.showTab}
-        titleOf={(tab) => TAB_TITLES[tab]}
-        label="Programme"
-        panelId={panelId}
-      />
-      <div
-        className="ui-inset events-programme-page"
-        role="tabpanel"
-        id={panelId}
-        aria-labelledby={tabIdOf(panelId, programme.tab)}
-      >
+      <div className="ui-form-choices" role="group" aria-label="Programme">
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className="ui-form-choice"
+            aria-pressed={programme.tab === tab}
+            aria-controls={panelId}
+            onClick={() => programme.showTab(tab)}
+          >
+            {TAB_TITLES[tab]}
+          </button>
+        ))}
+      </div>
+      <div className="events-programme-page" id={panelId}>
         {programme.tab === 'plan' ? (
           <Plan view={view} programme={programme} />
         ) : (

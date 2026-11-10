@@ -253,7 +253,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   staff: ({ stats, status, resort }) => (
     <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />
   ),
-  programme: ({ programme }) => <ProgrammePanel programme={programme} />,
+  events: ({ programme }) => <ProgrammePanel programme={programme} />,
   bookings: ({ bookings }) => <BookingsPanel bookings={bookings} />,
   money: (props) => <LedgerPanel ledger={props.ledger} />,
   prices: ({ stats, resort }) => (
@@ -269,7 +269,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       }}
     />
   ),
-  camera: ({ camera }) => (
+  lens: ({ camera }) => (
     <CameraPanel
       mode={camera.view.mode}
       direction={camera.view.direction}
@@ -376,7 +376,7 @@ function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
 }
 
 // These sink their own content, under the tabs, search and tools that stay on the window.
-const OWN_INSET: ReadonlySet<Framed> = new Set(['build', 'programme']);
+const OWN_INSET: ReadonlySet<Framed> = new Set(['build']);
 
 function plainBody(props: HudView, id: Exclude<Framed, TabbedWindow>): ReactNode {
   const content = CONTENT[id](props);
@@ -426,7 +426,7 @@ function Inspector(props: HudView) {
       renovation={renovationControls(props)}
       onOpenProgramme={(key) => {
         props.programme.choose(key);
-        props.windows.show('programme', true);
+        props.windows.show('events', true);
       }}
     />
   );

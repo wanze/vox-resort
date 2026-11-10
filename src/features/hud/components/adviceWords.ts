@@ -131,8 +131,8 @@ const FIXED_IN: { readonly [kind in AdviceKind]?: PageId } = {
   'short-staffed': 'staff',
   'storm-damage': 'upkeep',
   shabby: 'upkeep',
-  'no-events': 'programme',
-  'no-fireworks': 'programme',
+  'no-events': 'events',
+  'no-fireworks': 'events',
   underpriced: 'prices',
 };
 

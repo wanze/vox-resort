@@ -106,7 +106,7 @@ export function useStops(
   const { showTab } = programme;
   const plan = useCallback(
     (key: string) => {
-      show('programme', true);
+      show('events', true);
       showTab('plan');
       keeper.hold();
       answer(key);
@@ -115,7 +115,7 @@ export function useStops(
   );
 
   // The planning hold is never shown, so the state may keep it a little after it is let go.
-  const programmeUp = isShown(windows.layout, 'programme');
+  const programmeUp = isShown(windows.layout, 'events');
   useEffect(() => {
     if (!programmeUp) keeper.answer(PLANNING.key);
   }, [programmeUp, keeper]);

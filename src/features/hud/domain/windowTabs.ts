@@ -1,6 +1,8 @@
 export const WINDOW_TABS = {
-  overview: ['summary', 'report', 'demand', 'photos', 'season'],
-  inbox: ['advice', 'messages', 'bookings'],
+  overview: ['summary', 'report', 'demand'],
+  inbox: ['advice', 'messages'],
+  programme: ['events', 'bookings', 'season'],
+  camera: ['lens', 'photos'],
   people: ['guests', 'staff'],
   books: ['money', 'prices', 'upkeep'],
   debug: ['render', 'actions'],

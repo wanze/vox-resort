@@ -5,7 +5,7 @@ import { adviceTiers, type AdviceTier, type TierGroup } from '../domain/adviceTi
 import { adviceKey } from '../domain/news';
 import { adviceIcon, adviceSays } from './adviceWords';
 import { HireButton, type HireControls } from './HireButton';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 
 export interface AdvicePanelProps {
   readonly advice: readonly Advice[];

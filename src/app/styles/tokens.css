@@ -145,7 +145,8 @@
   --ink-good: var(--foliage);
   --ink-warn: var(--ink-warm);
   --ink-bad: var(--ink-red);
-  --ink-idle: var(--ink-quiet);
+  /* A step darker than the icons' grey: a fill needs 3:1 on the stone it sits on. */
+  --ink-idle: #66707f;
   --pin-cleaner: #2f8e9e;
   --pin-lifeguard: #d2503a;
   --pin-animator: #f5c03c;

@@ -63,12 +63,12 @@ const pressure = (value: number, used: number, places: number, turnedAway = 0): 
 // From roomy to crowded, so every colour and note of the demand bars shows.
 const DEMAND: Demand = {
   lines: {
-    beds: pressure(0.9, 585, 598, 14),
+    beds: pressure(0.9, 585, 598, 0.14),
     energy: pressure(-0.8, 3, 44),
     hunger: pressure(0.4, 214, 248),
     thirst: pressure(-0.2, 160, 308),
     fun: pressure(-0.6, 120, 524),
-    hygiene: pressure(1, 59, 59, 6),
+    hygiene: pressure(1, 59, 59, 0.06),
     health: pressure(-1, 0, 20),
   },
   groups: { stay: 'beds', food: 'hunger', fun: 'fun', care: 'hygiene' },

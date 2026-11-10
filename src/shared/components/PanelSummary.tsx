@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Tone } from '../../../shared/domain/tone';
+import type { Tone } from '../domain/tone';
 
 export interface SummaryFigure {
   readonly label: string;
@@ -9,6 +9,7 @@ export interface SummaryFigure {
   readonly aside?: string | undefined;
 }
 
+// The row every tab may open with: its few key figures, and the help card at the far end.
 export function PanelSummary({
   figures,
   help,
@@ -17,12 +18,12 @@ export function PanelSummary({
   readonly help?: ReactNode;
 }) {
   return (
-    <div className="hud-summary">
+    <div className="ui-summary">
       {figures.map((figure) => (
         <span key={figure.label} className="ui-tag">
           <span className="ui-label">{figure.label}</span>
           <strong data-tone={figure.tone}>{figure.value}</strong>
-          {figure.aside ? <span className="hud-figure-aside">{figure.aside}</span> : null}
+          {figure.aside ? <span className="ui-summary-aside">{figure.aside}</span> : null}
         </span>
       ))}
       {help}

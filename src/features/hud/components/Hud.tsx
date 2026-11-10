@@ -56,6 +56,7 @@ import {
   type WindowId,
 } from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
+import { tierOf } from '../domain/adviceTiers';
 import { isCompact, type LayoutMode } from '../domain/layoutMode';
 import type { BuildTool } from '../../build/domain/buildTool';
 import type { SelectionView } from '../../inspect/domain/selection';
@@ -335,10 +336,13 @@ function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFr
 
 const offerCount = (props: HudView): number => props.bookings.view?.offers.length ?? 0;
 
+// Only what waits on the player: notes and the message log are there to read, not to answer.
+const toActOn = (props: HudView): number =>
+  props.advice.filter((advice) => tierOf(advice) !== 'note').length;
+
 const badgeOf = (props: HudView, tab: TabId): number => {
-  if (tab === 'advice') return props.advice.length;
-  if (tab === 'bookings') return offerCount(props);
-  return tab === 'messages' ? props.news.log.length : 0;
+  if (tab === 'advice') return toActOn(props);
+  return tab === 'bookings' ? offerCount(props) : 0;
 };
 
 function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
@@ -557,7 +561,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         ledger={props.ledger}
         status={props.status}
         trend={starsTrend(props.history.history)}
-        inboxCount={props.advice.length + offerCount(props)}
+        inboxCount={toActOn(props) + offerCount(props)}
         windows={props.windows}
         menu={props.menu}
         onMenuChange={props.onMenuChange}

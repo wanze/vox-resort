@@ -11,7 +11,7 @@ import { LevelRow, StatRow } from '../shared/components/StatRow';
 import { Stepper } from '../shared/components/Stepper';
 import { Tabs } from '../shared/components/Tabs';
 import type { IconName } from '../shared/components/pixelIcons';
-import { PanelSummary } from '../features/hud/components/PanelSummary';
+import { PanelSummary } from '../shared/components/PanelSummary';
 import { SAMPLE_TILL } from './styleguideSamples';
 
 const noop = (): void => undefined;

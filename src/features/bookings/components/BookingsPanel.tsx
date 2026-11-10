@@ -9,6 +9,7 @@ import {
   type OfferCard,
 } from '../domain/bookingsView';
 import { leavesOn } from '../domain/stayStrip';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import type { BookingsControls } from './bookingsControls';
 import { Checks } from './Checks';
 import { OfferVoucher } from './OfferVoucher';
@@ -120,14 +121,22 @@ export function BookingsPanel({ bookings }: BookingsPanelProps) {
   const { view } = bookings;
   if (view === null) return null;
   return (
-    <div className="bookings-panel">
-      <Section title="Offers">
-        <Offers view={view} bookings={bookings} />
-      </Section>
-      <Section title="Booked">
-        <Book view={view} />
-      </Section>
-      <LastGroup settled={view.settled} />
-    </div>
+    <>
+      <PanelSummary
+        figures={[
+          { label: 'Offers', value: view.offers.length },
+          { label: 'Booked', value: view.booked.length },
+        ]}
+      />
+      <div className="bookings-panel">
+        <Section title="Offers">
+          <Offers view={view} bookings={bookings} />
+        </Section>
+        <Section title="Booked">
+          <Book view={view} />
+        </Section>
+        <LastGroup settled={view.settled} />
+      </div>
+    </>
   );
 }

@@ -348,7 +348,7 @@
 /* Zero sits in the middle; the fill grows up or down from it by --pressure, -1 to 1.
    One edge of the fill stays on zero because one of the max/min is always 0. */
 .hud-demand-bar {
-  --demand-ink: var(--ink-quiet);
+  --demand-ink: var(--ink-idle);
   position: relative;
   display: block;
   width: 9px;

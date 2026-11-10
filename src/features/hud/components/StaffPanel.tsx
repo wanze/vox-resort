@@ -7,7 +7,7 @@ import { ZONE_COLOURS } from '../../overlays/domain/ramp';
 import { roleWord } from './staffWords';
 import { crewLine, cssColour, ZONE_IDS, zoneLabel } from './zoneWords';
 import type { ShowcaseStats } from '../domain/views';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import { SettingGroup, SettingRow } from './SettingRows';
 
 export interface StaffPanelProps {
@@ -26,27 +26,23 @@ const ROLE_ICONS: { readonly [role in StaffRole]: IconName } = {
   mechanic: 'mechanic',
 };
 
-const tallyWords = ({ working, walking, idle }: RoleTally): string =>
-  `${working} working, ${walking} walking, ${idle} idle`;
-
 const SHARES = ['working', 'walking', 'idle'] as const;
 
-const onDuty = ({ working, walking, idle }: RoleTally): number => working + walking + idle;
+const dutyWords = (tally: RoleTally): string =>
+  SHARES.map((share) => `${tally[share]} ${share}`).join(', ');
 
-// Drawn empty for a role nobody holds, so every row keeps the same height.
-function DutyBar({ tally }: { readonly tally: RoleTally | null }) {
-  if (!tally || onDuty(tally) === 0) return <span className="ui-track hud-staff-duty" />;
-  const words = tallyWords(tally);
+// One lamp a head, lit by what they are doing, as the gates' lamp is lit when they are open;
+// a share drawn as a bar read as a level. The row keeps its height with nobody on duty.
+function DutyLamps({ tally }: { readonly tally: RoleTally | null }) {
+  if (!tally) return <span className="hud-staff-duty" />;
+  const words = dutyWords(tally);
   return (
-    <span className="ui-track hud-staff-duty" role="img" aria-label={words} title={words}>
-      {SHARES.map((share) => (
-        <span
-          key={share}
-          className="hud-staff-duty-share"
-          data-share={share}
-          style={{ flexGrow: tally[share] }}
-        />
-      ))}
+    <span className="hud-staff-duty" role="img" aria-label={words} title={words}>
+      {SHARES.flatMap((share) =>
+        Array.from({ length: tally[share] }, (_, at) => (
+          <span key={`${share}${at}`} className="hud-staff-lamp" data-share={share} />
+        )),
+      )}
     </span>
   );
 }
@@ -76,7 +72,7 @@ function StaffRow({
     <SettingRow
       icon={ROLE_ICONS[role]}
       name={plural}
-      under={<DutyBar tally={count > 0 ? tally : null} />}
+      under={<DutyLamps tally={count > 0 ? tally : null} />}
       value={<Headcount count={count} wanted={staff.recommended[role]} />}
       note={`${formatNumber(count * WAGES[role])}/day`}
       stepper={{
@@ -110,19 +106,8 @@ function StaffHelp() {
         differs. Short-handed is red.
       </p>
       <p>
-        The bar under a role is what those on duty did this hour:{' '}
-        <span className="hud-staff-key" data-share="working">
-          working
-        </span>
-        ,{' '}
-        <span className="hud-staff-key" data-share="walking">
-          walking
-        </span>{' '}
-        to a job, or{' '}
-        <span className="hud-staff-key" data-share="idle">
-          idle
-        </span>
-        . Plenty idle means you can let some go.
+        A lamp for each of them on duty: green is working, amber walking to a job, unlit idle.
+        Plenty unlit means you can let some go.
       </p>
       <p>
         Auto hires and lets go to match what the plot needs; a step by hand switches it off. Wages

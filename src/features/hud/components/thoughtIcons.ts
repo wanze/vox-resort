@@ -1,0 +1,35 @@
+import type { ThoughtKind } from '../../sim/domain/thoughts';
+import type { IconName } from '../../../shared/components/pixelIcons';
+
+// What a remark is about at a glance; the label stays beside it for a reader and a tooltip.
+export const THOUGHT_ICONS: { readonly [kind in ThoughtKind]: IconName } = {
+  'queue-too-long': 'queue',
+  closed: 'lock',
+  'nothing-for': 'alert',
+  'no-bed': 'lodging',
+  filthy: 'dirty',
+  enjoyed: 'star',
+  lovely: 'clear',
+  littered: 'litter',
+  broken: 'broken',
+  hurt: 'first-aid',
+  'no-step-free': 'wheelchair',
+  'great-show': 'stage',
+  'called-off': 'programme',
+  welcomed: 'reception',
+  fireworks: 'programme',
+  photo: 'camera',
+  sunset: 'clear',
+  'not-worth-it': 'money',
+  'good-value': 'money',
+  sunrise: 'clear',
+  shabby: 'shabby',
+  renovating: 'renovate',
+  dark: 'moon',
+  unwatched: 'lifeguard',
+  smelly: 'toilets',
+  noisy: 'sound',
+  crowded: 'people',
+  promised: 'bookings',
+  wedding: 'star',
+};

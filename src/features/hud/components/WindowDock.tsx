@@ -1,5 +1,6 @@
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { DOCK_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
+import { badgeText } from '../../../shared/domain/badge';
 import { isOpen, type WindowId, type WindowLayout } from '../domain/windowLayout';
 
 export interface WindowDockProps {
@@ -34,7 +35,7 @@ export function WindowDock({ layout, onToggle, inboxCount }: WindowDockProps) {
             <span className="hud-tool-label">{WINDOW_TITLES[id]}</span>
             {badged ? (
               <span className="ui-badge" aria-hidden="true">
-                {inboxCount}
+                {badgeText(inboxCount)}
               </span>
             ) : null}
           </button>

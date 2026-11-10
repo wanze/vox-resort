@@ -14,7 +14,7 @@ import {
   type UpkeepChoice,
   type UpkeepFilter,
 } from '../domain/upkeepFilter';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import {
   RenovateAction,
   unaffordable,

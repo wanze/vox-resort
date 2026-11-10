@@ -7,7 +7,7 @@ import {
   type PriceVerdict,
 } from '../../sim/domain/pricing';
 import type { ShowcaseStats } from '../domain/views';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import { SettingGroup, SettingRow } from './SettingRows';
 import type { Tone } from '../../../shared/domain/tone';
 import { SIGN_ICONS } from './signIcons';

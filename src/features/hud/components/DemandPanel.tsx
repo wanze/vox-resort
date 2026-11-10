@@ -1,15 +1,18 @@
 import { Fragment } from 'react';
 import { OutOf } from '../../../shared/components/OutOf';
-import { DEMAND_GROUPS, type DemandGroup } from '../../sim/domain/demand';
+import { DEMAND_GROUPS, type Demand, type DemandGroup } from '../../sim/domain/demand';
 import { DemandBar } from './DemandBar';
 import {
   GROUP_TITLES,
   LINE_NAMES,
   pressureNote,
   pressureWord,
+  PRESSURE_LOUD,
   turnedAwayShare,
 } from './demandWords';
 import type { StatusView } from '../domain/views';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
+import { demandFigures } from '../domain/panelFigures';
 
 export interface DemandPanelProps {
   readonly status: StatusView | null;
@@ -17,45 +20,60 @@ export interface DemandPanelProps {
 
 const GROUPS = Object.keys(DEMAND_GROUPS) as readonly DemandGroup[];
 
+function DemandSummary({ demand }: { readonly demand: Demand }) {
+  const { short, loud, most } = demandFigures(demand, PRESSURE_LOUD);
+  return (
+    <PanelSummary
+      figures={[
+        { label: 'Short', value: short, tone: short > 0 && loud ? 'bad' : undefined },
+        { label: 'Most needed', value: most ? LINE_NAMES[most] : 'nothing' },
+      ]}
+    />
+  );
+}
+
 // One grid for every group, so the bars line up down the whole window.
 export function DemandPanel({ status }: DemandPanelProps) {
   if (!status?.demand) return <p className="hud-rating-note">Nothing counted yet.</p>;
   const { demand } = status;
   return (
-    <div className="hud-demand-grid">
-      <span />
-      <span className="hud-demand-head hud-demand-scale">
-        <span>Enough</span>
-        <span>Build</span>
-      </span>
-      <span className="hud-demand-head">Busiest / room</span>
-      <span className="hud-demand-head">Away</span>
-      {GROUPS.map((group) => (
-        <Fragment key={group}>
-          <h3 className="hud-report-heading hud-demand-group-heading">{GROUP_TITLES[group]}</h3>
-          {DEMAND_GROUPS[group].map((line) => {
-            const pressure = demand.lines[line];
-            return (
-              <div
-                key={line}
-                className="hud-demand-row"
-                title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure)}`}
-              >
-                {/* Inside the name: the row is a run of grid cells, and a sibling would be one more. */}
-                <span className="hud-demand-name">
-                  {LINE_NAMES[line]}
-                  <span className="ui-visually-hidden">{`: ${pressureWord(pressure.pressure)}`}</span>
-                </span>
-                <DemandBar pressure={pressure.pressure} across />
-                <span className="hud-demand-figure">
-                  <OutOf value={pressure.used} total={pressure.places} />
-                </span>
-                <span className="hud-demand-figure">{turnedAwayShare(pressure)}</span>
-              </div>
-            );
-          })}
-        </Fragment>
-      ))}
-    </div>
+    <>
+      <DemandSummary demand={demand} />
+      <div className="hud-demand-grid">
+        <span />
+        <span className="hud-demand-head hud-demand-scale">
+          <span>Enough</span>
+          <span>Build</span>
+        </span>
+        <span className="hud-demand-head">Busiest / room</span>
+        <span className="hud-demand-head">Away</span>
+        {GROUPS.map((group) => (
+          <Fragment key={group}>
+            <h3 className="hud-report-heading hud-demand-group-heading">{GROUP_TITLES[group]}</h3>
+            {DEMAND_GROUPS[group].map((line) => {
+              const pressure = demand.lines[line];
+              return (
+                <div
+                  key={line}
+                  className="hud-demand-row"
+                  title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure)}`}
+                >
+                  {/* Inside the name: the row is a run of grid cells, and a sibling would be one more. */}
+                  <span className="hud-demand-name">
+                    {LINE_NAMES[line]}
+                    <span className="ui-visually-hidden">{`: ${pressureWord(pressure.pressure)}`}</span>
+                  </span>
+                  <DemandBar pressure={pressure.pressure} across />
+                  <span className="hud-demand-figure">
+                    <OutOf value={pressure.used} total={pressure.places} />
+                  </span>
+                  <span className="hud-demand-figure">{turnedAwayShare(pressure)}</span>
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </>
   );
 }

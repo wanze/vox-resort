@@ -2,6 +2,10 @@ import { quoteOf, type Review } from '../../sim/domain/reviews';
 import { remarksOf, type Remark } from '../domain/remarks';
 import { THOUGHT_LABELS, thoughtLine } from '../domain/thoughtWords';
 import type { VoicesView } from '../domain/views';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { THOUGHT_ICONS } from './thoughtIcons';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
+import { voiceFigures } from '../domain/panelFigures';
 
 export interface GuestsPanelProps {
   readonly voices: VoicesView;
@@ -21,7 +25,10 @@ function RemarkRow({ remark }: { readonly remark: Remark }) {
   const { tally } = remark;
   return (
     <li className="hud-remark" data-tone={remark.complaint ? 'bad' : 'good'}>
-      <span className="ui-label">{THOUGHT_LABELS[tally.kind]}</span>
+      <span className="hud-remark-icon" title={THOUGHT_LABELS[tally.kind]}>
+        <PixelIcon name={THOUGHT_ICONS[tally.kind]} />
+        <span className="ui-visually-hidden">{`${THOUGHT_LABELS[tally.kind]}: `}</span>
+      </span>
       <span className="hud-remark-said">
         <span>{thoughtLine(tally.kind, tally.subject)}</span>
         <span className="hud-remark-count">{`${tally.count.toLocaleString('en-US')}×`}</span>
@@ -83,15 +90,31 @@ function ReviewsSection({ reviews }: { readonly reviews: VoicesView['reviews'] }
   );
 }
 
+function VoiceSummary({ voices }: { readonly voices: VoicesView }) {
+  const { praise, complaints, stars } = voiceFigures(voices.loudest, voices.reviews);
+  return (
+    <PanelSummary
+      figures={[
+        { label: 'Praise', value: praise, tone: 'good' },
+        { label: 'Complaints', value: complaints, tone: complaints > 0 ? 'bad' : undefined },
+        { label: 'Reviews', value: stars === null ? '–' : `${stars.toFixed(1)} ★` },
+      ]}
+    />
+  );
+}
+
 export function GuestsPanel({ voices }: GuestsPanelProps) {
   const { loudest, reviews } = voices;
   if (loudest.length === 0 && reviews.length === 0) {
     return <p className="ui-loading">Nobody has said anything yet.</p>;
   }
   return (
-    <div className="hud-guests">
-      <RemarksSection loudest={loudest} />
-      <ReviewsSection reviews={reviews} />
-    </div>
+    <>
+      <VoiceSummary voices={voices} />
+      <div className="hud-guests">
+        <RemarksSection loudest={loudest} />
+        <ReviewsSection reviews={reviews} />
+      </div>
+    </>
   );
 }

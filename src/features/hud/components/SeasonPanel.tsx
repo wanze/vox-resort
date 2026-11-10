@@ -18,7 +18,7 @@ import {
 import { PaperArchive } from '../../newspaper/components/PaperArchive';
 import type { PaperControls } from '../../newspaper/components/paperControls';
 import { MoneyRows, ReviewRows } from './DayReportPanel';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import { Row, Rows, Section } from './ReportRows';
 import { signed } from '../../../shared/domain/till';
 import {

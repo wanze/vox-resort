@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react';
 import { PixelIcon } from './PixelIcon';
 import type { IconName } from './pixelIcons';
 import { rovingTarget } from '../domain/roving';
+import { badgeText } from '../domain/badge';
 
 export interface TabsProps<T extends string> {
   readonly tabs: readonly T[];
@@ -43,7 +44,7 @@ function Tab(props: {
       <span>{props.title}</span>
       {props.badge > 0 ? (
         <span className="ui-badge" aria-hidden="true">
-          {props.badge}
+          {badgeText(props.badge)}
         </span>
       ) : null}
     </button>

@@ -2,7 +2,7 @@ import { netOf, REASONS, type Ledger } from '../../sim/domain/ledger';
 import { MODE_LABELS } from '../../welcome/components/modeNames';
 import { againstYesterday, REASON_LABELS, toneOf } from '../domain/ledgerWords';
 import { signed } from '../../../shared/domain/till';
-import { PanelSummary } from './PanelSummary';
+import { PanelSummary } from '../../../shared/components/PanelSummary';
 import { Row, Rows, Section } from './ReportRows';
 
 export interface LedgerPanelProps {

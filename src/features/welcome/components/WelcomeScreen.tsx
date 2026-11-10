@@ -15,7 +15,8 @@ import { SharedResortCard } from '../../sharing/components/SharedResortCard';
 import type { SharedResort } from '../../sharing/domain/sharedResort';
 import type { LoadingStep } from '../domain/loading';
 import type { NewGame } from '../domain/newGame';
-import { LoadingProgress } from './LoadingProgress';
+import { Sky } from './Sky';
+import { LoadingCaption, LoadingProgress } from './LoadingProgress';
 import { NewGamePanel } from './NewGamePanel';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { IncomingShare } from '../../sharing/components/incomingShare';
@@ -188,7 +189,6 @@ function Card(props: ChoiceProps) {
   return (
     <>
       <Choices {...props} />
-      {props.ready ? null : <LoadingProgress done={props.loaded} />}
     </>
   );
 }
@@ -315,10 +315,14 @@ function Body(props: WelcomeScreenProps) {
 export function WelcomeScreen(props: WelcomeScreenProps) {
   return (
     <div className="welcome" data-ready={props.ready ? '' : undefined}>
+      <Sky done={props.loaded}>
+        <LoadingProgress done={props.loaded} />
+      </Sky>
       <div className="welcome-column">
         <h1 className="welcome-wordmark">Vox Resort</h1>
         <p className="welcome-tagline">Build a seaside resort, block by block.</p>
         <Body {...props} />
+        <LoadingCaption done={props.loaded} failed={props.error !== null} />
       </div>
       {props.ready ? <LocalTime /> : null}
     </div>

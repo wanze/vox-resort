@@ -185,6 +185,27 @@
   --flyer-welcome: #1f6b73;
   --flyer-welcome-accent: #ec8fb0;
   --notice-pin: #d2503a;
+  /* The loading screen's sunrise. Each sky ends at 72%, the horizon in the welcome's sky.ts,
+     where the sea starts. */
+  --sky-night: var(--grain), linear-gradient(180deg, #1d1820 0%, #2f2627 50%, #4a3528 72%);
+  --sky-dawn:
+    var(--grain), linear-gradient(180deg, #2f2a4a 0%, #7a4660 38%, #d8805e 62%, #f1b27a 72%);
+  --sky-morning:
+    var(--grain), linear-gradient(180deg, #4d7398 0%, #8fb0c4 40%, #e8cfa4 66%, #f6dfb2 72%);
+  --sky-noon: var(--grain), linear-gradient(180deg, #3f7fb3 0%, #84b6d4 50%, #cfe4ea 72%);
+  /* Hard steps, each deeper and wider than the last, so the sea reads as receding pixel rows. */
+  --sea: linear-gradient(
+    180deg,
+    #4a8aa2 0 3%,
+    #3d7c95 3% 9%,
+    #337089 9% 19%,
+    #2a627b 19% 35%,
+    #22546c 35% 60%,
+    #1b475d 60%
+  );
+  --sun-low: #e8683a;
+  --sun-high: #ffd45a;
+  --sun-shade: rgb(150 60 20 / 35%);
 
   /* Brown specks at a fine scale and soft patches at a coarse one: flat colour reads as
      plastic, the two together as cut sandstone. The filter region is the tile, else stitching

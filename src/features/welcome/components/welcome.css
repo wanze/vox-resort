@@ -168,78 +168,6 @@
   animation: ui-busy 0.9s ease-in-out infinite alternate;
 }
 
-.welcome-loading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.welcome-blocks {
-  display: grid;
-  grid-template-columns: repeat(3, 10px);
-  gap: 3px;
-  flex: none;
-}
-
-.welcome-blocks > span {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--stone-300);
-  box-shadow: var(--bevel-in);
-  animation: welcome-lay 2.4s var(--ease) infinite;
-  animation-delay: calc(var(--block) * 140ms);
-}
-
-@keyframes welcome-lay {
-  0%,
-  8% {
-    background: var(--stone-300);
-    transform: translateY(-3px);
-  }
-
-  14%,
-  70% {
-    background: var(--terracotta);
-    box-shadow: var(--bevel);
-    transform: none;
-  }
-
-  86%,
-  100% {
-    background: var(--stone-300);
-  }
-}
-
-.welcome-loading-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.welcome-loading-text p {
-  margin: 0;
-  font-size: var(--size-small);
-  color: var(--text-dim);
-}
-
-.welcome-progress {
-  height: 8px;
-  border-radius: var(--radius-sm);
-  background: var(--sunken);
-  box-shadow: var(--bevel-in);
-  overflow: hidden;
-}
-
-.welcome-progress > span {
-  display: block;
-  height: 100%;
-  background-image: var(--slab-accent);
-  transition: width 600ms var(--ease);
-}
-
 .welcome-failure p {
   margin: 0 0 var(--space-2);
   color: var(--text-dim);
@@ -304,11 +232,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-blocks > span {
-    animation: none;
-    background: var(--terracotta);
-  }
-
   .welcome::before {
     transition: none;
   }
@@ -364,4 +287,238 @@
   margin: 0;
   font-size: var(--size-small);
   color: var(--text-faint);
+}
+
+/* The sun's light spreading along the horizon in its colour: the loading bar, drawn as the sea's
+   edge, keeping time with the sun's climb. */
+.welcome-horizon {
+  position: absolute;
+  inset: calc(var(--horizon) - 1px) 0 auto;
+  height: 3px;
+}
+
+.welcome-horizon::before,
+.welcome-horizon > span {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: currentcolor;
+}
+
+.welcome-horizon::before {
+  right: 0;
+  opacity: 0.18;
+}
+
+.welcome-horizon > span {
+  box-shadow: 0 0 10px currentcolor;
+  transition: width 900ms var(--ease);
+}
+
+/* Topped up quickly at the end, and the sky waits for it, so the bar is seen to finish. */
+.welcome[data-ready] .welcome-horizon > span {
+  transition-duration: 500ms;
+}
+
+.welcome-caption {
+  margin: 0;
+  font-size: var(--size-lead);
+  color: var(--stone-50);
+  text-shadow: var(--shadow-caption);
+  animation: welcome-line 320ms var(--ease);
+}
+
+@keyframes welcome-line {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* Under the menu, over the plain backdrop; it fades with the backdrop as the real resort comes in. */
+.welcome-sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  color: var(--sun-low);
+  pointer-events: none;
+  transition:
+    opacity 1200ms var(--ease),
+    visibility 0s linear 1200ms,
+    color 4s var(--ease);
+}
+
+.welcome[data-ready] .welcome-sky {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 1200ms var(--ease) 500ms,
+    visibility 0s linear 1700ms;
+}
+
+.welcome-sky-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 2400ms var(--ease);
+}
+
+.welcome-sky-layer--night {
+  background-image: var(--sky-night);
+  opacity: 1;
+}
+
+.welcome-sky-layer--dawn {
+  background-image: var(--sky-dawn);
+}
+
+.welcome-sky-layer--morning {
+  background-image: var(--sky-morning);
+}
+
+.welcome-sky-layer--noon {
+  background-image: var(--sky-noon);
+}
+
+.welcome-sky:not([data-stage='night']) .welcome-sky-layer--dawn,
+.welcome-sky:is([data-stage='morning'], [data-stage='noon']) .welcome-sky-layer--morning,
+.welcome-sky[data-stage='noon'] .welcome-sky-layer--noon {
+  opacity: 1;
+}
+
+.welcome-sky-scrim {
+  background-image: var(--scrim);
+  opacity: 1;
+}
+
+/* A long ease-out, so after each step the sun keeps creeping up for a while rather than
+   jumping and sitting still until the next. */
+.welcome-sky-sun,
+.welcome-sky-halo {
+  position: absolute;
+  top: var(--sun-y);
+  left: var(--sun-x);
+  translate: -50% -50%;
+  transition:
+    top 5s cubic-bezier(0.15, 0.6, 0.25, 1),
+    left 5s cubic-bezier(0.15, 0.6, 0.25, 1);
+}
+
+/* The sun's colour, worn by the sky so the sun and its halo warm up together. */
+.welcome-sky:is([data-stage='morning'], [data-stage='noon']) {
+  color: var(--sun-high);
+}
+
+/* A circle stepped on an eight-block grid, so the sun is built of blocks like the wordmark. */
+.welcome-sky-sun {
+  width: 14vmin;
+  height: 14vmin;
+  background: currentcolor;
+  box-shadow: inset -1vmin -1vmin 0 var(--sun-shade);
+  clip-path: polygon(
+    25% 0,
+    75% 0,
+    75% 12.5%,
+    87.5% 12.5%,
+    87.5% 25%,
+    100% 25%,
+    100% 75%,
+    87.5% 75%,
+    87.5% 87.5%,
+    75% 87.5%,
+    75% 100%,
+    25% 100%,
+    25% 87.5%,
+    12.5% 87.5%,
+    12.5% 75%,
+    0 75%,
+    0 25%,
+    12.5% 25%,
+    12.5% 12.5%,
+    25% 12.5%
+  );
+}
+
+.welcome-sky-halo {
+  width: 46vmin;
+  height: 46vmin;
+  background: radial-gradient(circle closest-side, currentcolor, transparent);
+  opacity: 0.45;
+  animation: welcome-halo 4s ease-in-out infinite alternate;
+}
+
+@keyframes welcome-halo {
+  to {
+    opacity: 0.6;
+    scale: 1.08;
+  }
+}
+
+.welcome-sky-sea {
+  position: absolute;
+  inset: var(--horizon) 0 0;
+  background-image: var(--sea);
+  filter: brightness(0.45);
+  transition: filter 2400ms var(--ease);
+}
+
+.welcome-sky[data-stage='dawn'] .welcome-sky-sea {
+  filter: brightness(0.7);
+}
+
+.welcome-sky[data-stage='morning'] .welcome-sky-sea {
+  filter: brightness(0.9);
+}
+
+.welcome-sky[data-stage='noon'] .welcome-sky-sea {
+  filter: none;
+}
+
+.welcome-sky-glints {
+  position: absolute;
+  inset: 0 auto 0 var(--sun-x);
+  width: 30vmin;
+  translate: -50% 0;
+  transition: left 5s cubic-bezier(0.15, 0.6, 0.25, 1);
+}
+
+/* Stepped rather than eased, so a glint flicks on and off like light catching a wave. */
+.welcome-sky-glint {
+  position: absolute;
+  top: var(--depth);
+  left: calc(50% + var(--shift));
+  width: var(--width);
+  height: 0.7vmin;
+  translate: -50% 0;
+  background: currentcolor;
+  opacity: 0.25;
+  animation: welcome-glint 2.4s steps(3) var(--delay) infinite alternate;
+}
+
+@keyframes welcome-glint {
+  to {
+    opacity: 0.85;
+    scale: 1.25 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-sky-halo,
+  .welcome-sky-glint,
+  .welcome-caption {
+    animation: none;
+  }
+
+  .welcome-sky-sun,
+  .welcome-sky-halo,
+  .welcome-sky-glints,
+  .welcome-horizon > span {
+    transition: none;
+  }
+}
+
+.welcome-sky-scene {
+  position: absolute;
+  inset: 0;
 }

@@ -81,3 +81,8 @@
   margin: 0;
   color: var(--text-dim);
 }
+
+/* Beside the left column while it holds a window, which would otherwise cover them. */
+.app[data-layout='desk'] .hud:has(.hud-column[data-side='left'] > .ui-window) .hud-toasts {
+  left: calc(var(--column-w) + var(--space-3) * 2);
+}

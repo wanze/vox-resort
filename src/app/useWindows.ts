@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { loadLayout, saveLayout } from '../features/hud/adapters/layoutStore';
 import {
-  moveWindow,
+  goBack,
   raiseWindow,
   isShown,
-  resetPlaces,
   showWindow,
   soloWindow,
   tabOf,
@@ -13,7 +12,6 @@ import {
   type PageId,
   type WindowId,
   type WindowLayout,
-  type WindowSpot,
 } from '../features/hud/domain/windowLayout';
 import type { TabbedWindow } from '../features/hud/domain/windowTabs';
 import { isCompact, type LayoutMode } from '../features/hud/domain/layoutMode';
@@ -48,11 +46,7 @@ export function useWindows(mode: LayoutMode): WindowControls {
       [compact],
     ),
     raise: useCallback((id: WindowId) => setLayout((now) => raiseWindow(now, id)), []),
-    move: useCallback(
-      (id: WindowId, spot: WindowSpot) => setLayout((now) => moveWindow(now, id, spot)),
-      [],
-    ),
-    resetPlaces: useCallback(() => setLayout(resetPlaces), []),
+    back: useCallback(() => setLayout(goBack), []),
     tab: (id: TabbedWindow) => tabOf(layout, id),
   };
 }

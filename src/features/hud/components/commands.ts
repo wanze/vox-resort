@@ -416,18 +416,7 @@ function pageCommand(page: PageId, { windows, history }: CommandContext): Comman
 }
 
 function windowCommands(context: CommandContext): Command[] {
-  const { windows } = context;
-  return [
-    ...MENU_PAGES.map((page) => pageCommand(page, context)),
-    ...debugPages(context),
-    {
-      id: 'window:reset',
-      label: 'Reset window positions',
-      group: 'Windows',
-      note: 'put every window back where it started',
-      run: windows.resetPlaces,
-    },
-  ];
+  return [...MENU_PAGES.map((page) => pageCommand(page, context)), ...debugPages(context)];
 }
 
 function debugPages({ windows, debug }: CommandContext): Command[] {

@@ -1,68 +1,45 @@
-.ui-window[data-window='build'] {
+/* Only a box on the desk: on a small screen the windows are sheets placed against the screen. */
+.hud-column {
+  display: contents;
+}
+
+/* Short of the dock floating at the foot of the screen, which would otherwise cover the windows'
+   own buttons. */
+.app[data-layout='desk'] .hud-column {
+  position: absolute;
+  top: var(--window-floor);
+  bottom: var(--dock-room);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--column-w);
+}
+
+.app[data-layout='desk'] .hud-column[data-side='left'] {
+  left: var(--space-3);
+}
+
+.app[data-layout='desk'] .hud-column[data-side='right'] {
   right: var(--space-3);
   width: var(--palette-w);
-  max-height: min(78vh, calc(100% - var(--window-top) - var(--dock-room)));
 }
 
-/* Short of the dock floating at the foot of the screen, which would otherwise cover the window's
-   own buttons. */
-.app[data-layout='desk'] .ui-window[data-window]:not([data-window='build']) {
+.app[data-layout='desk'] .hud-column > .ui-window {
+  position: relative;
+  top: auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* Half the side at most, so the palette under it keeps room to build from. */
+.app[data-layout='desk'] .hud-column > .ui-window[data-window='inspect'] {
+  flex: none;
+  max-height: 50%;
+}
+
+.app[data-layout='desk'] .hud > .ui-window[data-window] {
   max-height: max(160px, calc(100% - var(--window-top) - var(--dock-room)));
-}
-
-.ui-window[data-window='inspect'],
-.ui-window[data-window='debug'] {
-  left: var(--space-3);
-  width: 330px;
-}
-
-.ui-window[data-window='debug'] {
-  width: 370px;
-}
-
-/* Wider where a mouse points, so a venue's actions fit on one row; a finger keeps 330px. */
-@media (pointer: fine) {
-  .ui-window[data-window='inspect'] {
-    width: 370px;
-  }
-}
-
-.ui-window[data-window='overview'],
-.ui-window[data-window='inbox'],
-.ui-window[data-window='people'],
-.ui-window[data-window='books'],
-.ui-window[data-window='camera'] {
-  right: calc(var(--palette-w) + var(--space-3) * 2);
-  width: 380px;
-}
-
-/* Wide enough for all five tabs, Photo wall and Season too, on one row. */
-.ui-window[data-window='overview'] {
-  width: 492px;
-}
-
-.ui-window[data-window='inbox'] {
-  --window-top: calc(var(--window-floor) + 26px);
-}
-
-.ui-window[data-window='people'] {
-  --window-top: calc(var(--window-floor) + 52px);
-}
-
-/* As wide as People: the Prices tab has a row of buttons per family. */
-.ui-window[data-window='books'] {
-  --window-top: calc(var(--window-floor) + 78px);
-}
-
-.ui-window[data-window='camera'] {
-  --window-top: calc(var(--window-floor) + 104px);
-  width: 260px;
-}
-
-.ui-window[data-window='programme'] {
-  --window-top: calc(var(--window-floor) + 40px);
-  right: calc(var(--palette-w) + var(--space-3) * 2);
-  width: 440px;
 }
 
 .ui-window[data-window='resort'] {

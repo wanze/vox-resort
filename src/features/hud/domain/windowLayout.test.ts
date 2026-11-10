@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  clampSpot,
+  canGoBack,
   DEFAULT_LAYOUT,
   depthOf,
+  goBack,
   isOpen,
   isWindowId,
-  moveWindow,
   parseLayout,
   raiseWindow,
-  resetPlaces,
   showWindow,
+  sideOf,
   soloWindow,
   tabOf,
   toCompact,
@@ -20,7 +20,7 @@ import {
 const layout = (patch: Partial<WindowLayout> = {}): WindowLayout => ({
   open: [],
   stack: [],
-  spots: {},
+  back: [],
   focus: null,
   tabs: {},
   ...patch,
@@ -150,30 +150,57 @@ describe('tabOf', () => {
   });
 });
 
-describe('resetPlaces', () => {
-  it('forgets where windows were dragged but keeps which are open', () => {
-    const moved = moveWindow(layout({ open: ['build'], stack: ['build'] }), 'build', {
-      x: 1,
-      y: 2,
-    });
-    expect(resetPlaces(moved)).toEqual(layout({ open: ['build'] }));
+describe('sideOf', () => {
+  it('keeps the build palette and the inspector right, dialogs in the middle, the rest left', () => {
+    expect(sideOf('build')).toBe('right');
+    expect(sideOf('inspect')).toBe('right');
+    expect(sideOf('books')).toBe('left');
+    expect(sideOf('camera')).toBe('left');
+    expect(sideOf('saves')).toBeNull();
   });
 });
 
-describe('clampSpot', () => {
-  const viewport = { width: 1000, height: 800 };
-  const size = { width: 300, height: 400 };
-
-  it('keeps the whole window across and the title bar down inside the screen', () => {
-    expect(clampSpot({ x: 900, y: 900 }, size, viewport, 60)).toEqual({ x: 694, y: 756 });
+describe('the left side', () => {
+  it('holds one window: the next takes its place and remembers it', () => {
+    const next = showWindow(layout({ open: ['build', 'inbox'] }), 'money', true);
+    expect(next.open).toEqual(['build', 'books']);
+    expect(next.back).toEqual(['inbox']);
+    expect(canGoBack(next, 'books')).toBe(true);
   });
 
-  it('never lets the title bar slide under the top bar', () => {
-    expect(clampSpot({ x: -50, y: 0 }, size, viewport, 60)).toEqual({ x: 6, y: 60 });
+  it('leaves the build palette and the dialogs open beside it, and remembers nothing for them', () => {
+    const next = showWindow(layout({ open: ['books'], back: ['inbox'] }), 'saves', true);
+    expect(next.open).toEqual(['books', 'saves']);
+    expect(next.back).toEqual(['inbox']);
+    expect(canGoBack(next, 'saves')).toBe(false);
   });
 
-  it('pins a window wider than the screen to its left edge', () => {
-    expect(clampSpot({ x: 200, y: 100 }, { width: 1200, height: 100 }, viewport, 60).x).toBe(6);
+  it('switches tabs without a step to go back to', () => {
+    const next = showWindow(layout({ open: ['books'] }), 'prices', true);
+    expect(next.back).toEqual([]);
+  });
+
+  it('goes back step by step, and forgets the way once the window is shut', () => {
+    const there = showWindow(
+      showWindow(layout({ open: ['inbox'] }), 'people', true),
+      'books',
+      true,
+    );
+    expect(there.back).toEqual(['inbox', 'people']);
+    const back = goBack(there);
+    expect(back.open).toEqual(['people']);
+    expect(back.back).toEqual(['inbox']);
+    expect(back.focus).toBe('people');
+    expect(showWindow(back, 'people', false).back).toEqual([]);
+  });
+
+  it('starts afresh when a window opens onto an empty side', () => {
+    expect(showWindow(layout({ back: ['inbox'] }), 'books', true).back).toEqual([]);
+  });
+
+  it('hands back the same layout with nowhere to go back to', () => {
+    const before = layout({ open: ['books'] });
+    expect(goBack(before)).toBe(before);
   });
 });
 
@@ -182,21 +209,30 @@ describe('parseLayout', () => {
     expect(parseLayout({ open: ['build'], focus: 'build' }).focus).toBeNull();
   });
 
-  it('reads back what it was given', () => {
-    const stored = moveWindow(layout({ open: ['build', 'debug'], stack: ['debug'] }), 'debug', {
-      x: 10,
-      y: 70,
+  it('reads back what it was given, but the way back', () => {
+    const stored = layout({
+      open: ['build', 'debug'],
+      stack: ['debug'],
+      tabs: { books: 'prices' },
     });
-    expect(parseLayout(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
+    expect(parseLayout(JSON.parse(JSON.stringify({ ...stored, back: ['inbox'] })))).toEqual(stored);
   });
 
-  it('drops windows it does not know and spots that are not numbers', () => {
+  it('keeps only the left window opened last from a build that let several share the side', () => {
+    expect(parseLayout({ open: ['inbox', 'build', 'books', 'saves'] }).open).toEqual([
+      'build',
+      'books',
+      'saves',
+    ]);
+  });
+
+  it("drops windows it does not know, and reads an older build's dragged spots as nothing", () => {
     const parsed = parseLayout({
       open: ['build', 'jukebox', 'build'],
       stack: 'advice',
-      spots: { build: { x: 'left', y: 3 }, books: { x: 4, y: 5 }, jukebox: { x: 1, y: 1 } },
+      spots: { books: { x: 4, y: 5 } },
     });
-    expect(parsed).toEqual(layout({ open: ['build'], spots: { books: { x: 4, y: 5 } } }));
+    expect(parsed).toEqual(layout({ open: ['build'] }));
   });
 
   it('reads windows an older build had as the tabs they became', () => {
@@ -205,20 +241,15 @@ describe('parseLayout', () => {
     expect(parsed.tabs).toEqual({ inbox: 'advice' });
   });
 
-  it('drops spots of windows that became tabs and tabs stored under the wrong window', () => {
-    const parsed = parseLayout({
-      open: ['build'],
-      spots: { guests: { x: 1, y: 2 }, build: { x: 3, y: 4 } },
-      tabs: { inbox: 'staff', people: 'guests' },
-    });
-    expect(parsed.spots).toEqual({ build: { x: 3, y: 4 } });
+  it('drops tabs stored under the wrong window', () => {
+    const parsed = parseLayout({ open: ['build'], tabs: { inbox: 'staff', people: 'guests' } });
     expect(parsed.tabs).toEqual({ people: 'guests' });
   });
 
   it('falls back to the default for anything that is not a layout', () => {
     expect(parseLayout(null)).toBe(DEFAULT_LAYOUT);
     expect(parseLayout('build')).toBe(DEFAULT_LAYOUT);
-    expect(parseLayout({ spots: {} })).toBe(DEFAULT_LAYOUT);
+    expect(parseLayout({ stack: [] })).toBe(DEFAULT_LAYOUT);
   });
 });
 

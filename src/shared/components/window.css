@@ -10,18 +10,11 @@
   animation: ui-pop var(--pop);
 }
 
-.ui-window[data-dragging] {
-  box-shadow: var(--shadow-drag), var(--bevel);
-  opacity: 0.94;
-}
-
 .ui-window-head {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4);
-  cursor: var(--cursor-hand);
-  touch-action: none;
 }
 
 .ui-window-title {
@@ -41,6 +34,7 @@
   outline: none;
 }
 
+.ui-window-back,
 .ui-window-close {
   flex: none;
   width: 26px;
@@ -51,6 +45,7 @@
 
 /* 44px: the smallest target a fingertip hits reliably. */
 @media (pointer: coarse) {
+  .ui-window-back,
   .ui-window-close {
     width: 44px;
     height: 44px;

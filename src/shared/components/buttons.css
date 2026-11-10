@@ -1,5 +1,6 @@
 .ui-chip,
 .ui-tab,
+.ui-window-back,
 .ui-window-close,
 .ui-button,
 .ui-form-roll,
@@ -27,6 +28,7 @@
 
 .ui-chip:hover,
 .ui-tab:hover,
+.ui-window-back:hover,
 .ui-window-close:hover,
 .ui-button:hover:not(:disabled),
 .ui-form-roll:hover:not(:disabled),
@@ -40,6 +42,7 @@
 
 .ui-chip:active,
 .ui-tab:active,
+.ui-window-back:active,
 .ui-window-close:active,
 .ui-button:active:not(:disabled),
 .ui-button-primary:active:not(:disabled),

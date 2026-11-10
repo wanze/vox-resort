@@ -45,7 +45,16 @@ import { FollowCard, type FollowSheet } from '../../guest-view/components/Follow
 import { collapsedOnView } from '../../guest-view/domain/followSheet';
 import type { ViewMode } from '../../guest-view/domain/followRig';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
-import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
+import {
+  canGoBack,
+  depthOf,
+  isOpen,
+  sideOf,
+  WINDOW_IDS,
+  type PageId,
+  type Side,
+  type WindowId,
+} from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
 import { isCompact, type LayoutMode } from '../domain/layoutMode';
 import type { BuildTool } from '../../build/domain/buildTool';
@@ -303,6 +312,12 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
     ) : null,
 };
 
+function backOf({ windows }: HudView, id: WindowId): HudWindowFrame['back'] {
+  const previous = windows.layout.back.at(-1);
+  if (!canGoBack(windows.layout, id) || previous === undefined) return null;
+  return { title: WINDOW_TITLES[previous], onBack: windows.back };
+}
+
 function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFrame {
   const { windows } = props;
   const compact = isCompact(props.layout);
@@ -310,11 +325,10 @@ function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFr
     id,
     compact,
     peek: compact && id === 'build' && props.tool !== null,
-    spot: windows.layout.spots[id] ?? null,
     depth: depthOf(windows.layout, id),
+    back: backOf(props, id),
     takesFocus: windows.layout.focus === id,
     onRaise: () => windows.raise(id),
-    onMove: (spot) => windows.move(id, spot),
     onClose,
   };
 }
@@ -374,6 +388,45 @@ const selectedKey = (selection: SelectionView | null): string | null => {
   return selection.kind === 'guest' ? `guest:${selection.person}` : `staff:${selection.worker}`;
 };
 
+function FramedWindow({ props, id }: { props: HudView; id: Framed }) {
+  const { windows } = props;
+  const content = bodyOf(props, id);
+  if (content === null) return null;
+  return (
+    <HudWindow
+      frame={frameOf(props, id, () => windows.show(id, false))}
+      title={WINDOW_TITLES[id]}
+      icon={WINDOW_ICONS[id]}
+    >
+      {content}
+    </HudWindow>
+  );
+}
+
+// The follow card stands in for the inspector, and takes its activity line.
+function Inspector(props: HudView) {
+  if (props.guestView.following) return null;
+  return (
+    <InspectPanel
+      frame={frameOf(props, 'inspect', props.inspector.clear)}
+      selection={props.selection}
+      advice={props.advice}
+      activityElement={props.nodes.inspect}
+      onSelectPerson={props.inspector.selectPerson}
+      onShow={props.inspector.showSelected}
+      onFollow={props.guestView.follow}
+      onSend={props.inspector.send}
+      hire={hireControls(props)}
+      onRenameVenue={props.inspector.renameVenue}
+      renovation={renovationControls(props)}
+      onOpenProgramme={(key) => {
+        props.programme.choose(key);
+        props.windows.show('programme', true);
+      }}
+    />
+  );
+}
+
 function Windows(props: HudView) {
   const { windows } = props;
   const selected = selectedKey(props.selection);
@@ -382,42 +435,20 @@ function Windows(props: HudView) {
   useEffect(() => {
     if (selected !== null) raise('inspect');
   }, [selected, raise]);
+  const openOn = (side: Side | null) =>
+    FRAMED.filter((id) => sideOf(id) === side && isOpen(windows.layout, id)).map((id) => (
+      <FramedWindow key={id} props={props} id={id} />
+    ));
   return (
     <>
-      {FRAMED.filter((id) => isOpen(windows.layout, id)).map((id) => {
-        const content = bodyOf(props, id);
-        if (content === null) return null;
-        return (
-          <HudWindow
-            key={id}
-            frame={frameOf(props, id, () => windows.show(id, false))}
-            title={WINDOW_TITLES[id]}
-            icon={WINDOW_ICONS[id]}
-          >
-            {content}
-          </HudWindow>
-        );
-      })}
-      {/* The follow card stands in for the inspector, and takes its activity line. */}
-      {props.guestView.following ? null : (
-        <InspectPanel
-          frame={frameOf(props, 'inspect', props.inspector.clear)}
-          selection={props.selection}
-          advice={props.advice}
-          activityElement={props.nodes.inspect}
-          onSelectPerson={props.inspector.selectPerson}
-          onShow={props.inspector.showSelected}
-          onFollow={props.guestView.follow}
-          onSend={props.inspector.send}
-          hire={hireControls(props)}
-          onRenameVenue={props.inspector.renameVenue}
-          renovation={renovationControls(props)}
-          onOpenProgramme={(key) => {
-            props.programme.choose(key);
-            windows.show('programme', true);
-          }}
-        />
-      )}
+      <div className="hud-column" data-side="left">
+        {openOn('left')}
+      </div>
+      <div className="hud-column" data-side="right">
+        <Inspector {...props} />
+        {openOn('right')}
+      </div>
+      {openOn(null)}
     </>
   );
 }

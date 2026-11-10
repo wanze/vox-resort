@@ -221,7 +221,6 @@
   --shadow-slab: 0 2px 0 rgb(90 64 38 / 30%), 0 10px 26px rgb(48 32 16 / 30%);
   --shadow-lift: 0 3px 8px rgb(48 32 16 / 28%);
   --shadow-ledge: 0 1px 0 rgb(90 64 38 / 25%);
-  --shadow-drag: 0 18px 40px rgb(48 32 16 / 38%);
   --emboss: 1px 1px 0 rgb(255 255 255 / 55%);
   --shadow-accent-text: 0 1px 0 rgb(0 0 0 / 25%);
   --glow-accent: 0 0 0 1px var(--terracotta), 0 0 12px rgb(191 90 51 / 45%);
@@ -314,10 +313,11 @@
 
   --control-h: 32px;
   --bar-h: 48px;
-  /* Plain pixels, not calc(): the window drag reads it back from script. The bar and the hub
-     hanging below it, so a window never opens over the clock. */
+  /* The bar and the hub hanging below it, so a window never opens over the clock. */
   --window-floor: 62px;
   --palette-w: 284px;
+  /* The left side's windows: never narrower than the build palette on the right. */
+  --column-w: clamp(var(--palette-w), 28vw, 400px);
   --tile-min: 60px;
 
   /* Taller than the plates, so they float with a little of the map showing above and below. */
@@ -377,7 +377,7 @@
   }
 }
 
-/* The drag reads --window-floor back, so it grows with the bar: 8 px taller controls. */
+/* The window floor grows with the bar: 8 px taller controls. */
 @media (pointer: coarse) {
   :root {
     --control-h: 40px;

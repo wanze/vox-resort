@@ -32,22 +32,29 @@ function hostOf(page: PageId): WindowId {
   return isTab(page) ? hostOfTab(page) : page;
 }
 
-export interface WindowSpot {
-  readonly x: number;
-  readonly y: number;
+// Short-lived windows over the middle of the screen. The rest have a side: the right holds the
+// build palette with the inspector over it, the left one of the others at a time.
+const DIALOGS: ReadonlySet<WindowId> = new Set(['resort', 'name', 'saves', 'share']);
+const RIGHT: ReadonlySet<WindowId> = new Set(['build', 'inspect']);
+
+export type Side = 'left' | 'right';
+
+export function sideOf(id: WindowId): Side | null {
+  if (DIALOGS.has(id)) return null;
+  return RIGHT.has(id) ? 'right' : 'left';
 }
 
-export interface Box {
-  readonly width: number;
-  readonly height: number;
-}
+const isLeft = (id: WindowId): boolean => sideOf(id) === 'left';
+
+// Enough to retrace a few steps; older ones are forgotten.
+const BACK_STEPS = 10;
 
 export interface WindowLayout {
   readonly open: readonly WindowId[];
   // Back to front. A window never raised is not in it and sits under every one that was.
   readonly stack: readonly WindowId[];
-  // Only windows the player has dragged; the rest keep the stylesheet's default place.
-  readonly spots: Readonly<Partial<Record<WindowId, WindowSpot>>>;
+  // The left windows that gave way to the one there now, the latest last. Never restored.
+  readonly back: readonly WindowId[];
   // The window the player last opened, which may take the keyboard. Never restored, so a
   // reload does not grab the keys before anything has been clicked.
   readonly focus: WindowId | null;
@@ -58,14 +65,10 @@ export interface WindowLayout {
 export const DEFAULT_LAYOUT: WindowLayout = {
   open: ['build'],
   stack: [],
-  spots: {},
+  back: [],
   focus: null,
   tabs: {},
 };
-
-const MARGIN = 6;
-// Enough of the title bar to grab, so a window pushed off an edge can always be pulled back.
-const GRIP = 44;
 
 export function isOpen(layout: WindowLayout, id: WindowId): boolean {
   return layout.open.includes(id);
@@ -93,16 +96,42 @@ function pickTab(layout: WindowLayout, tab: TabId): WindowLayout {
   return { ...layout, tabs: { ...layout.tabs, [host]: tab } };
 }
 
+function hide(layout: WindowLayout, id: WindowId): WindowLayout {
+  if (!isOpen(layout, id)) return layout;
+  const focus = layout.focus === id ? null : layout.focus;
+  const back = isLeft(id) ? [] : layout.back;
+  return { ...layout, open: layout.open.filter((each) => each !== id), focus, back };
+}
+
+// A left window takes the place of the one there, which is remembered to go back to.
+function place(layout: WindowLayout, id: WindowId, back: readonly WindowId[]): WindowLayout {
+  const there = isLeft(id) ? layout.open.find(isLeft) : undefined;
+  const kept = layout.open.filter((each) => each !== there);
+  return { ...layout, open: [...kept, id], focus: id, back };
+}
+
+function pushedBack(layout: WindowLayout, id: WindowId): readonly WindowId[] {
+  const there = isLeft(id) ? layout.open.find(isLeft) : undefined;
+  if (there === undefined) return isLeft(id) ? [] : layout.back;
+  return [...layout.back, there].slice(-BACK_STEPS);
+}
+
 // Hiding a tab hides its window, whichever tab that window is on.
 export function showWindow(layout: WindowLayout, page: PageId, shown: boolean): WindowLayout {
   const id = hostOf(page);
-  if (!shown) {
-    if (!isOpen(layout, id)) return layout;
-    const focus = layout.focus === id ? null : layout.focus;
-    return { ...layout, open: layout.open.filter((each) => each !== id), focus };
-  }
-  const opened = isOpen(layout, id) ? layout : { ...layout, open: [...layout.open, id], focus: id };
+  if (!shown) return hide(layout, id);
+  const opened = isOpen(layout, id) ? layout : place(layout, id, pushedBack(layout, id));
   return raiseWindow(isTab(page) ? pickTab(opened, page) : opened, id);
+}
+
+export function canGoBack(layout: WindowLayout, id: WindowId): boolean {
+  return isLeft(id) && layout.back.length > 0;
+}
+
+export function goBack(layout: WindowLayout): WindowLayout {
+  const previous = layout.back.at(-1);
+  if (previous === undefined) return layout;
+  return raiseWindow(place(layout, previous, layout.back.slice(0, -1)), previous);
 }
 
 // A tab whose window is open on another tab is switched to, not closed.
@@ -125,28 +154,8 @@ export function toCompact(layout: WindowLayout): WindowLayout {
   return kept === undefined ? layout : { ...layout, open: [kept] };
 }
 
-export function moveWindow(layout: WindowLayout, id: WindowId, spot: WindowSpot): WindowLayout {
-  return { ...layout, spots: { ...layout.spots, [id]: spot } };
-}
-
-export function resetPlaces(layout: WindowLayout): WindowLayout {
-  return { ...layout, stack: [], spots: {} };
-}
-
 export function depthOf(layout: WindowLayout, id: WindowId): number {
   return layout.stack.indexOf(id) + 1;
-}
-
-const clamp = (value: number, low: number, high: number): number =>
-  Math.min(Math.max(value, low), high);
-
-export function clampSpot(spot: WindowSpot, size: Box, viewport: Box, top: number): WindowSpot {
-  const right = Math.max(MARGIN, viewport.width - size.width - MARGIN);
-  const bottom = Math.max(top, viewport.height - GRIP);
-  return {
-    x: Math.round(clamp(spot.x, MARGIN, right)),
-    y: Math.round(clamp(spot.y, top, bottom)),
-  };
 }
 
 export const isWindowId = (value: unknown): value is WindowId =>
@@ -193,38 +202,22 @@ function tabsOf(value: unknown): Partial<Record<TabbedWindow, TabId>> {
   return tabs;
 }
 
-function spotOf(value: unknown): WindowSpot | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const { x, y } = value as { x?: unknown; y?: unknown };
-  if (typeof x !== 'number' || typeof y !== 'number') return null;
-  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-}
-
-function spotsOf(value: unknown): WindowLayout['spots'] {
-  if (typeof value !== 'object' || value === null) return {};
-  const spots: Partial<Record<WindowId, WindowSpot>> = {};
-  for (const [id, raw] of Object.entries(value)) {
-    const spot = spotOf(raw);
-    if (isWindowId(id) && spot) spots[id] = spot;
-  }
-  return spots;
+// A build that let several windows share the left kept them all open; the one opened last stays.
+function oneLeft(ids: readonly WindowId[]): readonly WindowId[] {
+  const last = ids.findLast(isLeft);
+  return ids.filter((id) => !isLeft(id) || id === last);
 }
 
 // Whatever was stored by an older build, or by hand, comes back as something usable.
 export function parseLayout(value: unknown): WindowLayout {
   if (typeof value !== 'object' || value === null) return DEFAULT_LAYOUT;
-  const { open, stack, spots, tabs } = value as {
-    open?: unknown;
-    stack?: unknown;
-    spots?: unknown;
-    tabs?: unknown;
-  };
+  const { open, stack, tabs } = value as { open?: unknown; stack?: unknown; tabs?: unknown };
   if (!Array.isArray(open)) return DEFAULT_LAYOUT;
   const picked = tabsOf(tabs);
   return {
-    open: idsOf(open, picked),
+    open: oneLeft(idsOf(open, picked)),
     stack: idsOf(stack, picked),
-    spots: spotsOf(spots),
+    back: [],
     focus: null,
     tabs: picked,
   };

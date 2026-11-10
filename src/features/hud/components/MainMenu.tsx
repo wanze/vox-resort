@@ -281,7 +281,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
       />
     </>
   ),
-  windows: ({ windows, run, debug }) => (
+  windows: ({ windows, debug }) => (
     <>
       {MENU_PAGES.map((page) => (
         <MenuOption
@@ -316,11 +316,6 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
           />
         </>
       ) : null}
-      <MenuOption
-        label="Reset window positions"
-        note="put every window back where it started"
-        onSelect={run(windows.resetPlaces)}
-      />
     </>
   ),
   // Not layers: these stand over whichever layer the map view has on, or none.

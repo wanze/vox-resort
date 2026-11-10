@@ -24,7 +24,7 @@ import type {
   UpdatePhase,
 } from '../domain/news';
 import type { BuildNote, CameraView } from '../domain/views';
-import type { PageId, WindowId, WindowLayout, WindowSpot } from '../domain/windowLayout';
+import type { PageId, WindowId, WindowLayout } from '../domain/windowLayout';
 import type { TabbedWindow, TabId } from '../domain/windowTabs';
 import type { SelectionView } from '../../inspect/domain/selection';
 import type { FollowView, RideCommand } from '../../guest-view/domain/followRules';
@@ -133,8 +133,7 @@ export interface WindowControls {
   toggle(page: PageId): void;
   show(page: PageId, shown: boolean): void;
   raise(id: WindowId): void;
-  move(id: WindowId, spot: WindowSpot): void;
-  resetPlaces(): void;
+  back(): void;
   readonly tab: (id: TabbedWindow) => TabId;
 }
 

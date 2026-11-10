@@ -9,6 +9,8 @@ export interface MenuOptionProps {
   readonly icon?: IconName | null;
   readonly note?: ReactNode;
   readonly shortcut?: string | undefined;
+  // A short state at the row's end, such as "muted": what a note would say, kept on one line.
+  readonly value?: string | undefined;
   // A radio row when it is set, a plain command when it is not; a checkbox row when many can be.
   readonly checked?: boolean;
   readonly many?: boolean;
@@ -44,6 +46,7 @@ export function MenuOption({
   icon = null,
   note,
   shortcut,
+  value,
   checked,
   many = false,
   disabled = false,
@@ -64,10 +67,14 @@ export function MenuOption({
         <span className="ui-option-label">{label}</span>
         {note ? <span className="ui-option-note">{note}</span> : null}
       </span>
+      <OptionValue value={value} />
       <OptionMarks shortcut={shortcut} checked={checked === true} more={more} />
     </button>
   );
 }
+
+const OptionValue = ({ value }: { readonly value: string | undefined }) =>
+  value ? <span className="ui-option-value">{value}</span> : null;
 
 function OptionMarks({
   shortcut,

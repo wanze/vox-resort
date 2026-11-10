@@ -5,12 +5,15 @@ import { adviceTiers, type AdviceTier, type TierGroup } from '../domain/adviceTi
 import { adviceKey } from '../domain/news';
 import { adviceIcon, adviceSays } from './adviceWords';
 import { HireButton, type HireControls } from './HireButton';
+import { FixButton } from './FixButton';
+import type { PageId } from '../domain/windowLayout';
 import { PanelSummary } from '../../../shared/components/PanelSummary';
 
 export interface AdvicePanelProps {
   readonly advice: readonly Advice[];
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly hire?: HireControls;
+  readonly onOpenPage: (page: PageId) => void;
 }
 
 const TIER_NAMES: { readonly [tier in AdviceTier]: string } = {
@@ -23,10 +26,12 @@ function AdviceRow({
   advice,
   onShowOnPlot,
   hire,
+  onOpenPage,
 }: {
   readonly advice: Advice;
   readonly onShowOnPlot: AdvicePanelProps['onShowOnPlot'];
   readonly hire: AdvicePanelProps['hire'];
+  readonly onOpenPage: AdvicePanelProps['onOpenPage'];
 }) {
   const { at } = advice;
   return (
@@ -47,6 +52,7 @@ function AdviceRow({
           </button>
         ) : null}
         <HireButton advice={advice} hire={hire} />
+        <FixButton advice={advice} onOpenPage={onOpenPage} />
       </span>
     </li>
   );
@@ -56,17 +62,25 @@ function AdviceGroup({
   group,
   onShowOnPlot,
   hire,
+  onOpenPage,
 }: {
   readonly group: TierGroup;
   readonly onShowOnPlot: AdvicePanelProps['onShowOnPlot'];
   readonly hire: AdvicePanelProps['hire'];
+  readonly onOpenPage: AdvicePanelProps['onOpenPage'];
 }) {
   return (
     <section className="hud-advice-group" aria-label={TIER_NAMES[group.tier]}>
       <h3 className="hud-report-heading">{TIER_NAMES[group.tier]}</h3>
       <ul className="hud-problems">
         {group.advice.map((each) => (
-          <AdviceRow key={adviceKey(each)} advice={each} onShowOnPlot={onShowOnPlot} hire={hire} />
+          <AdviceRow
+            key={adviceKey(each)}
+            advice={each}
+            onShowOnPlot={onShowOnPlot}
+            hire={hire}
+            onOpenPage={onOpenPage}
+          />
         ))}
       </ul>
     </section>
@@ -82,7 +96,7 @@ function AdviceHelp() {
   );
 }
 
-export function AdvicePanel({ advice, onShowOnPlot, hire }: AdvicePanelProps) {
+export function AdvicePanel({ advice, onShowOnPlot, hire, onOpenPage }: AdvicePanelProps) {
   if (advice.length === 0) {
     return <p className="ui-loading">Nothing needs attention.</p>;
   }
@@ -104,7 +118,13 @@ export function AdvicePanel({ advice, onShowOnPlot, hire }: AdvicePanelProps) {
         help={<AdviceHelp />}
       />
       {groups.map((group) => (
-        <AdviceGroup key={group.tier} group={group} onShowOnPlot={onShowOnPlot} hire={hire} />
+        <AdviceGroup
+          key={group.tier}
+          group={group}
+          onShowOnPlot={onShowOnPlot}
+          hire={hire}
+          onOpenPage={onOpenPage}
+        />
       ))}
     </div>
   );

@@ -6,21 +6,9 @@ function toneOf(pressure: number): string {
   return pressure > 0 ? 'up' : 'down';
 }
 
-// Upright in the bar, across in the window: the same zero-centred scale either way.
-export function DemandBar({
-  pressure,
-  across = false,
-}: {
-  readonly pressure: number;
-  readonly across?: boolean;
-}) {
+export function DemandBar({ pressure }: { readonly pressure: number }) {
   return (
-    <span
-      className="hud-demand-bar"
-      data-tone={toneOf(pressure)}
-      data-across={across || undefined}
-      aria-hidden="true"
-    >
+    <span className="hud-demand-bar" data-tone={toneOf(pressure)} aria-hidden="true">
       <span className="hud-demand-fill" style={{ '--pressure': pressure } as CSSProperties} />
     </span>
   );

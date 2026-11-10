@@ -21,9 +21,6 @@ export interface DayReportPanelProps {
   readonly resortName: string | null;
 }
 
-// The report keeps more for yesterday's photo wall; here only the top of the list.
-const SPOTS_SHOWN = 3;
-
 const whole = (value: number): string => value.toLocaleString('en-US');
 
 const starsOf = (value: number): string => `${value.toFixed(1)} ★`;
@@ -138,21 +135,6 @@ function EventsSection({ report }: { readonly report: DayReport }) {
   );
 }
 
-function PhotosSection({ report }: { readonly report: DayReport }) {
-  if (!report.photos) return null;
-  return (
-    <Section title="Most photographed">
-      <Rows>
-        {report.photos.spots.slice(0, SPOTS_SHOWN).map((spot) => (
-          <Row key={spot.key} label={spot.subject}>
-            <dd>{`${whole(spot.count)}×`}</dd>
-          </Row>
-        ))}
-      </Rows>
-    </Section>
-  );
-}
-
 function SaidSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="What guests said">
@@ -237,7 +219,6 @@ export function DayReportPanel({ history, shown, onShow, mode, resortName }: Day
       />
       <RatingSection report={report} />
       <EventsSection report={report} />
-      <PhotosSection report={report} />
       <SaidSection report={report} />
       <TrendSection history={history} mode={mode} />
     </div>

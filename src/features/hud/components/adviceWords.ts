@@ -1,3 +1,4 @@
+import type { PageId } from '../domain/windowLayout';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import { markerIconOf } from '../domain/markers';
@@ -48,12 +49,12 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'short-staffed': ({ subject, count }) =>
     `The plot needs ${count} more ${isStaffRole(subject) ? roleWord(subject, count) : subject}`,
   broken: ({ subject }) => `${subject} has broken down`,
-  'storm-damage': ({ subject }) => `The storm battered ${subject}: renovate it`,
+  'storm-damage': ({ subject }) => `The storm battered ${subject}`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
   smelly: ({ subject }) => `Guests smell something at ${subject}`,
   noisy: ({ subject }) => `Guests find ${subject} too noisy`,
   'noisy-night': ({ subject }) => `Guests at ${subject} are kept awake at night`,
-  shabby: ({ subject }) => `${subject} has seen better days: renovate it`,
+  shabby: ({ subject }) => `${subject} has seen better days`,
   unwatched: ({ subject }) => `Nobody is watching ${subject}`,
   littered: ({ count }) => `Litter is piling up on ${count} tiles`,
   'far-from-home': ({ subject, count, need }) =>
@@ -66,10 +67,10 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'no-fireworks': () => 'Nothing to celebrate in two weeks',
   underpriced: ({ subject, count }) =>
     count === 1
-      ? `${subject} charges less than your stars allow: raise it in Books, Prices`
-      : `${count} kinds of room charge less than your stars allow: raise them in Books, Prices`,
+      ? `${subject} charges less than your stars allow`
+      : `${count} kinds of room charge less than your stars allow`,
   'weather-closed': ({ subject, need }) =>
-    `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
+    `The weather shut most places for ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
 
 const LABELS: { readonly [kind in AdviceKind]: string } = {
@@ -124,6 +125,18 @@ const ICONS: { readonly [kind in AdviceKind]?: IconName } = {
   underpriced: 'money',
   'weather-closed': 'storm',
 };
+
+// Where the fix is made, so the line can say what happened and a button can take the player there.
+const FIXED_IN: { readonly [kind in AdviceKind]?: PageId } = {
+  'short-staffed': 'staff',
+  'storm-damage': 'upkeep',
+  shabby: 'upkeep',
+  'no-events': 'programme',
+  'no-fireworks': 'programme',
+  underpriced: 'prices',
+};
+
+export const adviceFixedIn = (kind: AdviceKind): PageId | undefined => FIXED_IN[kind];
 
 export const adviceIcon = (kind: AdviceKind): IconName =>
   markerIconOf(kind) ?? ICONS[kind] ?? 'advice';

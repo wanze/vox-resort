@@ -1,3 +1,5 @@
+import { FixButton } from './FixButton';
+import type { PageId } from '../domain/windowLayout';
 import { useEffect, useState, type FocusEvent } from 'react';
 import { bookingNewsLine, bookingNewsTitle } from '../../bookings/components/bookingNews';
 import { OperatorLogo } from '../../bookings/components/OperatorLogo';
@@ -25,7 +27,7 @@ interface NewsToastsProps {
   readonly mode: GameMode | null;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly hire: HireControls;
-  readonly onOpenAdvice: () => void;
+  readonly onOpenPage: (page: PageId) => void;
   readonly onOpenReport: (day: number) => void;
   readonly onOpenBookings: () => void;
   readonly offers: {
@@ -44,7 +46,7 @@ export interface ToastsProps {
   readonly onHold?: (held: boolean) => void;
 }
 
-type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'hire' | 'onOpenAdvice'>;
+type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'hire' | 'onOpenPage'>;
 
 function ToastActions({ news, ...props }: { readonly news: News } & ToastActionsProps) {
   const { advice } = news;
@@ -62,9 +64,7 @@ function ToastActions({ news, ...props }: { readonly news: News } & ToastActions
         </button>
       ) : null}
       <HireButton advice={advice} hire={props.hire} />
-      <button type="button" className="ui-button hud-advice-show" onClick={props.onOpenAdvice}>
-        Advice
-      </button>
+      <FixButton advice={advice} fallback="advice" onOpenPage={props.onOpenPage} />
     </div>
   );
 }

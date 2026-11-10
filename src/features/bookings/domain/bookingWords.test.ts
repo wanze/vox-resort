@@ -61,6 +61,7 @@ describe('booking words', () => {
     expect(groupWords('family', 8)).toBe('8 families');
     expect(groupWords('couple', 1)).toBe('1 couple');
     expect(groupWords('wedding', 6)).toBe('a wedding party of 6');
+    expect(groupWords('wedding', 1)).toBe('a wedding party');
   });
 
   it('puts the apostrophe where the name needs it', () => {

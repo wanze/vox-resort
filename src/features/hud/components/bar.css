@@ -386,63 +386,60 @@
   background: var(--demand-ink);
 }
 
-.hud-demand-bar[data-across] {
-  width: 100%;
-  height: 8px;
-}
-
-.hud-demand-bar[data-across]::before {
-  top: -1px;
-  bottom: -1px;
-  left: calc(50% - 0.5px);
-  right: auto;
-  width: 1px;
-  height: auto;
-}
-
-.hud-demand-bar[data-across] .hud-demand-fill {
-  top: 1px;
-  bottom: 1px;
-  left: calc(50% + min(var(--pressure), 0) * 50%);
-  right: calc(50% - max(var(--pressure), 0) * 50%);
-}
-
 .hud-demand-grid {
   display: grid;
-  grid-template-columns: auto minmax(90px, 1fr) auto auto;
-  gap: var(--space-2) var(--space-3);
+  grid-template-columns: auto minmax(72px, 1fr) auto auto;
+  gap: var(--space-3);
   align-items: center;
-}
-
-/* Less the grid's own row gap, so the break is the same as between any two sections. */
-.hud-demand-grid > .hud-demand-group-heading {
-  grid-column: 1 / -1;
-  margin: calc(var(--section-gap) - var(--space-2)) 0 var(--space-1);
-}
-
-.hud-demand-grid > .hud-demand-group-heading:first-of-type {
-  margin-top: 0;
 }
 
 .hud-demand-row {
   display: contents;
 }
 
-.hud-demand-head {
-  font: 400 var(--size-label) / 1.2 var(--font-label);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--text-faint);
-  text-align: right;
-}
-
-.hud-demand-scale {
-  display: flex;
-  justify-content: space-between;
-}
-
 .hud-demand-name {
   font: 600 var(--size-body) / 1.2 var(--font-ui);
+}
+
+/* The tick stands where comfortable ends; a fill past it is a line that wants building. */
+.hud-demand-full {
+  position: relative;
+}
+
+.hud-demand-full::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--comfort) * 100%);
+  width: 2px;
+  background: var(--edge-strong);
+}
+
+.hud-demand-full-fill {
+  display: block;
+  width: calc(var(--full) * 100%);
+  height: 100%;
+  background:
+    linear-gradient(180deg, var(--wash-key), transparent 55%, var(--meter-notch)),
+    var(--band-ink, var(--ink-good));
+  box-shadow: inset -1px 0 0 var(--edge-strong);
+}
+
+.hud-demand-row[data-band='more'] {
+  --band-ink: var(--ink-warn);
+  --band-text: var(--text-figure);
+}
+
+.hud-demand-row[data-band='now'] {
+  --band-ink: var(--ink-bad);
+  --band-text: var(--text-bad);
+}
+
+.hud-demand-word {
+  font-size: var(--size-small);
+  white-space: nowrap;
+  color: var(--band-text, var(--text-faint));
 }
 
 .hud-demand-figure {

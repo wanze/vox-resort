@@ -1,15 +1,13 @@
-import { Fragment } from 'react';
+import type { CSSProperties } from 'react';
 import { OutOf } from '../../../shared/components/OutOf';
-import { DEMAND_GROUPS, type Demand, type DemandGroup } from '../../sim/domain/demand';
-import { DemandBar } from './DemandBar';
 import {
-  GROUP_TITLES,
-  LINE_NAMES,
-  pressureNote,
-  pressureWord,
-  PRESSURE_LOUD,
-  turnedAwayShare,
-} from './demandWords';
+  COMFORTABLE,
+  DEMAND_GROUPS,
+  type Demand,
+  type DemandGroup,
+  type Pressure,
+} from '../../sim/domain/demand';
+import { LINE_NAMES, pressureBand, pressureNote, pressureWord, PRESSURE_LOUD } from './demandWords';
 import type { StatusView } from '../domain/views';
 import { PanelSummary } from '../../../shared/components/PanelSummary';
 import { demandFigures } from '../domain/panelFigures';
@@ -33,6 +31,19 @@ function DemandSummary({ demand }: { readonly demand: Demand }) {
 }
 
 // One grid for every group, so the bars line up down the whole window.
+// How full the line got at its busiest, with a tick where enough room ends: past it, build.
+function FullnessBar({ pressure }: { readonly pressure: Pressure }) {
+  const full = pressure.places > 0 ? Math.min(pressure.used / pressure.places, 1) : 1;
+  const style = { '--full': full, '--comfort': COMFORTABLE } as CSSProperties;
+  return (
+    <span className="ui-meter hud-demand-full" style={style} aria-hidden="true">
+      <span className="hud-demand-full-fill" />
+    </span>
+  );
+}
+
+const LINES = GROUPS.flatMap((group) => DEMAND_GROUPS[group]);
+
 export function DemandPanel({ status }: DemandPanelProps) {
   if (!status?.demand) return <p className="hud-rating-note">Nothing counted yet.</p>;
   const { demand } = status;
@@ -40,39 +51,25 @@ export function DemandPanel({ status }: DemandPanelProps) {
     <>
       <DemandSummary demand={demand} />
       <div className="hud-demand-grid">
-        <span />
-        <span className="hud-demand-head hud-demand-scale">
-          <span>Enough</span>
-          <span>Build</span>
-        </span>
-        <span className="hud-demand-head">Busiest / room</span>
-        <span className="hud-demand-head">Away</span>
-        {GROUPS.map((group) => (
-          <Fragment key={group}>
-            <h3 className="hud-report-heading hud-demand-group-heading">{GROUP_TITLES[group]}</h3>
-            {DEMAND_GROUPS[group].map((line) => {
-              const pressure = demand.lines[line];
-              return (
-                <div
-                  key={line}
-                  className="hud-demand-row"
-                  title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure)}`}
-                >
-                  {/* Inside the name: the row is a run of grid cells, and a sibling would be one more. */}
-                  <span className="hud-demand-name">
-                    {LINE_NAMES[line]}
-                    <span className="ui-visually-hidden">{`: ${pressureWord(pressure.pressure)}`}</span>
-                  </span>
-                  <DemandBar pressure={pressure.pressure} across />
-                  <span className="hud-demand-figure">
-                    <OutOf value={pressure.used} total={pressure.places} />
-                  </span>
-                  <span className="hud-demand-figure">{turnedAwayShare(pressure)}</span>
-                </div>
-              );
-            })}
-          </Fragment>
-        ))}
+        {LINES.map((line) => {
+          const pressure = demand.lines[line];
+          const word = pressureWord(pressure.pressure);
+          return (
+            <div
+              key={line}
+              className="hud-demand-row"
+              data-band={pressureBand(pressure.pressure)}
+              title={`${word}: ${pressureNote(line, pressure)}`}
+            >
+              <span className="hud-demand-name">{LINE_NAMES[line]}</span>
+              <FullnessBar pressure={pressure} />
+              <span className="hud-demand-figure">
+                <OutOf value={pressure.used} total={pressure.places} />
+              </span>
+              <span className="hud-demand-word">{word}</span>
+            </div>
+          );
+        })}
       </div>
     </>
   );

@@ -77,7 +77,6 @@ export interface MainMenuProps {
 type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'settings';
 
 interface PageContext extends MainMenuProps {
-  readonly title: string;
   readonly run: (action: () => void) => () => void;
 }
 
@@ -90,12 +89,6 @@ const PAGE_TITLES: { readonly [page in SubPage]: string } = {
   weather: 'Weather forecast',
   settings: 'Settings',
 };
-
-const weatherNote = ({ weather, forcedWeather }: ClockControls): string =>
-  `${WEATHER_NAMES[weather]} today${forcedWeather ? ', pinned' : ''}`;
-
-const settingsNote = (sound: SoundControls, shortcuts: ShortcutToggle): string =>
-  `${sound.prefs.on ? 'sound on' : 'sound muted'}, ${shortcuts.singleKeys ? 'all shortcuts' : 'no single-key shortcuts'}`;
 
 const PAUSES: readonly (readonly [keyof PausePrefs, string, string])[] = [
   ['pauseWeek', 'For the week ahead', "each Monday, with the week's poster"],
@@ -136,7 +129,7 @@ function NarrowViewRows({
         <MenuOption
           icon="inspect"
           label="Highlight buildings"
-          note={picked > 0 ? `${picked} kinds ringed` : 'ring every building of a kind'}
+          value={picked > 0 ? `${picked} ringed` : undefined}
           more
           onSelect={() => onOpen('highlight')}
         />
@@ -145,7 +138,7 @@ function NarrowViewRows({
         <MenuOption
           icon="overlay"
           label="Map view"
-          note={overlay.kind ? OVERLAY_NAMES[overlay.kind] : 'off'}
+          value={overlay.kind ? OVERLAY_NAMES[overlay.kind] : undefined}
           more
           onSelect={() => onOpen('maps')}
         />
@@ -161,7 +154,7 @@ function WeatherRow({ clock, onOpen }: Pick<PageProps, 'clock' | 'onOpen'>) {
       <MenuOption
         icon={clock.weather}
         label="Weather"
-        note={weatherNote(clock)}
+        value={WEATHER_NAMES[clock.weather]}
         more
         onSelect={() => onOpen('weather')}
       />
@@ -177,14 +170,12 @@ function GatesOption({ gates, season, run }: Pick<PageContext, 'gates' | 'season
         <MenuOption
           icon="guests"
           label={`Open season ${season.next}`}
-          note="open the gates and start the clock"
           onSelect={run(season.onOpen)}
         />
       ) : (
         <MenuOption
           icon="guests"
           label={gates.open ? 'Close the gates' : 'Open the gates'}
-          note={gates.open ? 'turn new guests away' : 'let new guests in'}
           onSelect={run(() => gates.onOpenChange(!gates.open))}
         />
       )}
@@ -193,13 +184,19 @@ function GatesOption({ gates, season, run }: Pick<PageContext, 'gates' | 'season
 }
 
 function RootPage(props: PageProps) {
-  const { saves, windows, clock, sound, shortcuts, run, onOpen } = props;
+  const { saves, windows, clock, sound, run, onOpen } = props;
   return (
     <>
       <MenuOption
+        icon="inspect"
+        label="Find an action…"
+        shortcut={keyLabel('find')}
+        onSelect={props.onFind}
+      />
+      <hr className="ui-rule" />
+      <MenuOption
         icon="saves"
         label="Save game"
-        note={saves.current?.name ?? 'name it first'}
         shortcut={SAVE_SHORTCUT}
         disabled={!saves.available}
         onSelect={run(() => void saveOrAsk(saves.save, () => windows.show('saves', true)))}
@@ -208,75 +205,42 @@ function RootPage(props: PageProps) {
       <MenuOption
         icon="camera"
         label="Photo mode"
-        note="hide the HUD and take a picture"
         shortcut={keyLabel('photo')}
         onSelect={run(props.onPhoto)}
       />
       <hr className="ui-rule" />
-      <MenuOption
-        icon="resort"
-        label="Game"
-        note="start, load, rename or share"
-        more
-        onSelect={() => onOpen('game')}
-      />
-      <MenuOption
-        icon="windows"
-        label="Windows"
-        note="open and close every window"
-        more
-        onSelect={() => onOpen('windows')}
-      />
-      <MenuOption
-        icon="overlay"
-        label="View"
-        note="markers, signs and staff pins"
-        more
-        onSelect={() => onOpen('view')}
-      />
+      <MenuOption icon="resort" label="Game" more onSelect={() => onOpen('game')} />
+      <MenuOption icon="windows" label="Windows" more onSelect={() => onOpen('windows')} />
+      <MenuOption icon="overlay" label="View" more onSelect={() => onOpen('view')} />
       <WeatherRow clock={clock} onOpen={onOpen} />
       <MenuOption
         icon="settings"
         label="Settings"
-        note={settingsNote(sound, shortcuts)}
+        value={sound.prefs.on ? undefined : 'muted'}
         more
         onSelect={() => onOpen('settings')}
-      />
-      <hr className="ui-rule" />
-      <MenuOption
-        label="Find an action…"
-        note="search every switch, window and thing to build"
-        shortcut={keyLabel('find')}
-        onSelect={props.onFind}
       />
     </>
   );
 }
 
 const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
-  game: ({ windows, run, title }) => (
+  game: ({ windows, run }) => (
     <>
       <MenuOption
         icon="resort"
         label="New game…"
-        note="tycoon or free play, on bare land or a generated resort"
         onSelect={run(() => windows.show('resort', true))}
       />
-      <MenuOption
-        label="Load game…"
-        note="pick up a saved game, or delete one"
-        onSelect={run(() => windows.show('saves', true))}
-      />
+      <MenuOption label="Load game…" onSelect={run(() => windows.show('saves', true))} />
       <MenuOption
         icon="rename"
         label="Rename resort…"
-        note={title}
         onSelect={run(() => windows.show('name', true))}
       />
       <MenuOption
         icon="share"
         label="Share resort…"
-        note="a link to its layout"
         onSelect={run(() => windows.show('share', true))}
       />
     </>
@@ -323,21 +287,20 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
     <>
       <MenuOption
         label="Problem markers"
-        note="pin a sign over every building in trouble"
         checked={view.markers}
         many
         onSelect={() => view.onMarkersChange(!view.markers)}
       />
       <MenuOption
         label="Building signs"
-        note={`say what each building is, when zoomed in (${keyLabel('signs')}; hold Alt for names)`}
+        shortcut={keyLabel('signs')}
         checked={view.signs}
         many
         onSelect={() => view.onSignsChange(!view.signs)}
       />
       <MenuOption
         label="Staff pins"
-        note={`pin every member of staff on duty (${keyLabel('staffPins')})`}
+        shortcut={keyLabel('staffPins')}
         checked={view.staffPins}
         many
         onSelect={() => view.onStaffPinsChange(!view.staffPins)}
@@ -436,7 +399,7 @@ export function MainMenu(props: MainMenuProps) {
         </>
       }
     >
-      <MenuPages {...props} title={title} run={run} />
+      <MenuPages {...props} run={run} />
     </DropdownMenu>
   );
 }

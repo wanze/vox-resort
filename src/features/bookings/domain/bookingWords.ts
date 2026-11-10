@@ -14,7 +14,8 @@ const GROUPS: { readonly [kind in OfferKind]: readonly [string, string] } = {
 };
 
 export function groupWords(kind: OfferKind, parties: number): string {
-  if (kind === 'wedding') return `a wedding party of ${parties}`;
+  if (kind === 'wedding')
+    return parties === 1 ? 'a wedding party' : `a wedding party of ${parties}`;
   const [one, many] = GROUPS[kind];
   return parties === 1 ? `1 ${one}` : `${parties} ${many}`;
 }

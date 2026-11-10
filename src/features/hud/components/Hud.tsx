@@ -218,6 +218,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       advice={props.advice}
       onShowOnPlot={props.onShowOnPlot}
       hire={hireControls(props)}
+      onOpenPage={(page) => props.windows.show(page, true)}
     />
   ),
   messages: (props) => (
@@ -615,7 +616,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           mode: modeOf(props.ledger),
           onShowOnPlot: props.onShowOnPlot,
           hire: hireControls(props),
-          onOpenAdvice: () => props.windows.show('advice', true),
+          onOpenPage: (page) => props.windows.show(page, true),
           onOpenReport: (day) => openReport(props, day),
           onOpenBookings: () => props.windows.show('bookings', true),
           offers: offerAnswers(props),

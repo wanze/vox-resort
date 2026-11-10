@@ -86,7 +86,7 @@ export function Panels() {
       <SampleWindow
         id="inbox"
         pages={{
-          advice: <AdvicePanel advice={SAMPLE_ADVICE} onShowOnPlot={noop} />,
+          advice: <AdvicePanel advice={SAMPLE_ADVICE} onShowOnPlot={noop} onOpenPage={noop} />,
           bookings: <BookingsPanel bookings={desk} />,
         }}
       />

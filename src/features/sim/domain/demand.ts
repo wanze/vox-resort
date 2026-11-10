@@ -29,7 +29,7 @@ export interface Demand {
 
 // Past three quarters full at its busiest, a line starts to want more: the rest is the slack a
 // crowd needs, as walks bunch up and parties want tables together. A first cut, for tuning.
-const COMFORTABLE = 0.75;
+export const COMFORTABLE = 0.75;
 
 const clamp = (value: number): number => (value < -1 ? -1 : value > 1 ? 1 : value);
 

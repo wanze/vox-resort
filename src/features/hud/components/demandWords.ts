@@ -27,6 +27,15 @@ export const LINE_NAMES: { readonly [line in DemandLine]: string } = {
 // Past this the bar turns red: most of the line is already being turned away.
 export const PRESSURE_LOUD = 0.6;
 
+export type PressureBand = 'plenty' | 'right' | 'more' | 'now';
+
+// The same four steps the words take, for a stylesheet to colour by.
+export function pressureBand(pressure: number): PressureBand {
+  if (pressure > PRESSURE_LOUD) return 'now';
+  if (pressure > 0) return 'more';
+  return pressure < -0.5 ? 'plenty' : 'right';
+}
+
 export function pressureWord(pressure: number): string {
   if (pressure > PRESSURE_LOUD) return 'build more now';
   if (pressure > 0) return 'could use more';
@@ -35,11 +44,6 @@ export function pressureWord(pressure: number): string {
 }
 
 const whole = (value: number): string => value.toLocaleString('en-US');
-
-export const turnedAwayShare = ({ turnedAway }: Pressure): string => {
-  const percent = Math.round(turnedAway * 100);
-  return percent > 0 ? `${percent}%` : '';
-};
 
 export function pressureNote(line: DemandLine, pressure: Pressure): string {
   const { used, places, turnedAway } = pressure;

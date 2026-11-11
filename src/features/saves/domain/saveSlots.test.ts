@@ -154,7 +154,14 @@ describe('listedOf', () => {
       unreadable: true,
     });
     expect(listedOf({ id: 'b', name: 7 })).toEqual({ id: 'b', unreadable: true });
-    expect(listedOf(null)).toEqual({ id: '', unreadable: true });
+    expect(listedOf(null)).toEqual({ id: 'unreadable-0', unreadable: true });
+  });
+
+  it('gives records without an id distinct placeholder ids', () => {
+    expect([null, { name: 7 }].map(listedOf)).toEqual([
+      { id: 'unreadable-0', unreadable: true },
+      { id: 'unreadable-1', unreadable: true },
+    ]);
   });
 });
 

@@ -34,11 +34,11 @@ export function isReadable(save: ListedSave): save is SaveMeta {
 }
 
 // Another version is as unreadable as a broken record: there are no migrations.
-export function listedOf(raw: unknown): ListedSave {
+export function listedOf(raw: unknown, index = 0): ListedSave {
   const parsed = saveMetaSchema.safeParse(raw);
   if (parsed.success && parsed.data.version === SAVE_VERSION) return parsed.data;
   const id = (raw as { id?: unknown } | null)?.id;
-  return { id: typeof id === 'string' ? id : '', unreadable: true };
+  return { id: typeof id === 'string' ? id : `unreadable-${index}`, unreadable: true };
 }
 
 export function cleanName(raw: string): string | null {

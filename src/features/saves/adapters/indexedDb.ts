@@ -7,8 +7,19 @@ export function openedOnce(
   unavailable: (cause: unknown) => Error,
 ): () => Promise<IDBDatabase> {
   let opened: Promise<IDBDatabase> | null = null;
+  const forget = (): void => {
+    opened = null;
+  };
   return () => {
-    opened ??= openDatabase(name, upgrade, unavailable);
+    opened ??= openDatabase(name, upgrade, unavailable).then((db) => {
+      // The browser may close a connection it finds idle; the next call then opens afresh.
+      db.addEventListener('close', forget);
+      db.addEventListener('versionchange', () => {
+        db.close();
+        forget();
+      });
+      return db;
+    });
     return opened;
   };
 }

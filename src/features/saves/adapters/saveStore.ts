@@ -38,8 +38,12 @@ export async function readSave(id: string): Promise<GameSnapshot | null> {
   const row = (await answer(db.transaction(SNAPSHOTS).objectStore(SNAPSHOTS).get(id))) as
     | SnapshotRow
     | undefined;
-  const parsed = gameSnapshotSchema.safeParse(row?.snapshot);
-  return parsed.success ? parsed.data : null;
+  if (!row) return null;
+  const parsed = gameSnapshotSchema.safeParse(row.snapshot);
+  if (parsed.success) return parsed.data;
+  // The issues are the only trace of why a save from another build no longer opens.
+  console.warn(`Save ${id} does not read:`, parsed.error.issues);
+  return null;
 }
 
 // One transaction, so a game moving into a named slot is never in both or in neither.

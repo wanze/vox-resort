@@ -16,7 +16,8 @@
   gap: var(--space-3);
   padding: var(--space-3);
   border-left-width: 4px;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   pointer-events: auto;
   animation: ui-pop var(--pop);
 }
@@ -65,7 +66,8 @@
   max-width: 520px;
   padding: var(--space-4);
   border-color: var(--terracotta);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   pointer-events: auto;
   animation: ui-pop var(--pop);
 }

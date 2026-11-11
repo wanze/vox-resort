@@ -23,7 +23,8 @@
   width: min(560px, 100%);
   max-height: min(560px, 76vh);
   padding: var(--space-2);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   animation: ui-pop var(--pop);
 }
 

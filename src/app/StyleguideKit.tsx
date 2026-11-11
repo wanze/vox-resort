@@ -75,17 +75,32 @@ export function Buttons() {
           Skip
         </button>
       </Specimen>
-      <Specimen title="ui-chip, as the top bar wears it">
-        <span className="ui-chip">
-          <PixelIcon name="inspect" />
-          <span className="ui-chip-label">Highlight</span>
-          <span className="ui-chip-caret">
-            <PixelIcon name="caret" scale={1} />
-          </span>
-        </span>
-        <button type="button" className="ui-chip" aria-expanded="true">
-          <span className="ui-chip-label">Open</span>
+      <Specimen title="ui-key, set into the top bar">
+        <button type="button" className="ui-key">
+          <PixelIcon name="overlay" />
+          <span className="ui-key-label">View</span>
         </button>
+        <button type="button" className="ui-key" aria-expanded="true">
+          <span className="ui-key-label">Open</span>
+        </button>
+        <button type="button" className="ui-key" disabled>
+          <span className="ui-key-label">Disabled</span>
+        </button>
+      </Specimen>
+      <Specimen title="ui-keys, joined">
+        <span className="ui-keys" role="group" aria-label="Sample keys">
+          <button type="button" className="ui-key" aria-label="Pause">
+            <PixelIcon name="paused" />
+          </button>
+          <button
+            type="button"
+            className="ui-key"
+            aria-pressed={pressed}
+            onClick={() => setPressed(!pressed)}
+          >
+            <span className="ui-key-label">Fast</span>
+          </button>
+        </span>
       </Specimen>
       <Specimen title="ui-plate">
         <span className="ui-plate styleguide-plate">

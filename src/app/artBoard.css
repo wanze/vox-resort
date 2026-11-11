@@ -29,7 +29,8 @@
 .art-preview-window {
   width: var(--sheet-w);
   padding: var(--space-4);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
 }
 
 /* Each site's flyers as one column, the width the Programme window gives them. */

@@ -2,6 +2,7 @@
    HUD it sits in, without out-ranking their selectors. The first import of a layer fixes
    its place, so this order is the cascade's. */
 @import url('./styles/tokens.css') layer(tokens);
+@import url('./styles/looks.css') layer(tokens);
 @import url('./styles/base.css') layer(base);
 @import url('../shared/components/ui.css') layer(ui);
 @import url('../features/hud/components/hud.css') layer(hud);

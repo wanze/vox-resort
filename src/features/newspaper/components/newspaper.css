@@ -14,7 +14,8 @@
   flex-direction: column;
   width: min(1200px, 100%);
   max-height: 100%;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   animation: ui-pop var(--pop);
 }
 
@@ -507,7 +508,8 @@
   gap: var(--space-3);
   max-width: 420px;
   padding: var(--space-4);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   animation: ui-pop var(--pop);
 }
 

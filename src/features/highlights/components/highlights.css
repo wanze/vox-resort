@@ -1,15 +1,6 @@
-.highlights {
-  position: relative;
-}
-
 /* The list scrolls under the search rather than the whole panel, so the field stays in reach. */
 .ui-dropdown-panel:has(.highlights-list) {
   overflow: hidden;
-}
-
-.highlights .ui-dropdown-panel {
-  min-width: 280px;
-  max-height: min(420px, calc(100dvh - var(--bar-h) - var(--space-5)));
 }
 
 .highlights-search {
@@ -37,21 +28,10 @@
   color: var(--text-faint);
 }
 
-/* Clear of the clock hub, as the map's legend is. The map legend's height is its close button,
-   padding and border; a fingertip's 44px button makes it 58px. */
+/* The map legend's height is its close button, padding and border; a fingertip's 44px button
+   makes it 58px. */
 .highlights-legend {
   --map-legend-h: 40px;
-  position: absolute;
-  top: calc(50% + var(--bar-h) / 2 + var(--hub-drop) + var(--space-2));
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border-radius: var(--radius-pebble);
-  font-size: var(--size-body);
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 /* Each line as tall as the close button, so one pick makes a legend as tall as the map's. */
@@ -81,15 +61,6 @@
   vertical-align: -0.1em;
 }
 
-/* The picker goes to the menu's View page when the bar folds it; its legend is fixed, so it stays. */
-.hud-bar[data-fold~='highlight'] .highlights {
-  display: contents;
-}
-
-.hud-bar[data-fold~='highlight'] .highlights > .ui-dropdown {
-  display: none;
-}
-
 .app:not([data-layout='desk']) .highlights-legend {
   position: fixed;
   top: calc(var(--strip-floor) + var(--space-2));
@@ -110,11 +81,5 @@
 @media (pointer: coarse) {
   .highlights-legend {
     --map-legend-h: 58px;
-  }
-}
-
-@media (width <= 1240px) {
-  .highlights .ui-chip-label {
-    display: none;
   }
 }

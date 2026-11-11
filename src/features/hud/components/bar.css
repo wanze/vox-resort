@@ -13,65 +13,78 @@
   align-items: center;
   gap: var(--strip-gap);
   padding: var(--safe-t) calc(var(--space-3) + var(--safe-r)) 0 calc(var(--space-3) + var(--safe-l));
-  border-bottom: 1px solid var(--edge);
-  background-image: var(--slab);
-  box-shadow: var(--shadow-slab), var(--bevel);
   pointer-events: auto;
+}
+
+/* The plank is drawn behind the bar, not on it: a filter or clip on the bar would cut off its
+   dropdowns and pin what is fixed inside it to the bar. The thick foot is the block's side. */
+.hud-bar::before,
+.hud-hub::before {
+  content: '';
+  position: absolute;
+  inset: 0 -1px -3px;
+  z-index: -1;
+  border: 0 solid var(--plank-outline);
+  border-width: 0 1px;
+  border-bottom: 3px solid var(--plank-side);
+  border-radius: var(--radius-foot);
+  corner-shape: var(--corner-shape);
+  background: var(--slab);
+  box-shadow: var(--bevel), var(--shadow-step);
 }
 
 .hud-bar-start,
 .hud-bar-end {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--strip-gap);
+  height: 100%;
 }
 
 .hud-bar-end {
   justify-content: flex-end;
 }
 
-/* One slab from edge to edge: a plate per group sat badly beside the hub, and on a phone left
-   slivers of scene between them. The groups part with a rule instead. */
-.hud-bar .ui-plate:not(.hud-dock, .hud-hub) {
-  flex: none;
-  height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.hud-bar .ui-plate:not(.hud-dock, .hud-hub) + .ui-plate:not(.hud-dock) {
-  padding-left: var(--strip-gap);
-  border-left: 2px dotted var(--edge-soft);
-}
-
-/* A tab of the bar hanging below it, open at the top so the slab runs on into it; its foot is the
-   windows' floor. */
-.hud-hub {
-  --play-size: calc(var(--control-h) + 8px);
-  align-self: start;
-  height: calc(var(--bar-h) + var(--hub-drop));
-  padding: var(--space-1);
-  border-top: 0;
-  border-radius: 0 0 12px 9px / 0 0 9px 12px;
-}
-
-.hud-hub-well {
+/* The plank's sections part with a groove cut across it rather than each sitting on a plate. */
+.hud-bar-section {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  height: 100%;
+  gap: var(--space-2);
+}
+
+.hud-bar-section + .hud-bar-section {
+  padding-left: var(--strip-gap);
+  background: var(--groove) left center / 2px 60% no-repeat;
+}
+
+/* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
+.hud-bar-section > * {
+  flex: none;
+}
+
+/* A block of its own hanging below the plank, so its foot is the windows' floor. Not a stacking
+   context: its plank must stay under the bar's other dropdowns and their scrim. */
+.hud-hub {
+  position: relative;
+  align-self: start;
+  display: flex;
+  align-items: stretch;
+  gap: var(--strip-gap);
+  height: calc(var(--bar-h) + var(--hub-drop));
   padding: 0 var(--space-3);
 }
 
+.hud-hub-time {
+  gap: var(--space-3);
+}
+
 .hud-play {
-  flex: none;
-  width: var(--play-size);
-  height: var(--play-size);
+  width: calc(var(--control-h) + 4px);
   padding: 0;
-  border-radius: 50%;
+}
+
+.hud-speed > .ui-key {
+  padding: 0 var(--space-3);
 }
 
 .hud-speed-steps {
@@ -85,7 +98,6 @@
 .hud-speed-step {
   width: 4px;
   height: 5px;
-  border-radius: 1px;
   background: var(--sunken);
   box-shadow: inset 0 0 0 1px var(--edge-soft);
 }
@@ -118,12 +130,6 @@
 /* Only a narrow bar stacks the money over the guests; a wide one lays them out in its row. */
 .hud-hub-figures {
   display: contents;
-}
-
-/* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
-.hud-status > *,
-.hud-hub-well > * {
-  flex: none;
 }
 
 .hud-readout-row {
@@ -160,7 +166,8 @@
 .hud-menu-back {
   margin-bottom: var(--space-1);
   border-bottom: 2px dotted var(--edge-soft);
-  border-radius: var(--radius-pebble) var(--radius-pebble) 0 0;
+  border-radius: var(--radius-sheet);
+  corner-shape: var(--corner-shape);
 }
 
 .hud-menu-back .ui-option-label {
@@ -222,7 +229,6 @@
   width: 7px;
   height: 7px;
   border: 1px solid var(--terracotta-deep);
-  border-radius: 50%;
   background: var(--terracotta);
 }
 
@@ -266,13 +272,17 @@
   padding: 0 var(--space-3) 0 var(--space-2);
 }
 
+.hud-season-open {
+  box-shadow: var(--bevel), var(--shadow-step);
+}
+
 /* The gates leave the bar for the menu before anything else does: they are rarely changed. */
 .hud-menu-gates {
   display: none;
 }
 
 @media (width <= 1120px) {
-  .hud-bar .hud-gates {
+  .hud-gates-section:has(> .hud-gates) {
     display: none;
   }
 
@@ -285,14 +295,12 @@
   width: 10px;
   height: 10px;
   border: 1px solid var(--lamp-rim);
-  border-radius: 2px;
   background: var(--lamp-off);
-  box-shadow: 0 0 6px var(--lamp-off);
+  box-shadow: inset 1px 1px 0 var(--wash-key);
 }
 
 .hud-gates[aria-pressed='true'] .hud-gates-lamp {
   background: var(--lamp-on);
-  box-shadow: 0 0 6px var(--lamp-on);
 }
 
 .hud-gates .hud-readout-value,
@@ -304,7 +312,7 @@
 .hud-demand {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 /* A fold hides the four for the one most pressing, so the strip keeps a warning in less room. */
@@ -313,36 +321,9 @@
 }
 
 .hud-bar[data-fold~='demand'] .hud-demand-group {
-  display: none;
-}
-
-.hud-bar[data-fold~='demand'] .hud-demand-most {
   display: flex;
-}
-
-.hud-bar[data-fold~='guests'] .hud-hub-guests {
-  display: none;
-}
-
-/* Bars run up and down, so the panel wants room for the grid's bar column to read as a scale. */
-.hud-demand-menu .ui-dropdown-panel {
-  min-width: 320px;
-}
-
-.hud-demand-menu .hud-demand-grid {
-  padding: var(--dropdown-inset);
-}
-
-.hud-demand-group {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 2px;
-}
-
-/* One pixel letter under a bar, hidden from readers: the chip's name says the words. */
-.hud-demand-initial {
-  font: 400 8px / 1 var(--font-pixel);
 }
 
 /* Zero sits in the middle; the fill grows up or down from it by --pressure, -1 to 1.
@@ -351,12 +332,10 @@
   --demand-ink: var(--ink-idle);
   position: relative;
   display: block;
-  width: 9px;
-  /* With the initial under it, this sits centred in the chip with room above and below. */
-  height: 14px;
-  border-radius: 2px;
+  width: 6px;
+  height: 16px;
   background: var(--sunken);
-  box-shadow: inset 0 0 0 1px var(--edge-soft);
+  box-shadow: inset 0 0 0 1px var(--key-edge);
 }
 
 .hud-demand-bar[data-tone='up'] {
@@ -533,8 +512,62 @@
   list-style: none;
 }
 
-.hud-menu-highlight,
-.hud-menu-maps,
+.hud-menu-view-pickers,
 .hud-menu-weather {
   display: none;
+}
+
+.hud-view {
+  position: relative;
+  display: flex;
+}
+
+/* The key sits centred in the bar, so half the bar below its middle is the bar's foot; the hub
+   drop on top clears the clock hub, which hangs lower, so a legend never touches the bar. */
+.hud-view-legends {
+  position: absolute;
+  top: calc(50% + var(--bar-h) / 2 + var(--hub-drop) + var(--space-2));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* The map's legend and the highlights' are one kind of card, hung under the key that set them. */
+.hud-view-legends > .ui-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
+  font-size: var(--size-body);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hud-view-menu .ui-dropdown-panel {
+  min-width: 300px;
+  max-height: min(460px, calc(100dvh - var(--bar-h) - var(--space-5)));
+}
+
+.hud-view-menu .ui-tabs {
+  position: static;
+  margin: 0 0 var(--space-1);
+  padding: 0;
+}
+
+.hud-view-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (width <= 1240px) {
+  .hud-view .ui-key-label {
+    display: none;
+  }
 }

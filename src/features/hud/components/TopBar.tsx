@@ -5,17 +5,22 @@ import { MainMenu, type PauseToggles, type ShortcutToggle, type ViewToggles } fr
 import { RatingControl } from './RatingControl';
 import type { FastNights } from './SpeedControl';
 import { WindowDock } from './WindowDock';
-import { OverlayControl } from '../../overlays/components/OverlayControl';
-import { HighlightControl } from '../../highlights/components/HighlightControl';
+import { ViewControl } from './ViewControl';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { Ledger } from '../../sim/domain/ledger';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
-import type { ClockControls, ResortControls, SoundControls, WindowControls } from './hudControls';
+import type {
+  ClockControls,
+  LookControls,
+  ResortControls,
+  SoundControls,
+  WindowControls,
+} from './hudControls';
 import type { StatusView } from '../domain/views';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 
-export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'highlight' | 'demand' | 'rating';
+export type MenuId = 'main' | 'speed' | 'weather' | 'view' | 'demand' | 'rating';
 
 export interface TopBarProps {
   readonly barElement: RefCallback<HTMLElement>;
@@ -41,6 +46,7 @@ export interface TopBarProps {
   // A touch layout: no field takes focus by itself there.
   readonly compact: boolean;
   readonly sound: SoundControls;
+  readonly look: LookControls;
   readonly forecast: readonly DayForecast[];
   readonly onPhoto: () => void;
   readonly debug: boolean;
@@ -63,7 +69,7 @@ function OpenSeasonButton({
       className={
         pill
           ? 'ui-button-large ui-button-large--primary hud-season-open'
-          : 'ui-chip hud-season-open'
+          : 'ui-button-primary hud-season-open'
       }
       title="Open the gates and start the next season"
       onClick={onOpen}
@@ -107,7 +113,7 @@ function GateControl({
 }
 
 // The stylesheet hands it to the menu on a narrow bar: there is no room, and it is rarely changed.
-function GatesToggle({
+export function GatesToggle({
   open,
   onOpenChange,
 }: {
@@ -117,7 +123,7 @@ function GatesToggle({
   return (
     <button
       type="button"
-      className="ui-chip hud-gates"
+      className="ui-key hud-gates"
       aria-pressed={open}
       title={open ? 'Close the gates to new guests' : 'Open the gates to new guests'}
       onClick={() => onOpenChange(!open)}
@@ -143,7 +149,7 @@ export function TopBar(props: TopBarProps) {
   return (
     <header ref={barElement} className="hud-bar">
       <div className="hud-bar-start">
-        <div className="ui-plate">
+        <div className="hud-bar-section">
           <MainMenu
             open={menu === 'main'}
             onOpenChange={opener('main')}
@@ -154,6 +160,7 @@ export function TopBar(props: TopBarProps) {
             clock={clock}
             forecast={props.forecast}
             sound={props.sound}
+            look={props.look}
             view={props.view}
             shortcuts={props.shortcuts}
             pauses={props.pauses}
@@ -165,20 +172,13 @@ export function TopBar(props: TopBarProps) {
             debug={props.debug}
           />
         </div>
-
-        {/* Highlight first: its legend hangs to the left, the map's to the right, so both fit. */}
-        <div className="ui-plate hud-maps-plate">
-          <HighlightControl
+        <div className="hud-bar-section hud-view-section">
+          <ViewControl
+            overlay={overlay}
             highlights={props.highlights}
-            open={menu === 'highlight'}
-            onOpenChange={opener('highlight')}
+            open={menu === 'view'}
+            onOpenChange={opener('view')}
             focusSearch={!props.compact}
-          />
-          <OverlayControl
-            kind={overlay.kind}
-            onKindChange={overlay.setOverlay}
-            open={menu === 'overlay'}
-            onOpenChange={opener('overlay')}
           />
         </div>
       </div>
@@ -199,10 +199,12 @@ export function TopBar(props: TopBarProps) {
       />
 
       <div className="hud-bar-end">
-        <div className="ui-plate hud-status">
+        <div className="hud-bar-section">
           <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
-          {/* A phone wants the room for the maps; the stars are in the day report and Overview. */}
-          {status && !props.compact ? (
+        </div>
+        {/* A phone wants the room for the maps; the stars are in the day report and Overview. */}
+        {status && !props.compact ? (
+          <div className="hud-bar-section">
             <RatingControl
               rating={status.rating}
               stepFree={status.stepFree}
@@ -211,7 +213,9 @@ export function TopBar(props: TopBarProps) {
               open={menu === 'rating'}
               onOpenChange={opener('rating')}
             />
-          ) : null}
+          </div>
+        ) : null}
+        <div className="hud-bar-section hud-gates-section">
           <GateControl action={season} resort={resort} compact={props.compact} />
         </div>
       </div>

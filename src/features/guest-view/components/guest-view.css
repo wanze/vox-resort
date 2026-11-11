@@ -79,7 +79,8 @@
     (100% - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b)) * var(--sheet-half)
   );
   translate: none;
-  border-radius: 12px 8px 0 0 / 8px 11px 0 0;
+  border-radius: var(--radius-sheet);
+  corner-shape: var(--corner-shape);
   animation: hud-sheet-up var(--pop);
 }
 
@@ -87,7 +88,8 @@
 .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .guest-view-follow[data-sheet] {
   inset: calc(var(--strip-floor) + var(--space-2)) calc(var(--space-2) + var(--safe-r)) auto
     calc(var(--space-2) + var(--safe-l));
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
 }
 
 @supports (anchor-name: --sheet) {
@@ -107,7 +109,8 @@
   left: auto;
   width: var(--sheet-w);
   translate: none;
-  border-radius: 12px 0 0 9px / 8px 0 0 12px;
+  border-radius: var(--radius-rail);
+  corner-shape: var(--corner-shape);
   animation: hud-sheet-in var(--pop);
 }
 

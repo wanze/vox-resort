@@ -8,7 +8,6 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { PixelIcon } from './PixelIcon';
 import { OptionHost } from './optionHost';
 import { useReturnFocus } from './useReturnFocus';
 import { rovingTarget } from '../domain/roving';
@@ -134,7 +133,7 @@ const Trigger = ({
   <button
     ref={ref}
     type="button"
-    className="ui-chip"
+    className="ui-key"
     aria-expanded={open}
     aria-haspopup={kind}
     aria-controls={open ? panelId : undefined}
@@ -144,9 +143,6 @@ const Trigger = ({
     onClick={() => onOpenChange(!open)}
   >
     {label}
-    <span className="ui-chip-caret">
-      <PixelIcon name="caret" scale={1} />
-    </span>
   </button>
 );
 

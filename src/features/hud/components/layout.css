@@ -8,7 +8,12 @@
   display: none;
 }
 
-.app:not([data-layout='desk']) .hud-menu-gates {
+.app:not([data-layout='desk']) .hud-view-legends {
+  display: contents;
+}
+
+.app:not([data-layout='desk']) .hud-menu-gates,
+.app:not([data-layout='desk']) .hud-gates-section {
   display: contents;
 }
 
@@ -44,22 +49,21 @@
   padding: var(--safe-t) calc(var(--space-2) + var(--safe-r)) 0 calc(var(--space-2) + var(--safe-l));
 }
 
-.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock, .hud-hub) {
+.app:not([data-layout='desk']) .hud-bar-section {
   gap: var(--space-1);
-  height: var(--strip-control-h);
 }
 
-.app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
+.app:not([data-layout='desk']) .hud-bar .ui-key {
   height: var(--strip-control-h);
   padding: 0 var(--space-3);
 }
 
 @media (pointer: coarse) {
-  .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
+  .app:not([data-layout='desk']) .hud-bar .ui-key {
     position: relative;
   }
 
-  .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates)::before {
+  .app:not([data-layout='desk']) .hud-bar .ui-key::before {
     content: '';
     position: absolute;
     inset: -7px 0;
@@ -93,8 +97,7 @@
   .hud-bar
   :is(
     .hud-wordmark,
-    .ui-chip-label,
-    .hud-menu .ui-chip-caret,
+    .ui-key-label,
     .hud-readout-label,
     .hud-gates-state,
     .ui-out-of-total,
@@ -134,7 +137,7 @@
   translate: -50% 0;
   height: var(--season-pill-h);
   padding: 0 var(--space-4);
-  box-shadow: var(--bevel), var(--shadow-lift);
+  box-shadow: var(--bevel), var(--shadow-step);
   animation: ui-pop var(--pop);
 }
 
@@ -159,16 +162,12 @@
 }
 
 .app:not([data-layout='desk']) .hud-bar .hud-hub {
-  --play-size: 44px;
-  height: calc(var(--strip-h) + var(--hub-drop));
-}
-
-.app:not([data-layout='desk']) .hud-hub-well {
   gap: var(--space-2);
+  height: calc(var(--strip-h) + var(--hub-drop));
   padding: 0 var(--space-2);
 }
 
-.app:not([data-layout='desk']) .hud-hub .hud-speed > .ui-chip {
+.app:not([data-layout='desk']) .hud-hub .hud-speed > .ui-key {
   padding: 0 var(--space-2);
 }
 
@@ -214,32 +213,28 @@
   display: none;
 }
 
-/* The plate goes only with both its pickers: either can be given back the room on its own. */
-.hud-bar[data-fold~='highlight'] .hud-menu-highlight,
-.hud-bar[data-fold~='maps'] .hud-menu-maps,
-.hud-bar[data-fold~='highlight'][data-fold~='maps'] .hud-maps-plate,
+/* The View key goes to the menu; its legends are fixed to the screen here, so they stay. */
+.hud-bar[data-fold~='view'] .hud-menu-view-pickers,
+.hud-bar[data-fold~='view'] :is(.hud-view-section, .hud-view),
 .hud-bar[data-fold~='weather'] .hud-menu-weather {
   display: contents;
 }
 
 .hud-bar[data-fold~='weather'] .hud-weather,
-.hud-bar[data-fold~='tight'] .ui-chip-caret {
+.hud-bar[data-fold~='view'] .hud-view > .ui-dropdown {
   display: none;
 }
 
-/* A phone gives the carets up before any fold: the maps hold on for the room they leave. */
-@media (width < 630px) {
-  .hud-bar .ui-chip-caret {
-    display: none;
-  }
+.hud-bar[data-fold~='tight'] {
+  --strip-gap: var(--space-1);
 }
 
 .hud-bar[data-fold~='tight'] .hud-demand {
   gap: var(--space-1);
 }
 
-/* A lone bar is a thin mark, so the chip around it keeps a finger's width. */
-.hud-bar[data-fold~='demand'] .hud-demand-menu > .ui-chip {
+/* A lone bar is a thin mark, so the key around it keeps a finger's width. */
+.hud-bar[data-fold~='demand'] .hud-demand-menu > .ui-key {
   padding: 0 var(--space-3);
 }
 
@@ -310,7 +305,8 @@
   bottom: calc(var(--dock-h) + var(--safe-b));
   left: var(--safe-l);
   max-height: calc(var(--sheet-room) * var(--sheet-half));
-  border-radius: 12px 8px 0 0 / 8px 11px 0 0;
+  border-radius: var(--radius-sheet);
+  corner-shape: var(--corner-shape);
 }
 
 .app[data-layout='bottom'] .ui-window[data-window][data-expanded] {
@@ -324,7 +320,8 @@
   left: auto;
   width: var(--sheet-w);
   max-height: none;
-  border-radius: 12px 0 0 9px / 8px 0 0 12px;
+  border-radius: var(--radius-rail);
+  corner-shape: var(--corner-shape);
   animation-name: hud-sheet-in;
 }
 
@@ -372,9 +369,6 @@
   grid-template-columns: auto auto auto;
   width: max-content;
   margin-inline: auto;
-  border: 1px solid var(--edge);
-  border-top: 0;
-  border-radius: 0 0 12px 9px / 0 0 9px 12px;
 }
 
 .app[data-layout='desk'] .hud-bar .hud-dock {

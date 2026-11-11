@@ -42,7 +42,7 @@ export default {
   },
   overrides: [
     {
-      files: ['src/app/styles/tokens.css'],
+      files: ['src/app/styles/tokens.css', 'src/app/styles/looks.css'],
       rules: { 'color-no-hex': null, 'function-disallowed-list': null },
     },
     {

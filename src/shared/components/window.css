@@ -5,7 +5,8 @@
   display: flex;
   flex-direction: column;
   max-height: max(160px, calc(100% - var(--window-top) - var(--space-3)));
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   pointer-events: auto;
   animation: ui-pop var(--pop);
 }
@@ -40,7 +41,8 @@
   width: 26px;
   height: 26px;
   padding: 0;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
 }
 
 /* 44px: the smallest target a fingertip hits reliably. */

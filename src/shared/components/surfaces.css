@@ -28,7 +28,7 @@
 .ui-window,
 .ui-panel {
   border: 1px solid var(--edge);
-  background-image: var(--slab);
+  background: var(--slab);
   color: var(--text);
   box-shadow: var(--shadow-slab), var(--bevel);
 }
@@ -67,7 +67,8 @@
 .ui-window-body::-webkit-scrollbar-thumb,
 .ui-scroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
   background: var(--stone-500);
   background-clip: content-box;
 }
@@ -78,7 +79,8 @@
   gap: var(--space-2);
   height: calc(var(--control-h) + 12px);
   padding: 0 var(--space-2);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   pointer-events: auto;
 }
 

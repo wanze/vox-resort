@@ -1,25 +1,3 @@
-/* The legend hangs under the picker it explains. */
-.overlays {
-  position: relative;
-}
-
-/* The picker sits centred in the bar, so half the bar below its middle is the bar's foot; the
-   hub drop on top clears the clock hub, which hangs lower, so the legend never touches the bar. */
-.overlays-legend {
-  position: absolute;
-  top: calc(50% + var(--bar-h) / 2 + var(--hub-drop) + var(--space-2));
-  left: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border-radius: var(--radius-pebble);
-  font-size: var(--size-body);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .overlays-ramp {
   width: 16ch;
   height: 0.9em;
@@ -27,23 +5,9 @@
   box-shadow: 0 0 0 1px var(--edge-soft);
 }
 
-.hud-bar[data-fold~='maps'] .overlays {
-  display: contents;
-}
-
-.hud-bar[data-fold~='maps'] .overlays > .ui-dropdown {
-  display: none;
-}
-
 .app:not([data-layout='desk']) .overlays-legend {
   position: fixed;
   top: calc(var(--strip-floor) + var(--space-2));
   left: 50%;
   transform: translateX(-50%);
-}
-
-@media (width <= 1240px) {
-  .overlays .ui-chip-label {
-    display: none;
-  }
 }

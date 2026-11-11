@@ -1,10 +1,12 @@
+import type { IconName } from '../../../shared/components/pixelIcons';
 import type { DemandGroup, DemandLine, Pressure } from '../../sim/domain/demand';
 
-export const GROUP_NAMES: { readonly [group in DemandGroup]: string } = {
-  stay: 'Stay',
-  food: 'Food',
-  fun: 'Fun',
-  care: 'Care',
+// Each group's sign on the bar, drawn from what it asks to have built.
+export const GROUP_ICONS: { readonly [group in DemandGroup]: IconName } = {
+  stay: 'lodging',
+  food: 'restaurant',
+  fun: 'games',
+  care: 'shower',
 };
 
 export const GROUP_TITLES: { readonly [group in DemandGroup]: string } = {

@@ -48,7 +48,8 @@
   gap: var(--space-2);
   padding: var(--space-2);
   border: 1px solid var(--terracotta);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   scroll-margin: var(--space-2);
 }
 
@@ -102,7 +103,8 @@
   gap: var(--space-1);
   min-height: 28px;
   padding: 2px;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--sunken);
   box-shadow: var(--bevel-in);
 }
@@ -113,7 +115,8 @@
   min-height: 24px;
   padding: 0 var(--space-2);
   border: 1px solid var(--edge-soft);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--slab-raised);
   color: var(--text);
   font: inherit;
@@ -223,7 +226,8 @@
 .events-refusal {
   margin: 0;
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--alert);
   color: var(--text-on-accent);
   font-size: var(--size-small);

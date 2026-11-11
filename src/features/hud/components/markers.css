@@ -37,7 +37,8 @@
   margin: -34px 0 0 -14px;
   padding: 0;
   border: 2px solid var(--stone-700);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--stone-50);
   box-shadow: var(--shadow-lift);
   cursor: var(--cursor-hand);
@@ -68,7 +69,8 @@
   display: none;
   padding: 2px var(--space-2);
   border: 2px solid var(--stone-700);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--stone-50);
   box-shadow: var(--shadow-lift);
   color: var(--text);
@@ -121,7 +123,8 @@
   display: none;
   padding: var(--space-1) var(--space-2);
   border: 2px solid var(--ochre);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--slab-raised);
   box-shadow: var(--shadow-lift), var(--bevel);
   font: inherit;
@@ -162,14 +165,7 @@
   width: 32px;
   height: 32px;
   margin: -39px 0 0 -16px;
-  padding: 0;
   border: 2px solid var(--ochre);
-  border-radius: var(--radius-pebble);
-  background-image: var(--slab-raised);
-  box-shadow: var(--shadow-lift), var(--bevel);
-  cursor: var(--cursor-hand);
-  pointer-events: auto;
-  will-change: transform;
 }
 
 .hud-marker::after {
@@ -212,9 +208,15 @@
   width: 22px;
   height: 22px;
   margin: -27px 0 0 -11px;
-  padding: 0;
   border: 2px solid var(--pin-edge);
-  border-radius: var(--radius-pebble);
+}
+
+/* A problem marker and a staff pin are one kind of raised tag over the scene. */
+.hud-marker,
+.hud-pin {
+  padding: 0;
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--slab-raised);
   box-shadow: var(--shadow-lift), var(--bevel);
   cursor: var(--cursor-hand);
@@ -290,7 +292,8 @@
   margin: -53px 0 0 -21px;
   padding: 4px 3px;
   border: 2px solid var(--work-edge, var(--foliage));
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--slab-raised);
   box-shadow: var(--shadow-lift), var(--bevel);
   cursor: var(--cursor-hand);

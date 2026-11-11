@@ -474,7 +474,7 @@ export function App() {
   );
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
-  const { windows, layout, menu, setMenu, palette, setPalette, bar } = useHudChrome(
+  const { windows, layout, menu, setMenu, palette, setPalette, bar, look } = useHudChrome(
     clock,
     tool,
     selectTool,
@@ -622,6 +622,7 @@ export function App() {
             news,
             history,
             sound,
+            look,
             programme,
             bookings,
             windows,

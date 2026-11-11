@@ -4,9 +4,8 @@ import { BAR_FOLDS, settleFolds, UNFOLD_SLACK, type BarFold } from './barFolds';
 const WIDTHS: Record<BarFold, number> = {
   weather: 40,
   demand: 20,
-  highlight: 120,
-  guests: 40,
-  maps: 40,
+  guests: 120,
+  view: 40,
   tight: 30,
 };
 
@@ -29,11 +28,11 @@ describe('settleFolds', () => {
   });
 
   it('gives the room the last fold frees back to the earlier ones, most missed first', () => {
-    expect(settleFolds([], saving(-150))).toEqual(['weather', 'highlight']);
+    expect(settleFolds([], saving(-150))).toEqual(['weather', 'guests']);
   });
 
   it('never gives a narrow fold back while a more missed one stays folded', () => {
-    expect(settleFolds([], saving(-200))).toEqual(['weather', 'demand', 'highlight', 'guests']);
+    expect(settleFolds([], saving(-200))).toEqual(['weather', 'demand', 'guests', 'view']);
   });
 
   it('keeps a fold until undoing it leaves room to spare', () => {

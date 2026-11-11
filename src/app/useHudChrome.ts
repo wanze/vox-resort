@@ -11,7 +11,12 @@ import type { BuildTool } from '../features/build/domain/buildTool';
 import { cycledTool } from '../features/build/domain/stylePick';
 import type { LayoutMode } from '../features/hud/domain/layoutMode';
 import { useLayoutMode } from './useLayoutMode';
-import type { ClockControls, WindowControls } from '../features/hud/components/hudControls';
+import { useLook } from './useLook';
+import type {
+  ClockControls,
+  LookControls,
+  WindowControls,
+} from '../features/hud/components/hudControls';
 import type { PhotoControls } from '../features/photo/components/photoControls';
 import type { SaveControls } from '../features/saves/components/saveControls';
 
@@ -23,6 +28,7 @@ export interface HudChrome {
   readonly setMenu: (menu: MenuId | null) => void;
   readonly palette: boolean;
   readonly setPalette: (open: boolean) => void;
+  readonly look: LookControls;
 }
 
 const always = (action: () => void) => (): boolean => {
@@ -117,5 +123,6 @@ export function useHudChrome(
   // None behind the welcome screen: there is no HUD for them to open.
   useHotkeys(playing ? live : []);
 
-  return { windows, layout, bar, menu, setMenu, palette, setPalette };
+  const look = useLook();
+  return { windows, layout, bar, menu, setMenu, palette, setPalette, look };
 }

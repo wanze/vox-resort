@@ -24,7 +24,7 @@ export interface SpeedControlProps {
 
 const BETWEEN_SEASONS = 'The resort is between seasons';
 
-// Rising steps, one lit per speed above pause, so the chip reads like a meter at a glance.
+// Rising steps, one lit per speed above pause, so the key reads like a meter at a glance.
 function SpeedSteps({ speed, night }: { readonly speed: SimSpeed; readonly night: boolean }) {
   const lit = SIM_SPEEDS.indexOf(speed);
   return (
@@ -54,7 +54,7 @@ export function PlayButton({ speed, onToggle, betweenSeasons }: PlayButtonProps)
   return (
     <button
       type="button"
-      className="ui-button hud-play"
+      className="ui-key hud-play"
       disabled={betweenSeasons}
       title={betweenSeasons ? BETWEEN_SEASONS : `${action} (${keyLabel('pause')})`}
       aria-label={action}
@@ -70,7 +70,7 @@ export function SpeedControl(props: SpeedControlProps) {
   if (props.betweenSeasons) {
     return (
       <div className="ui-dropdown hud-speed">
-        <button type="button" className="ui-chip" disabled title={BETWEEN_SEASONS}>
+        <button type="button" className="ui-key" disabled title={BETWEEN_SEASONS}>
           <SpeedSteps speed={speed} night={false} />
         </button>
       </div>

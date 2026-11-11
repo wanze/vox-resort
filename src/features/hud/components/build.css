@@ -90,7 +90,8 @@
   display: flex;
   gap: 3px;
   padding: 3px;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--tray);
   box-shadow: var(--bevel-in);
 }
@@ -102,7 +103,8 @@
   place-items: center;
   padding: 0;
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: linear-gradient(160deg, var(--stone-100), var(--stone-400));
   box-shadow: var(--bevel);
   color: var(--stone-700);
@@ -216,7 +218,8 @@
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--space-2) var(--space-2);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--tray);
   box-shadow:
     var(--bevel-in),
@@ -261,7 +264,8 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: var(--tile-ground);
   box-shadow: var(--bevel);
   color: var(--text);
@@ -318,7 +322,8 @@
   z-index: 1;
   padding: 2px 4px;
   border: 1px solid var(--badge-rim);
-  border-radius: 5px 6px 4px;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
   background: var(--badge);
   font: 700 11px / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
@@ -454,7 +459,8 @@
   max-height: inherit;
   overflow: auto;
   padding: var(--space-3);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   animation: ui-pop var(--pop);
 }
 

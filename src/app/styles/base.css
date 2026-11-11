@@ -98,7 +98,8 @@ input[type='range']::-webkit-slider-thumb {
   margin-top: -4px;
   width: var(--knob-size);
   height: var(--knob-size);
-  border-radius: 5px 6px 4px;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
   background: var(--knob-face);
   box-shadow: var(--knob-shadow);
 }
@@ -107,7 +108,8 @@ input[type='range']::-moz-range-thumb {
   border: 0;
   width: var(--knob-size);
   height: var(--knob-size);
-  border-radius: 5px 6px 4px;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
   background: var(--knob-face);
   box-shadow: var(--knob-shadow);
 }
@@ -122,7 +124,8 @@ input[type='text'] {
   height: var(--control-h);
   padding: 0 var(--space-3);
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--sunken);
   box-shadow: var(--bevel-in);
   color: var(--text);

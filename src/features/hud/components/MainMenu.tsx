@@ -17,15 +17,17 @@ import { isOpen, isShown } from '../domain/windowLayout';
 import { keyLabel } from '../domain/keymap';
 import { SoundOptions } from '../../sound/components/SoundControl';
 import { saveOrAsk } from '../../saves/domain/saveSlots';
-import { HighlightOptions } from '../../highlights/components/HighlightControl';
-import { OverlayOptions } from '../../overlays/components/OverlayControl';
+import { HighlightOptions } from '../../highlights/components/HighlightPicker';
+import { OverlayOptions } from '../../overlays/components/OverlayPicker';
 import { OVERLAY_NAMES } from '../../overlays/components/overlayNames';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
-import type { ClockControls, SoundControls, WindowControls } from './hudControls';
+import type { ClockControls, LookControls, SoundControls, WindowControls } from './hudControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { PausePrefs } from '../domain/stops';
+import { LOOKS } from '../domain/looks';
+import { LOOK_NAMES, LOOK_NOTES } from './lookWords';
 
 const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '');
 export const SAVE_SHORTCUT = keyLabel('save', MAC);
@@ -61,6 +63,7 @@ export interface MainMenuProps {
   // From today, one a day.
   readonly forecast: readonly DayForecast[];
   readonly sound: SoundControls;
+  readonly look: LookControls;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
   readonly pauses: PauseToggles;
@@ -114,8 +117,7 @@ interface PageProps extends PageContext {
 // Back from a page goes to the page that opened it, not always to the root.
 const PAGE_PARENTS: { readonly [page in SubPage]?: SubPage } = { highlight: 'view', maps: 'view' };
 
-// What a narrow strip has given up, each row shown by the stylesheet once the strip folds its chip
-// away; the map views fold later than the highlight picker.
+// What a narrow strip has given up, shown by the stylesheet once the strip folds its View key away.
 function NarrowViewRows({
   highlights,
   overlay,
@@ -123,31 +125,27 @@ function NarrowViewRows({
 }: Pick<PageProps, 'highlights' | 'overlay' | 'onOpen'>) {
   const picked = highlights.picks.length;
   return (
-    <>
-      <div className="hud-menu-highlight">
-        <hr className="ui-rule" />
-        <MenuOption
-          icon="inspect"
-          label="Highlight buildings"
-          value={picked > 0 ? `${picked} ringed` : undefined}
-          more
-          onSelect={() => onOpen('highlight')}
-        />
-      </div>
-      <div className="hud-menu-maps">
-        <MenuOption
-          icon="overlay"
-          label="Map view"
-          value={overlay.kind ? OVERLAY_NAMES[overlay.kind] : undefined}
-          more
-          onSelect={() => onOpen('maps')}
-        />
-      </div>
-    </>
+    <div className="hud-menu-view-pickers">
+      <hr className="ui-rule" />
+      <MenuOption
+        icon="overlay"
+        label="Map view"
+        value={overlay.kind ? OVERLAY_NAMES[overlay.kind] : undefined}
+        more
+        onSelect={() => onOpen('maps')}
+      />
+      <MenuOption
+        icon="inspect"
+        label="Highlight buildings"
+        value={picked > 0 ? `${picked} ringed` : undefined}
+        more
+        onSelect={() => onOpen('highlight')}
+      />
+    </div>
   );
 }
 
-// Shown by the stylesheet only once the bar has folded its weather chip away.
+// Shown by the stylesheet only once the bar has folded its weather key away.
 function WeatherRow({ clock, onOpen }: Pick<PageProps, 'clock' | 'onOpen'>) {
   return (
     <div className="hud-menu-weather">
@@ -160,6 +158,18 @@ function WeatherRow({ clock, onOpen }: Pick<PageProps, 'clock' | 'onOpen'>) {
       />
     </div>
   );
+}
+
+function LookOptions({ look, setLook }: LookControls) {
+  return LOOKS.map((each) => (
+    <MenuOption
+      key={each}
+      label={LOOK_NAMES[each]}
+      note={LOOK_NOTES[each]}
+      checked={look === each}
+      onSelect={() => setLook(each)}
+    />
+  ));
 }
 
 // Shown by the stylesheet only where the bar has given up its own gates switch.
@@ -337,10 +347,13 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         onSelect={run(() => windows.show('programme', true))}
       />
     )),
-  settings: ({ sound, shortcuts, pauses }) => (
+  settings: ({ sound, look, shortcuts, pauses }) => (
     <>
       <MenuGroup label="Sound">
         <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
+      </MenuGroup>
+      <MenuGroup label="Look">
+        <LookOptions {...look} />
       </MenuGroup>
       <MenuGroup label="Keyboard">
         <MenuOption

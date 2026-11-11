@@ -1,12 +1,12 @@
 // Least missed first: the forecast is also in the programme, and the meter only shrinks to its
-// most pressing bar. The guests are in their window, and the legends stay once their pickers go to
-// the menu; the maps are switched most often, so only the carets go after them.
-export const BAR_FOLDS = ['weather', 'demand', 'highlight', 'guests', 'maps', 'tight'] as const;
+// most pressing bar. The guests are in their window, and the legends stay once the View key goes
+// to the menu; the view is switched most often, so only the spacing goes after it.
+export const BAR_FOLDS = ['weather', 'demand', 'guests', 'view', 'tight'] as const;
 
 export type BarFold = (typeof BAR_FOLDS)[number];
 
 // A fold is undone only with this much to spare, so a figure ticking over at the edge does not
-// flick a chip in and out.
+// flick a key in and out.
 export const UNFOLD_SLACK = 12;
 
 export function settleFolds(
@@ -20,7 +20,7 @@ export function settleFolds(
   let count = 0;
   while (count < BAR_FOLDS.length && !fits(BAR_FOLDS.slice(0, count))) count++;
   // The last fold can free more than it needed to, and the room goes back to the earlier ones,
-  // most missed first. It stops at the first that does not fit, so a narrow chip never comes back
+  // most missed first. It stops at the first that does not fit, so a narrow key never comes back
   // in place of one the player misses more.
   let folds: readonly BarFold[] = BAR_FOLDS.slice(0, count);
   for (const fold of folds.slice(0, -1).toReversed()) {

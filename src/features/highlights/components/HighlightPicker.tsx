@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { DropdownPopover } from '../../../shared/components/Dropdown';
 import { MenuOption } from '../../../shared/components/MenuOption';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { highlightIconOf } from './highlightIcons';
@@ -19,11 +18,6 @@ export interface HighlightOptionsProps {
   readonly onDone: () => void;
 }
 
-export interface HighlightControlProps extends Omit<HighlightOptionsProps, 'onDone'> {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}
-
 const cssColourOf = (colour: number): string =>
   `#${(HIGHLIGHT_COLOURS[colour] ?? 0xffffff).toString(16).padStart(6, '0')}`;
 
@@ -37,7 +31,7 @@ function Swatch({ colour }: { readonly colour: number }) {
   );
 }
 
-function HighlightLegend({
+export function HighlightLegend({
   types,
   picks,
   onClear,
@@ -126,39 +120,5 @@ export function HighlightOptions({ highlights, focusSearch, onDone }: HighlightO
         {shown.length === 0 ? <p className="highlights-empty">No building matches</p> : null}
       </div>
     </>
-  );
-}
-
-export function HighlightControl({
-  highlights,
-  focusSearch,
-  open,
-  onOpenChange,
-}: HighlightControlProps) {
-  const { types, picks, clear } = highlights;
-  return (
-    <div className="highlights">
-      <DropdownPopover
-        name="Highlight buildings"
-        open={open}
-        onOpenChange={onOpenChange}
-        title="Highlight buildings of a kind"
-        label={
-          <>
-            <PixelIcon name="inspect" />
-            <span className="ui-chip-label">
-              {picks.length > 0 ? `Highlight · ${picks.length}` : 'Highlight'}
-            </span>
-          </>
-        }
-      >
-        <HighlightOptions
-          highlights={highlights}
-          focusSearch={focusSearch}
-          onDone={() => onOpenChange(false)}
-        />
-      </DropdownPopover>
-      <HighlightLegend types={types} picks={picks} onClear={clear} />
-    </div>
   );
 }

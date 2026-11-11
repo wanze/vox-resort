@@ -66,12 +66,13 @@ function HubFigures({ ledger, status, short }: Pick<ClockHubProps, 'ledger' | 's
   );
 }
 
-// What is always read and always pressed, sunk into the middle of the bar around the play button.
+// What is always read and always pressed: a block hanging from the middle of the plank, cut into
+// the time, the clock's keys and the figures.
 export function ClockHub(props: ClockHubProps) {
   const { clock } = props;
   return (
-    <div className="ui-plate hud-hub">
-      <div className="ui-inset hud-hub-well">
+    <div className="hud-hub">
+      <div className="hud-bar-section hud-hub-time">
         <TimeOfDay
           dayElement={props.dayElement}
           timeElement={props.timeElement}
@@ -84,19 +85,25 @@ export function ClockHub(props: ClockHubProps) {
           open={props.weatherMenu.open}
           onOpenChange={props.weatherMenu.onOpenChange}
         />
-        <PlayButton
-          speed={clock.speed}
-          onToggle={clock.togglePause}
-          betweenSeasons={props.betweenSeasons}
-        />
-        <SpeedControl
-          speed={clock.speed}
-          onSpeedChange={clock.setSpeed}
-          fastNights={props.fastNights}
-          open={props.speedMenu.open}
-          onOpenChange={props.speedMenu.onOpenChange}
-          betweenSeasons={props.betweenSeasons}
-        />
+      </div>
+      <div className="hud-bar-section">
+        <div className="ui-keys hud-clock-keys" role="group" aria-label="Clock">
+          <PlayButton
+            speed={clock.speed}
+            onToggle={clock.togglePause}
+            betweenSeasons={props.betweenSeasons}
+          />
+          <SpeedControl
+            speed={clock.speed}
+            onSpeedChange={clock.setSpeed}
+            fastNights={props.fastNights}
+            open={props.speedMenu.open}
+            onOpenChange={props.speedMenu.onOpenChange}
+            betweenSeasons={props.betweenSeasons}
+          />
+        </div>
+      </div>
+      <div className="hud-bar-section">
         <HubFigures ledger={props.ledger} status={props.status} short={props.short} />
       </div>
     </div>

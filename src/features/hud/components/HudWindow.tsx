@@ -115,7 +115,7 @@ export function leaveField(field: HTMLElement): void {
 // Only some windows sit on the dock; the main menu opens the rest.
 const returnTarget = (id: WindowId): HTMLElement | null =>
   document.querySelector<HTMLElement>(`[data-dock="${id}"]`) ??
-  document.querySelector<HTMLElement>('.hud-menu > .ui-chip');
+  document.querySelector<HTMLElement>('.hud-menu > .ui-key');
 
 // Only on mount: a window already open does not pull the keyboard back on a later render.
 function useFocusOnOpen(frame: HudWindowFrame) {

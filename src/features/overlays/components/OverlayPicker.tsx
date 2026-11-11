@@ -1,16 +1,8 @@
-import { DropdownMenu } from '../../../shared/components/Dropdown';
 import { MenuOption } from '../../../shared/components/MenuOption';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from './overlayNames';
 import { OVERLAY_KINDS, type OverlayKind } from '../domain/overlays';
 import { rampInto } from '../domain/ramp';
-
-export interface OverlayControlProps {
-  readonly kind: OverlayKind | null;
-  readonly onKindChange: (kind: OverlayKind | null) => void;
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}
 
 // Both ends of the one ramp, worded for the layer; the high end is always the bad one.
 const OVERLAY_ENDS: { readonly [kind in OverlayKind]: readonly [string, string] } = {
@@ -72,42 +64,25 @@ export function OverlayOptions({ kind, onKindChange, onDone }: OverlayOptionsPro
   );
 }
 
-export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
+export function OverlayLegend({
+  kind,
+  onKindChange,
+}: Pick<OverlayOptionsProps, 'kind' | 'onKindChange'>) {
+  if (!kind) return null;
   return (
-    <div className="overlays">
-      <DropdownMenu
-        open={open}
-        onOpenChange={onOpenChange}
-        title={kind ? `Map view: ${OVERLAY_QUESTIONS[kind]}` : 'Map view'}
-        label={
-          <>
-            <PixelIcon name="overlay" />
-            <span className="ui-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Maps'}</span>
-          </>
-        }
+    <div className="ui-panel overlays-legend">
+      <span>{OVERLAY_ENDS[kind][0]}</span>
+      <span className="overlays-ramp" style={{ backgroundImage: RAMP_GRADIENT }} />
+      <span>{OVERLAY_ENDS[kind][1]}</span>
+      <button
+        type="button"
+        className="ui-window-close"
+        aria-label="Close the map view"
+        title="Close the map view"
+        onClick={() => onKindChange(null)}
       >
-        <OverlayOptions
-          kind={kind}
-          onKindChange={onKindChange}
-          onDone={() => onOpenChange(false)}
-        />
-      </DropdownMenu>
-      {kind ? (
-        <div className="ui-panel overlays-legend">
-          <span>{OVERLAY_ENDS[kind][0]}</span>
-          <span className="overlays-ramp" style={{ backgroundImage: RAMP_GRADIENT }} />
-          <span>{OVERLAY_ENDS[kind][1]}</span>
-          <button
-            type="button"
-            className="ui-window-close"
-            aria-label="Close the map view"
-            title="Close the map view"
-            onClick={() => onKindChange(null)}
-          >
-            <PixelIcon name="close" scale={1} />
-          </button>
-        </div>
-      ) : null}
+        <PixelIcon name="close" scale={1} />
+      </button>
     </div>
   );
 }

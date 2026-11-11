@@ -581,6 +581,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         }}
         pauses={{ prefs: props.news.prefs, onChange: props.news.setPause }}
         sound={props.sound}
+        look={props.look}
         forecast={props.programme.forecast}
         onPhoto={props.photo.enter}
         debug={props.debug !== null}

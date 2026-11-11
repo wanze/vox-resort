@@ -1,3 +1,4 @@
+import type { Look } from '../domain/looks';
 import type { SeasonView } from '../../sim/domain/season';
 import type { LandView } from '../../land/domain/landRights';
 import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
@@ -167,6 +168,11 @@ export interface GuestViewControls {
   offers(): readonly RideCommand[];
 }
 
+export interface LookControls {
+  readonly look: Look;
+  setLook(look: Look): void;
+}
+
 export interface HudControls {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
@@ -177,6 +183,7 @@ export interface HudControls {
   readonly news: NewsControls;
   readonly history: HistoryControls;
   readonly sound: SoundControls;
+  readonly look: LookControls;
   readonly programme: ProgrammeControls;
   readonly bookings: BookingsControls;
   readonly windows: WindowControls;

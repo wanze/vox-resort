@@ -2,7 +2,7 @@
   position: relative;
 }
 
-.ui-dropdown > .ui-chip[aria-expanded='true'] {
+.ui-dropdown > .ui-key[aria-expanded='true'] {
   position: relative;
   z-index: 3;
 }
@@ -40,7 +40,8 @@
   max-height: calc(100dvh - var(--bar-h) - var(--space-5));
   overflow: auto;
   padding: var(--space-2);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   pointer-events: auto;
   animation: ui-pop var(--pop);
   transform-origin: top left;
@@ -63,7 +64,8 @@
   min-height: 38px;
   padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background: transparent;
   color: var(--text);
   font: inherit;

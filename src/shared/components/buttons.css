@@ -14,7 +14,8 @@
   justify-content: center;
   gap: var(--space-2);
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background-image: var(--slab-raised);
   box-shadow: var(--bevel), var(--shadow-ledge);
   color: var(--text);
@@ -71,13 +72,67 @@
   padding: 0 var(--space-2) 0 var(--space-2);
 }
 
-.ui-chip-label {
+.ui-key-label {
   font-size: var(--size-body);
   white-space: nowrap;
 }
 
-.ui-chip-caret {
-  color: var(--text-faint);
+/* Set flush into a plank rather than laid on it: flat until a pointer finds it, then a whole-pixel
+   bevel, and sunk square while pressed or open. */
+.ui-key {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
+  background: none;
+  color: var(--text);
+  font: 600 var(--size-small) / 1 var(--font-ui);
+}
+
+.ui-key:hover:not(:disabled) {
+  border-color: var(--key-edge);
+  background-color: var(--wash-hover);
+  box-shadow: var(--bevel);
+  color: var(--terracotta-deep);
+}
+
+.ui-key:active:not(:disabled),
+.ui-key[aria-expanded='true'],
+.ui-key[aria-pressed='true'] {
+  border-color: var(--key-edge);
+  background-color: var(--key-sunk);
+  box-shadow: var(--bevel-in);
+  color: var(--terracotta-deep);
+}
+
+/* Keys that belong together, joined into one raised block with a seam between each. */
+.ui-keys {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--key-edge);
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
+  background-image: var(--slab-raised);
+  box-shadow: var(--bevel), var(--shadow-step);
+}
+
+.ui-keys > :not(:first-child) {
+  border-left: 1px solid var(--key-edge);
+}
+
+.ui-keys .ui-key {
+  height: calc(var(--control-h) - 2px);
+  border-color: transparent;
+}
+
+.ui-keys .ui-key:hover:not(:disabled) {
+  border-color: transparent;
 }
 
 /* 44px: the smallest target a fingertip hits reliably. */
@@ -127,7 +182,8 @@
   min-width: 16px;
   padding: 3px 3px 2px;
   border: 1px solid var(--terracotta-deep);
-  border-radius: 6px 8px 5px 7px;
+  border-radius: var(--radius-chip);
+  corner-shape: var(--corner-shape);
   background: var(--terracotta);
   font: 700 10px / 1 var(--font-ui);
   text-align: center;
@@ -142,7 +198,8 @@
   height: var(--control-h);
   padding: 0 calc(var(--space-3) * 2 + 10px) 0 var(--space-3);
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-shape);
   background:
     var(--select-caret) right var(--space-3) center / 10px 6px no-repeat,
     var(--slab-raised);

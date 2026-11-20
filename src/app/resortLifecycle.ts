@@ -117,8 +117,9 @@ export interface ResortLifecycle {
     source: ResortSource,
     mode: GameMode,
     dress?: (resort: Resort) => void,
-  ): Promise<void>;
-  load(saved: GameSnapshot): Promise<void>;
+  ): Promise<boolean>;
+  // False when a later request overtook it: the caller must not bind a save slot to work not done.
+  load(saved: GameSnapshot): Promise<boolean>;
   snapshot(): GameSnapshot;
   // The plot's lists changed: the walk graph catches up once the pointer has rested.
   edited(): void;
@@ -168,11 +169,11 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     source: ResortSource,
     mode: GameMode,
     dress: (resort: Resort) => void = undressed,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     cancelSettle();
     const request = ++requested;
     const prepared = await preparer.prepare(prepRequestFor(source, bench));
-    if (request !== requested || !parts.running()) return;
+    if (request !== requested || !parts.running()) return false;
     identity.params = asked;
     identity.gameId = parts.mintGameId();
     build.abandon();
@@ -187,6 +188,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     parts.stopDrift();
     clock.restart(INITIAL_TIME);
     parts.rebuilt();
+    return true;
   };
 
   const gameNow = (): GameSnapshot => {
@@ -215,29 +217,62 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     };
   };
 
+  // The save was taken on another plot's venues and failed to restore; the game played until now
+  // goes back up from the snapshot taken before the replace, which fits by construction.
+  const rollBack = async (
+    request: number,
+    game: GameSnapshot,
+    camera: CameraSnapshot,
+    was: ResortIdentity,
+  ): Promise<void> => {
+    const prepared = await preparer.prepare(
+      prepRequestFor({ kind: 'saved', world: game.world }, bench),
+    );
+    if (request !== requested || !parts.running()) return;
+    const resort = replaceResort(prepared, game.population);
+    parts.restoreGame(resort, game);
+    build.reopen();
+    restoreCamera(handle, camera);
+    Object.assign(identity, was);
+    parts.rebuilt();
+  };
+
+  const adoptIdentity = (saved: GameSnapshot): void => {
+    identity.params = saved.params;
+    identity.name = savedResortName(saved.name, saved.params.seed);
+    identity.gameId = saved.gameId ?? parts.mintGameId();
+  };
+
   // Mirrors regrow.
-  const load = async (saved: GameSnapshot): Promise<void> => {
+  const load = async (saved: GameSnapshot): Promise<boolean> => {
     cancelSettle();
     const request = ++requested;
     const prepared = await preparer.prepare(
       prepRequestFor({ kind: 'saved', world: saved.world }, bench),
     );
-    if (request !== requested || !parts.running()) return;
+    if (request !== requested || !parts.running()) return false;
+    const before = gameNow();
+    const camera = playerCamera();
+    const was: ResortIdentity = { ...identity };
     build.abandon();
     selection.select(null);
     walkStaleAt = null;
     const resort = replaceResort(prepared, saved.population);
-    parts.restoreGame(resort, saved);
+    try {
+      parts.restoreGame(resort, saved);
+    } catch (cause: unknown) {
+      await rollBack(request, before, camera, was);
+      throw cause;
+    }
     build.reopen();
     clock.setSpeed('paused');
     parts.stopDrift();
     // After the replace, whose reframe has put the camera back where a new plot is looked at from.
     restoreCamera(handle, saved.camera);
-    identity.params = saved.params;
-    identity.name = savedResortName(saved.name, saved.params.seed);
-    identity.gameId = saved.gameId ?? parts.mintGameId();
+    adoptIdentity(saved);
     parts.rebuilt();
     parts.onSpeedChange('paused');
+    return true;
   };
 
   let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -250,7 +285,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
 
   const scheduleSettle = (): void => {
     if (settleTimer !== null) clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => void settle(), SETTLE_DELAY_MS);
+    settleTimer = setTimeout(() => settle().catch(console.error), SETTLE_DELAY_MS);
   };
 
   // A rebuild that keeps the game, so the lighting, the beach and the guests catch up with the land
@@ -313,7 +348,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     },
     scheduleSettle,
     settleNow() {
-      if (settleTimer !== null) void settle();
+      if (settleTimer !== null) settle().catch(console.error);
     },
     // Never under a bench, so one that ever places something does not rebuild mid-run.
     reanchorDue: (timeMs) =>

@@ -140,11 +140,17 @@ async function writeGame(
   return now;
 }
 
-// Null when the snapshot does not read, which the list then shows.
-async function openGame(mounted: Showcase, meta: SaveMeta): Promise<GameSnapshot | null> {
+type Opened =
+  | { readonly kind: 'loaded'; readonly snapshot: GameSnapshot }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'superseded' };
+
+// Unreadable when the snapshot does not parse, which the list then shows; superseded when a later
+// load or new game overtook this one, which binds no slot.
+async function openGame(mounted: Showcase, meta: SaveMeta): Promise<Opened> {
   const snapshot = await readSave(meta.id);
-  if (snapshot) await mounted.load(snapshot);
-  return snapshot;
+  if (!snapshot) return { kind: 'unreadable' };
+  return (await mounted.load(snapshot)) ? { kind: 'loaded', snapshot } : { kind: 'superseded' };
 }
 
 // Listed afresh: the autosave just before may have rewritten the slot the list still shows.
@@ -221,17 +227,17 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
   const { store, currentRef, dirtyRef, lastSavedRef, follow } = session;
   const { setStatus, saved, refresh, fail } = store;
   const enabledRef = useLatest(playing && !BENCHING);
-  const writing = useRef(false);
+  const writing = useRef(0);
   // So a reload can wait for it rather than start a second write to the same slot.
   const inFlight = useRef<Promise<boolean> | null>(null);
   const keptAsked = useRef(false);
 
   const writeNow = useCallback(
     async (target: SaveTarget): Promise<boolean> => {
-      writing.current = true;
+      writing.current += 1;
       setStatus('saving');
       const at = await settled(writeGame(showcaseRef.current, target, dirtyRef), fail);
-      writing.current = false;
+      writing.current -= 1;
       if (at === false) return false;
       lastSavedRef.current = at;
       saved(at);
@@ -262,7 +268,7 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
     async (trigger: AutosaveTrigger): Promise<void> => {
       const due = autosaveDue({
         enabled: enabledRef.current,
-        busy: writing.current,
+        busy: writing.current > 0,
         dirty: dirtyRef.current,
         lastSavedAt: lastSavedRef.current,
         now: Date.now(),
@@ -278,7 +284,7 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
     const earlier = await writesDone(inFlight);
     const due = autosaveDue({
       enabled: enabledRef.current,
-      busy: writing.current,
+      busy: writing.current > 0,
       dirty: dirtyRef.current,
       lastSavedAt: lastSavedRef.current,
       now: Date.now(),
@@ -291,6 +297,22 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
 }
 
 // Building the world holds the main thread, so the button that says so must be painted first.
+// Null when nothing was loaded. A restore that threw put the game that was playing back, so only
+// the save is marked, as one that does not read is.
+async function loadGame(
+  mounted: Showcase,
+  meta: SaveMeta,
+  fail: (cause: unknown) => void,
+  broke: (id: string) => void,
+): Promise<GameSnapshot | null> {
+  const opened = await settled(openGame(mounted, meta), fail);
+  if (opened === false || opened.kind === 'unreadable') {
+    broke(meta.id);
+    return null;
+  }
+  return opened.kind === 'loaded' ? opened.snapshot : null;
+}
+
 const afterPaint = (): Promise<void> =>
   new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
@@ -312,12 +334,9 @@ function useLoader(
       setLoading(id);
       await afterPaint();
       await autosave('hidden');
-      const snapshot = await settled(openGame(mounted, meta), fail);
+      const snapshot = await loadGame(mounted, meta, fail, broke);
       setLoading(null);
-      if (!snapshot) {
-        broke(meta.id);
-        return false;
-      }
+      if (!snapshot) return false;
       dirtyRef.current = false;
       lastSavedRef.current = Date.now();
       follow({ id: meta.id, name: meta.name });

@@ -9,6 +9,9 @@ import type { ResortControls } from '../features/hud/components/hudControls';
 import type { HudStore } from '../features/hud/domain/hudStore';
 import { useHudSlice } from '../features/hud/components/useHudSlice';
 
+const grow = (mounted: Showcase, next: ResortParams, game: NewGame): Promise<boolean> =>
+  groundOf(game) === 'grown' ? mounted.generate(next) : mounted.clear(next, game.mode);
+
 // onStarted is told once the new resort stands, so its first save can be written at once.
 export function useResortControls(
   showcase: RefObject<Showcase | null>,
@@ -30,9 +33,8 @@ export function useResortControls(
       // Optimistic; the showcase's own clamped answer replaces it once the work is done.
       setParams(next);
       try {
-        await (groundOf(game) === 'grown'
-          ? mounted.generate(next)
-          : mounted.clear(next, game.mode));
+        const grown = await grow(mounted, next, game);
+        if (!grown) return false;
         setParams(mounted.params);
         // Before onStarted, so the first save already has it.
         mounted.rename(game.name);
@@ -54,7 +56,7 @@ export function useResortControls(
       if (!mounted) return false;
       setBuilding(true);
       try {
-        await mounted.openShared(shared);
+        if (!(await mounted.openShared(shared))) return false;
         setParams(mounted.params);
         onStarted();
         return true;

@@ -566,10 +566,10 @@ export interface Showcase {
   setSigns(shown: boolean): void;
   setSingleKeys(on: boolean): void;
   selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
-  generate(params: ResortParams): Promise<void>;
-  clear(params: ResortParams, mode: GameMode): Promise<void>;
+  generate(params: ResortParams): Promise<boolean>;
+  clear(params: ResortParams, mode: GameMode): Promise<boolean>;
   // Always sandbox: tycoon pays for everything that stands, and this resort was not built here.
-  openShared(shared: SharedResort): Promise<void>;
+  openShared(shared: SharedResort): Promise<boolean>;
   selectTool(tool: BuildTool | null): void;
   confirmPlacement(): void;
   dismissPlacement(): void;
@@ -618,8 +618,9 @@ export interface Showcase {
   declineOffer(id: number): void;
   // Finishes what is being built first: the save is of a world with no scaffolding.
   snapshot(): GameSnapshot;
-  // Opens paused. Rejects, with the resort already replaced, if the save does not fit its world.
-  load(snapshot: GameSnapshot): Promise<void>;
+  // Opens paused. False when a later load or new game overtook it. Rejects, with the game that
+  // was playing stood again, if the save does not fit its world.
+  load(snapshot: GameSnapshot): Promise<boolean>;
   dispose(): void;
 }
 
@@ -3724,9 +3725,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         identity.name = shared.name;
       };
       const source = { kind: 'saved', world: shared.world } as const;
-      const grown = lifecycle.regrow(clampParams(shared.params), source, 'sandbox', named);
       const { view } = shared;
-      return view ? grown.then(() => openPostcard(view)) : grown;
+      return lifecycle
+        .regrow(clampParams(shared.params), source, 'sandbox', named)
+        .then((grown) => {
+          if (grown && view) openPostcard(view);
+          return grown;
+        });
     },
     selectTool,
     confirmPlacement: () => build.confirm(),

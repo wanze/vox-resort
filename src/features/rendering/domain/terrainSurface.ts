@@ -6,12 +6,14 @@ import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreli
 import { levelHeight } from '../../layout/domain/elevation';
 import type { Ground, Terrain, TerrainTile } from '../../layout/domain/terrain';
 
-// Water, then sand, a hair above the bench and grass exactly on it: upside down as hydrology,
-// but the infinite grass plane would otherwise poke through the water, and the sea runs in under
-// the sand so the shoreline overlaps. All three stay below a path slab, which stands 0 to 2.
+// Land stands most of a path slab's two voxels up, so paving and plates sit nearly flush, but
+// half a voxel short of the slab's top: that is the depth gap the camera resolves. Water stays
+// low, so every bank is a drop, and the sea runs in under the sand so the shoreline overlaps.
 export const SEA_LEVEL = 0.1;
-export const SAND_LEVEL = 0.3;
-const GRASS_LEVEL = 0;
+export const SAND_LEVEL = 1.5;
+export const GRASS_LEVEL = 1.45;
+// Where wet sand meets the water: just clear of the sea it runs down into.
+const SAND_FOOT = 0.3;
 
 const SEA_UNDERLAP = 1;
 
@@ -407,7 +409,7 @@ interface ColumnProfile {
   readonly benches: Float64Array;
   readonly tops: Float64Array;
   readonly surfaces: Uint8Array;
-  // The sea and grass at sea level are drawn elsewhere, but still carry a height for their neighbours.
+  // The sea is drawn elsewhere, but still carries a height for its neighbours.
   readonly drawn: Uint8Array;
   readonly sea: Uint8Array;
 }
@@ -425,9 +427,8 @@ function profileOf(terrain: Terrain, tileX: number, firstRow: number, rows: numb
     tops[row] = topOf(tile);
     surfaces[row] = codeOf(tile.surface);
     const isSea = tile.surface === 'water' && terrain.isSea(tileX, tileZ);
-    const isPlane = tile.surface === 'grass' && tile.level === 0;
     sea[row] = isSea ? 1 : 0;
-    drawn[row] = isSea || isPlane ? 0 : 1;
+    drawn[row] = isSea ? 0 : 1;
   }
   return { benches, tops, surfaces, drawn, sea };
 }
@@ -517,8 +518,6 @@ const rowStart = (bounds: RowBounds, row: number): number =>
 const rowEnd = (bounds: RowBounds, row: number): number =>
   clampZ(bounds, (bounds.firstRow + row + 1) * bounds.tileVoxels);
 
-const isDrawn = (code: GroundCode, bench: number): boolean => !(code === GRASS && bench === 0);
-
 interface Meshes {
   readonly ground: Builders;
   readonly risers: Builders;
@@ -535,10 +534,7 @@ interface ColumnSpan {
 const topBuilder = (meshes: Meshes, code: GroundCode): GroundBuilder =>
   code === WATER ? meshes.water : meshes.ground[riserSurfaceOf(code)];
 
-// Wet sand needs nothing clear: a model's plate covers it anyway.
-const isBanked = (cut: Cut, surface: GroundCode, clear: () => boolean): boolean =>
-  cut.other === WATER && (surface === SAND || clear());
-
+// Under a plate the plate is the bank: a kerb or a wet band there would share its face.
 function layCut(
   meshes: Meshes,
   columns: Neighbourhood,
@@ -558,43 +554,68 @@ function layCut(
   const farZ = cut.dz < 0 ? z1 : z0;
   const bench = here.benches[row]!;
   const surface = here.surfaces[row]! as GroundCode;
-  if (isBanked(cut, surface, () => isClear(span.tileX, bounds.firstRow + row))) {
-    layDiagonalBank(meshes, here, row, { cutX, farX, cutZ, farZ });
+  if (cut.other === WATER && isClear(span.tileX, bounds.firstRow + row)) {
+    layDiagonalBank(meshes, columns, row, { cutX, farX, cutZ, farZ });
   } else if (here.drawn[row]) {
     topBuilder(meshes, surface).half(farX, farZ, farX, cutZ, cutX, farZ, here.tops[row]!);
   }
-  if (isDrawn(cut.other, bench)) {
-    const y = bench + liftOf(cut.other);
-    topBuilder(meshes, cut.other).half(cutX, cutZ, cutX, farZ, farX, cutZ, y);
-  }
+  const y = bench + liftOf(cut.other);
+  topBuilder(meshes, cut.other).half(cutX, cutZ, cutX, farZ, farX, cutZ, y);
 }
 
+// Under the land of its own bench but well above the next level down: water lies below its
+// banks, so a tile beside it slopes down to it like a tile beside a lower terrace.
+const WATER_SINK = 0.5;
+
+const levelAt = (profile: ColumnProfile, row: number): number =>
+  benchAt(profile, row) - (profile.surfaces[row] === WATER ? WATER_SINK : 0);
+
+type Cell = readonly [ColumnProfile, number];
+
 // An edge point takes the lower of the two tiles meeting there and a corner the lowest of
-// four, so neighbours agree and nothing has to be closed afterwards.
-function rimOf(columns: Neighbourhood, row: number, into: Float64Array): void {
+// four, so neighbours agree and nothing has to be closed afterwards. A tie keeps the tile's own.
+function rimOf(columns: Neighbourhood, row: number): void {
   const { west, here, east } = columns;
-  const own = here.benches[row]!;
-  const back = benchAt(here, row - 1);
-  const front = benchAt(here, row + 1);
+  const lowest = (index: number, cells: readonly Cell[]): void => {
+    let level = levelAt(here, row);
+    let top = here.tops[row]!;
+    for (const [profile, at] of cells) {
+      const candidate = levelAt(profile, at);
+      if (candidate >= level) continue;
+      level = candidate;
+      top = profile.tops[at]!;
+    }
+    RIM[index] = level;
+    RIM_TOP[index] = top;
+  };
   const side = (across: ColumnProfile, i: number): void => {
-    const beside = benchAt(across, row);
-    into[i * 4] = Math.min(own, beside, back, benchAt(across, row - 1));
-    into[i * 4 + 1] = Math.min(own, beside);
-    into[i * 4 + 2] = Math.min(own, beside);
-    into[i * 4 + 3] = Math.min(own, beside, front, benchAt(across, row + 1));
+    lowest(i * 4, [
+      [across, row],
+      [here, row - 1],
+      [across, row - 1],
+    ]);
+    lowest(i * 4 + 1, [[across, row]]);
+    lowest(i * 4 + 2, [[across, row]]);
+    lowest(i * 4 + 3, [
+      [across, row],
+      [here, row + 1],
+      [across, row + 1],
+    ]);
   };
   side(west, 0);
   side(east, 3);
   for (const i of [1, 2]) {
-    into[i * 4] = Math.min(own, back);
-    into[i * 4 + 1] = own;
-    into[i * 4 + 2] = own;
-    into[i * 4 + 3] = Math.min(own, front);
+    lowest(i * 4, [[here, row - 1]]);
+    lowest(i * 4 + 1, []);
+    lowest(i * 4 + 2, []);
+    lowest(i * 4 + 3, [[here, row + 1]]);
   }
 }
 
-// Shared module-wide: every reader finishes before the next tile starts.
+// Shared module-wide: every reader finishes before the next tile starts. The levels decide
+// what is flat, the tops how high each point stands.
 const RIM = new Float64Array(16);
+const RIM_TOP = new Float64Array(16);
 
 function mergeFlat(
   isFlat: (i: number, j: number) => boolean,
@@ -643,7 +664,7 @@ function spanIsFree(
 interface TileFrame {
   readonly own: number;
   readonly surface: GroundCode;
-  readonly lift: number;
+  readonly top: number;
   readonly xs: readonly number[];
   readonly zs: readonly number[];
 }
@@ -660,9 +681,9 @@ function frameOf(
   const tileZ0 = (bounds.firstRow + row) * bounds.tileVoxels;
   const tileZ1 = tileZ0 + bounds.tileVoxels;
   return {
-    own: here.benches[row]!,
+    own: levelAt(here, row),
     surface,
-    lift: liftOf(surface),
+    top: here.tops[row]!,
     xs: [span.x0, span.x0 + run, span.x1 - run, span.x1],
     zs: [tileZ0, tileZ0 + run, tileZ1 - run, tileZ1].map((z) => clampZ(bounds, z)),
   };
@@ -675,9 +696,9 @@ function layTile(
   span: ColumnSpan,
   bounds: RowBounds,
 ): void {
-  const { own, surface, lift, xs, zs } = frameOf(columns, row, span, bounds);
-  rimOf(columns, row, RIM);
-  const height = (i: number, j: number): number => RIM[i * 4 + j]! + lift;
+  const { own, surface, top, xs, zs } = frameOf(columns, row, span, bounds);
+  rimOf(columns, row);
+  const height = (i: number, j: number): number => RIM_TOP[i * 4 + j]!;
   const isFlat = (i: number, j: number): boolean =>
     RIM[i * 4 + j] === own &&
     RIM[i * 4 + j + 1] === own &&
@@ -701,7 +722,7 @@ function layTile(
 
   const tops = topBuilder(meshes, surface);
   mergeFlat(isFlat, (i0, i1, j0, j1) => {
-    tops.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, own + lift);
+    tops.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, top);
   });
 }
 
@@ -731,14 +752,15 @@ function layDetail(
   }
   const sides = waterSides(columns, row);
   if (sides === 0) return !here.drawn[row];
-  layBank(meshes, { here, row, sides, span, bounds }, isClear);
+  layBank(meshes, { columns, row, sides, span, bounds }, isClear);
   return true;
 }
 
-// In voxels. The kerb stands below a model's one-course plate and a path slab, so neither shows it.
+// In voxels. The kerb's top stays under a plate and a path slab, so neither shows it, and a
+// hair over the grass, so it reads as the stone edge of the drop.
 const WET_BAND = 3;
 const KERB_WIDTH = 2;
-const KERB_HEIGHT = 1;
+const KERB_HEIGHT = 1.5;
 
 const WEST = 1;
 const EAST = 2;
@@ -802,7 +824,7 @@ function bandFrame(span: ColumnSpan, bounds: RowBounds, row: number, width: numb
 }
 
 interface BankTile {
-  readonly here: ColumnProfile;
+  readonly columns: Neighbourhood;
   readonly row: number;
   readonly sides: number;
   readonly span: ColumnSpan;
@@ -817,30 +839,135 @@ function eachCell(test: CellTest, lay: (i: number, j: number) => void): void {
   }
 }
 
+// Per point of the four by four frame, the sides whose water it lies on.
+const POINT_SIDES: readonly number[] = [
+  WEST | NORTH | NORTH_WEST,
+  WEST,
+  WEST,
+  WEST | SOUTH | SOUTH_WEST,
+  NORTH,
+  0,
+  0,
+  SOUTH,
+  NORTH,
+  0,
+  0,
+  SOUTH,
+  EAST | NORTH | NORTH_EAST,
+  EAST,
+  EAST,
+  EAST | SOUTH | SOUTH_EAST,
+];
+
+const onWaterEdge = (sides: number, i: number, j: number): boolean =>
+  (sides & POINT_SIDES[i * 4 + j]!) !== 0;
+
+const neighbourAt = (columns: Neighbourhood, row: number, dx: number, dz: number): Cell => [
+  dx < 0 ? columns.west : dx > 0 ? columns.east : columns.here,
+  row + dz,
+];
+
+// Sand beside sand slopes the same way and meets it, and water lies below the slope; grass
+// stays up, and would show the gap under it.
+function needsSandSide(columns: Neighbourhood, row: number, dx: number, dz: number): boolean {
+  const [profile, at] = neighbourAt(columns, row, dx, dz);
+  return at >= 0 && at < profile.surfaces.length && profile.surfaces[at] === GRASS;
+}
+
+function closeSand(meshes: Meshes, a: Corner, b: Corner, top: number, out: Out): void {
+  meshes.risers.sand.facing(out[0], 0, out[1], [a, b, [b[0], top, b[2]], [a[0], top, a[2]]]);
+}
+
+// The band runs down from the dry sand to the water, so a bather wades in off a beach.
 function layWetSand(meshes: Meshes, tile: BankTile): void {
-  const { xs, zs } = bandFrame(tile.span, tile.bounds, tile.row, WET_BAND);
-  const top = tile.here.tops[tile.row]!;
-  const wet: CellTest = (i, j) => bordersWater(tile.sides, i, j);
+  const { columns, row, sides } = tile;
+  const { xs, zs } = bandFrame(tile.span, tile.bounds, row, WET_BAND);
+  const top = columns.here.tops[row]!;
+  const foot = columns.here.benches[row]! + SAND_FOOT;
+  const wet: CellTest = (i, j) => bordersWater(sides, i, j);
+  const point = (i: number, j: number): Corner => [
+    xs[i]!,
+    onWaterEdge(sides, i, j) ? foot : top,
+    zs[j]!,
+  ];
   mergeFlat(
     (i, j) => !wet(i, j),
     (i0, i1, j0, j1) => meshes.ground.sand.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, top),
   );
-  eachCell(wet, (i, j) => meshes.details.wetSand.top(xs[i]!, xs[i + 1]!, zs[j]!, zs[j + 1]!, top));
+  eachCell(wet, (i, j) => {
+    meshes.details.wetSand.facing(0, 1, 0, [
+      point(i, j),
+      point(i, j + 1),
+      point(i + 1, j + 1),
+      point(i + 1, j),
+    ]);
+  });
+  closeWetSides(meshes, tile, wet, point);
+}
+
+type FramePoint = readonly [number, number];
+
+// Each tile edge in turn: the cells along it, where they meet that edge, and which way it faces.
+const TILE_EDGES = [
+  {
+    cell: (k: number): FramePoint => [0, k],
+    from: (k: number): FramePoint => [0, k],
+    to: (k: number): FramePoint => [0, k + 1],
+    out: [-1, 0],
+  },
+  {
+    cell: (k: number): FramePoint => [2, k],
+    from: (k: number): FramePoint => [3, k],
+    to: (k: number): FramePoint => [3, k + 1],
+    out: [1, 0],
+  },
+  {
+    cell: (k: number): FramePoint => [k, 0],
+    from: (k: number): FramePoint => [k, 0],
+    to: (k: number): FramePoint => [k + 1, 0],
+    out: [0, -1],
+  },
+  {
+    cell: (k: number): FramePoint => [k, 2],
+    from: (k: number): FramePoint => [k, 3],
+    to: (k: number): FramePoint => [k + 1, 3],
+    out: [0, 1],
+  },
+] as const;
+
+function closeWetSides(
+  meshes: Meshes,
+  tile: BankTile,
+  wet: CellTest,
+  point: (i: number, j: number) => Corner,
+): void {
+  const top = tile.columns.here.tops[tile.row]!;
+  for (const edge of TILE_EDGES) {
+    if (!needsSandSide(tile.columns, tile.row, edge.out[0], edge.out[1])) continue;
+    for (let k = 0; k < 3; k++) {
+      const [ci, cj] = edge.cell(k);
+      if (!wet(ci, cj)) continue;
+      const [fi, fj] = edge.from(k);
+      const [ti, tj] = edge.to(k);
+      closeSand(meshes, point(fi, fj), point(ti, tj), top, edge.out);
+    }
+  }
 }
 
 // Walls only where the next cell is not kerb too; at the tile's edge always, since a kerb
 // beside it hides a wall it does not need.
 function layKerb(meshes: Meshes, tile: BankTile, kerbed: CellTest): void {
   const { xs, zs } = bandFrame(tile.span, tile.bounds, tile.row, KERB_WIDTH);
-  if (tile.here.drawn[tile.row]) {
-    const top = tile.here.tops[tile.row]!;
+  const here = tile.columns.here;
+  if (here.drawn[tile.row]) {
+    const top = here.tops[tile.row]!;
     mergeFlat(
       (i, j) => !kerbed(i, j),
       (i0, i1, j0, j1) => meshes.ground.grass.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, top),
     );
   }
   const kerb = meshes.details.kerb;
-  const bench = tile.here.benches[tile.row]!;
+  const bench = here.benches[tile.row]!;
   const height = bench + KERB_HEIGHT;
   const open = (i: number, j: number): boolean =>
     !(i >= 0 && i <= 2 && j >= 0 && j <= 2 && kerbed(i, j));
@@ -854,14 +981,28 @@ function layKerb(meshes: Meshes, tile: BankTile, kerbed: CellTest): void {
   });
 }
 
-// Sand darkens where the water reaches it; grass gets a stone kerb, unless something stands there.
+// Sand darkens and runs down where the water reaches it; grass ends in a stone kerb. Under a
+// plate the plate's own side is the drop, and a band there would flicker against it.
 function layBank(meshes: Meshes, tile: BankTile, isClear: IsClear): void {
-  if (tile.here.surfaces[tile.row] === SAND) {
+  const here = tile.columns.here;
+  if (!isClear(tile.span.tileX, tile.bounds.firstRow + tile.row)) {
+    const { span, bounds, row } = tile;
+    if (here.drawn[row]) {
+      topBuilder(meshes, here.surfaces[row]! as GroundCode).top(
+        span.x0,
+        span.x1,
+        rowStart(bounds, row),
+        rowEnd(bounds, row),
+        here.tops[row]!,
+      );
+    }
+    return;
+  }
+  if (here.surfaces[tile.row] === SAND) {
     layWetSand(meshes, tile);
     return;
   }
-  const clear = isClear(tile.span.tileX, tile.bounds.firstRow + tile.row);
-  layKerb(meshes, tile, (i, j) => clear && bordersWater(tile.sides, i, j));
+  layKerb(meshes, tile, (i, j) => bordersWater(tile.sides, i, j));
 }
 
 interface Diagonal {
@@ -873,13 +1014,14 @@ interface Diagonal {
 
 // The own half of a tile mitred into water: the band runs along the diagonal, and the kerb is
 // closed at both tile edges, where the straight kerb beside it takes over.
-function layDiagonalBank(meshes: Meshes, here: ColumnProfile, row: number, at: Diagonal): void {
+// A sand band is inset by its straight width along each edge, so it meets the straight band beside it.
+function layDiagonalBank(meshes: Meshes, columns: Neighbourhood, row: number, at: Diagonal): void {
+  const { here } = columns;
   const { cutX, farX, cutZ, farZ } = at;
   const surface = here.surfaces[row]! as GroundCode;
   const sx = Math.sign(cutX - farX);
   const sz = Math.sign(cutZ - farZ);
-  const width = surface === SAND ? WET_BAND : KERB_WIDTH;
-  const inset = width * Math.SQRT2;
+  const inset = surface === SAND ? WET_BAND : KERB_WIDTH * Math.SQRT2;
   const innerZ = cutZ - sz * inset;
   const innerX = cutX - sx * inset;
   const top = here.tops[row]!;
@@ -887,15 +1029,29 @@ function layDiagonalBank(meshes: Meshes, here: ColumnProfile, row: number, at: D
     topBuilder(meshes, surface).half(farX, farZ, farX, innerZ, innerX, farZ, top);
   }
   const bench = here.benches[row]!;
-  const band = surface === SAND ? meshes.details.wetSand : meshes.details.kerb;
-  const y = surface === SAND ? top : bench + KERB_HEIGHT;
+  if (surface === SAND) {
+    const foot = bench + SAND_FOOT;
+    const outer: [Corner, Corner] = [
+      [farX, foot, cutZ],
+      [cutX, foot, farZ],
+    ];
+    meshes.details.wetSand.facing(0, 1, 0, [...outer, [innerX, top, farZ], [farX, top, innerZ]]);
+    if (needsSandSide(columns, row, -sx, 0)) {
+      closeSand(meshes, outer[0], [farX, top, innerZ], top, [-sx, 0]);
+    }
+    if (needsSandSide(columns, row, 0, -sz)) {
+      closeSand(meshes, outer[1], [innerX, top, farZ], top, [0, -sz]);
+    }
+    return;
+  }
+  const band = meshes.details.kerb;
+  const y = bench + KERB_HEIGHT;
   band.facing(0, 1, 0, [
     [farX, y, cutZ],
     [cutX, y, farZ],
     [innerX, y, farZ],
     [farX, y, innerZ],
   ]);
-  if (surface === SAND) return;
   band.wall(farX, cutZ, cutX, farZ, bench, y, [sx, sz]);
   band.wall(farX, innerZ, innerX, farZ, bench, y, [-sx, -sz]);
   band.wall(farX, cutZ, farX, innerZ, bench, y, [-sx, 0]);
@@ -919,7 +1075,8 @@ const RIM_RING: readonly (readonly [number, number])[] = [
 ];
 
 // A model has a flat underside covering its tile, so a slope under it would leave it
-// overhanging. The wall's foot is the same rim sloped tiles use, so the two meet without a seam.
+// overhanging. The wall's foot is the same rim sloped tiles use, so the two meet without a seam,
+// and its top the bench the model stands on: above that the model's own side is in its plane.
 function layStandingTile(
   meshes: Meshes,
   columns: Neighbourhood,
@@ -927,19 +1084,19 @@ function layStandingTile(
   span: ColumnSpan,
   bounds: RowBounds,
 ): void {
-  const { own, surface, lift, xs, zs } = frameOf(columns, row, span, bounds);
-  const top = own + lift;
+  const { surface, top, xs, zs } = frameOf(columns, row, span, bounds);
+  const bench = columns.here.benches[row]!;
 
   topBuilder(meshes, surface).top(xs[0]!, xs[3]!, zs[0]!, zs[3]!, top);
 
-  rimOf(columns, row, RIM);
+  rimOf(columns, row);
   const wall = meshes.risers[riserSurfaceOf(surface)];
   for (let step = 0; step < RIM_RING.length; step++) {
     const [fi, fj] = RIM_RING[step]!;
     const [ti, tj] = RIM_RING[(step + 1) % RIM_RING.length]!;
-    const fromY = RIM[fi * 4 + fj]! + lift;
-    const toY = RIM[ti * 4 + tj]! + lift;
-    if (fromY >= top && toY >= top) continue;
+    const fromY = Math.min(RIM_TOP[fi * 4 + fj]!, bench);
+    const toY = Math.min(RIM_TOP[ti * 4 + tj]!, bench);
+    if (fromY >= bench && toY >= bench) continue;
     wall.patch(
       xs[fi]!,
       fromY,
@@ -948,10 +1105,10 @@ function layStandingTile(
       toY,
       zs[tj]!,
       xs[ti]!,
-      top,
+      bench,
       zs[tj]!,
       xs[fi]!,
-      top,
+      bench,
       zs[fj]!,
     );
   }

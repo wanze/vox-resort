@@ -6,7 +6,8 @@ const PLOT = { x1: 95, z1: 63 } as const;
 
 const COURT = { x0: 16, x1: 79, z0: 16, z1: 47 } as const;
 
-const SURFACE = 0;
+// The court's top meets the beach, whose sand stands a course and a half over the bench.
+const SURFACE = 1;
 const GROUND = SURFACE + 1;
 
 const POST = { x: 47, x1: 48 } as const;
@@ -60,6 +61,8 @@ export default defineModel({
   category: 'leisure',
   sound: 'ballcourt',
   placement: { ground: 'beach', perResort: { min: 1, max: 3 } },
+  // Priced as a court, not by its voxels: most of its plate is a course buried in the sand.
+  cost: 260,
   venue: {
     shelter: 'open',
     role: 'activity',
@@ -104,9 +107,9 @@ export default defineModel({
     const box = b.box.bind(b);
     const { bloom, sand, stucco, teak } = PALETTE;
 
-    // One course with no lip, so the court reads as flush with the beach. Not zero courses:
-    // blob shadows rely on the object's own ground plate to hide the half under it.
-    box(0, PLOT.x1, SURFACE, SURFACE, 0, PLOT.z1, sand.base);
+    // A plate rather than none: blob shadows rely on the object's own ground plate to hide the
+    // half under it.
+    box(0, PLOT.x1, 0, SURFACE, 0, PLOT.z1, sand.base);
 
     box(COURT.x0, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z0, stucco.light);
     box(COURT.x0, COURT.x1, SURFACE, SURFACE, COURT.z1, COURT.z1, stucco.light);

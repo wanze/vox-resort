@@ -6,6 +6,7 @@ export default defineModel({
   category: 'grounds',
   sound: 'torch',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   // Drawn unlit so the flame still burns after dark.
   emissive: [0xf2c33c, 0xef7a2f, 0xe0473f],
   lights: [{ x: 7, y: 8, z: 7, color: 0xff9a3c, intensity: 40, distance: 30 }],
@@ -14,8 +15,6 @@ export default defineModel({
     const box = b.box.bind(b);
 
     const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
       stone: 0x8f8a80,
       stoneDark: 0x777268,
       bamboo: 0xb79a54,
@@ -25,18 +24,6 @@ export default defineModel({
       flameB: 0xef7a2f,
       flameC: 0xe0473f,
     };
-
-    const N = 15;
-
-    box(0, N, 0, 1, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 1, 0, C.baseDark);
-      set(x, 1, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 1, z, C.baseDark);
-      set(N, 1, z, C.baseDark);
-    }
 
     const cx = 7;
     const cz = 7;

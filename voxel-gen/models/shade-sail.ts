@@ -27,6 +27,7 @@ export default defineModel({
   label: 'Shade Sail',
   category: 'grounds',
   tiles: { x: 2, z: 2 },
+  onTerrain: true,
   placement: { ground: 'beach' },
   shade: true,
   sound: 'sail',

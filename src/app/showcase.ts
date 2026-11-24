@@ -57,7 +57,7 @@ import { createResortPreparer } from '../features/resort-prep/adapters/resortPre
 import { armedLand, armedZone, type BuildTool } from '../features/build/domain/buildTool';
 import { type LandPointerOptions } from '../features/build/adapters/landPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
-import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
+import { createTileOccupancy, showsGround } from '../features/build/domain/tileOccupancy';
 import type { RailIndex } from '../features/build/domain/railIndex';
 import { createRailIndex } from '../features/build/domain/railIndex';
 import { createEditMode, type Purse, type Refusal } from '../features/build/adapters/editMode';
@@ -2527,7 +2527,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     terrain: current().terrain,
     surfaces: first.surfaces,
     // The live occupancy, not a snapshot: the ground under a cottage is drawn square.
-    isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
+    isClear: (tileX, tileZ) => showsGround(current().occupancy, { x: tileX, z: tileZ }),
     // Tinted under the land marks, so the edge and the plots for sale keep their colours.
     groundShade: (color) => ownership.shade(autumn.tint(color)),
     seaSwell: autumn.swell,

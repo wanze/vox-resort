@@ -1,10 +1,7 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 // A box, not a cylinder: a six-voxel circle is a chipped box anyway.
 const DRUM = { x: 5, x1: 10, z: 5, z1: 10 } as const;
@@ -20,12 +17,11 @@ export default defineModel({
   label: 'Litter Bin',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   binReach: 3,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { metal, teak } = PALETTE;
-
-    plinth(b, SLAB);
 
     const top = GROUND + DRUM_HEIGHT - 1;
     box(DRUM.x, DRUM.x1, GROUND, top, DRUM.z, DRUM.z1, teak.base);

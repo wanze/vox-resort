@@ -1,6 +1,5 @@
 import { crown, limb, noise } from '../models/foliage.ts';
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const EDGE = 15;
@@ -21,9 +20,10 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.4,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
-    const { foliage, sand, slate, stone, teak } = PALETTE;
-    const ground = plinth(b, { x: 0, z: 0, w: 16, d: 16, height: 2, stone: sand });
+    const { foliage, slate, stone, teak } = PALETTE;
+    const ground = 0;
     b.box(3, 12, ground - 1, ground - 1, 3, 12, teak.deep);
 
     const bark = { colors: [stone.shade, stone.deep] as const, limit: EDGE, floor: ground };

@@ -3,8 +3,8 @@ import { defineModel, type ModelSpot, type QuarterTurns, type VoxelBuilder } fro
 
 const N = 31;
 
-// One course with no lip, as the volleyball court: the pit lies in the beach, not on it.
-const SURFACE = 0;
+// Level with the beach's sand, as the volleyball court: the pit lies in the beach, not on it.
+const SURFACE = 1;
 const GROUND = SURFACE + 1;
 
 // Between the middle four columns: the flames and the light rise from the very centre.
@@ -86,6 +86,7 @@ export default defineModel({
     const set = b.set.bind(b);
     const { metal, sand, slate, stone, teak, water } = PALETTE;
 
+    box(0, N, 0, SURFACE - 1, 0, N, sand.base);
     for (let x = 0; x <= N; x++) {
       for (let z = 0; z <= N; z++) {
         set(x, SURFACE, z, distance(x, z) < TRAMPLED ? sand.shade : sand.base);

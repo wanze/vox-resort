@@ -20,10 +20,15 @@ import {
 import {
   abs,
   attribute,
+  distance as distanceBetween,
+  floor,
   fract,
+  float,
   mat4,
   max,
+  mix,
   positionLocal,
+  select,
   sin,
   smoothstep,
   step,
@@ -36,6 +41,7 @@ import {
 import type { Node } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
+import { ROOF_SWAP, WALL_SWAP, type RampSwap } from '../domain/buildingTints';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import {
@@ -163,6 +169,44 @@ function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
   };
 }
 
+// In linear albedo: the palette's nearest other colours are much further apart than this.
+const RAMP_MATCH = 0.002;
+
+function swapFactor(albedo: Node<'vec3'>, swap: RampSwap, seed: Node<'float'>): Node<'vec3'> {
+  const matched = swap.steps.reduce<Node<'float'>>(
+    (any, [r, g, b]) => max(any, step(distanceBetween(albedo, vec3(r, g, b)), RAMP_MATCH)),
+    float(0),
+  );
+  const pick = floor(seed.mul(swap.factors.length));
+  const factor = swap.factors.reduce<Node<'vec3'>>(
+    (chosen, [r, g, b], index) => select(pick.equal(index), vec3(r, g, b), chosen),
+    vec3(1, 1, 1),
+  );
+  return mix(vec3(1, 1, 1), factor, matched);
+}
+
+// Every house draws the one catalogue mesh, so its walls and roof take their colour from where
+// it stands. Only models with windows, so a court's lines or a planter keep the art's colours.
+function buildingMaterial(
+  volume: BakedLightVolume | null,
+  tint: ((color: Node<'vec3'>) => Node<'vec3'>) | undefined,
+): MeshStandardNodeMaterial {
+  const material = litMaterial(volume);
+  const building = placementSeed();
+  const albedo = vertexColor().rgb;
+  const factor = vertexStage(
+    swapFactor(albedo, WALL_SWAP, hashOf(building.mul(12.9898).add(4.1414))).mul(
+      swapFactor(albedo, ROOF_SWAP, hashOf(building.mul(39.3468).add(17.719))),
+    ),
+  );
+  const varied = albedo.mul(factor);
+  // Off, or three multiplies the vertex colours into the colour node a second time.
+  material.vertexColors = false;
+  material.colorNode = tint ? tint(varied) : varied;
+  if (volume) material.emissiveNode = volume.lampLight(varied);
+  return material;
+}
+
 // Above zero: step() at an edge of exactly 0 would furl a parasol at noon.
 const FURL_EDGE = { min: 0.02, spread: 0.96 } as const;
 
@@ -212,6 +256,10 @@ export function instancesByType(
 }
 
 type MaterialKind = 'lit' | 'glow' | 'water' | 'window' | 'canopy';
+
+interface Materials extends Readonly<Record<MaterialKind, Material>> {
+  readonly building: Material;
+}
 
 interface ModelPart {
   readonly kind: MaterialKind;
@@ -432,10 +480,7 @@ const SURFACES = [
 
 const trianglesIn = (geometry: BufferGeometry): number => (geometry.getIndex()?.count ?? 0) / 3;
 
-function modelPartsFor(
-  model: ModelGeometry,
-  materials: Readonly<Record<MaterialKind, Material>>,
-): ModelPart[] {
+function modelPartsFor(model: ModelGeometry, materials: Materials): ModelPart[] {
   const extent = extentOf(model);
   const coarse = model.coarse ?? null;
   const parts: ModelPart[] = [];
@@ -447,7 +492,7 @@ function modelPartsFor(
       geometry,
       // A canopy is never coarsened: it is a few dozen quads, and the coarse copy has no states.
       far: coarse && surface !== 'canopy' ? coarse[surface] : geometry,
-      material: materials[kind],
+      material: kind === 'lit' && model.window ? materials.building : materials[kind],
       triangles: trianglesIn(geometry),
       extent,
     });
@@ -509,8 +554,11 @@ export function buildInstancedWorld(
   const chunkVoxels = options.chunkVoxels ?? CHUNK_VOXELS;
 
   const modelById = new Map(geometries.map((entry) => [entry.id, entry]));
-  const materials: Record<MaterialKind, Material> = {
+  const building = buildingMaterial(options.lightVolume ?? null, options.tint);
+  standOnInstances(building);
+  const materials: Materials = {
     lit,
+    building,
     glow,
     water: poolWater.material,
     window: windows.material,
@@ -835,6 +883,7 @@ export function buildInstancedWorld(
       bucketsPerChunk.clear();
       group.clear();
       lit.dispose();
+      building.dispose();
       glow.dispose();
       poolWater.dispose();
       windows.material.dispose();

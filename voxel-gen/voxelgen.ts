@@ -460,6 +460,9 @@ export interface VoxelModelSource {
   readonly category: ModelCategory;
   readonly tiles: TileFootprint;
   readonly groundDecides?: boolean;
+  // Stands on the terrain with no plate under it, so its tiles rather than its voxels give its
+  // size: it keeps the place a plated model had, and a placement saved with that size.
+  readonly onTerrain?: true;
   // Not a venue: a gate in the venue list would have guests queueing at it.
   readonly gateway?: boolean;
   // Staff only: shifts start here and cleaners restock here. Not a venue, so no guest goes in.
@@ -529,6 +532,7 @@ export interface VoxelModel {
   readonly category: ModelCategory;
   readonly tiles: TileFootprint;
   readonly groundDecides: boolean;
+  readonly onTerrain: boolean;
   readonly gateway: boolean;
   readonly depot: ModelDepot | null;
   readonly scenery: number;
@@ -682,6 +686,7 @@ function nameplateFrom(
 function defaultsOf(source: VoxelModelSource) {
   return {
     groundDecides: source.groundDecides ?? false,
+    onTerrain: source.onTerrain === true,
     gateway: source.gateway ?? false,
     depot: source.depot ?? null,
     scenery: source.scenery ?? 0,
@@ -699,19 +704,18 @@ const paintedBy = (build: (builder: VoxelBuilder) => void): PaintedVoxel[] => {
   return [...builder];
 };
 
-export function buildModel(source: VoxelModelSource): VoxelModel {
-  const painted = paintedBy(source.build);
-  if (painted.length === 0) throw new Error(`Model "${source.id}" painted no voxels`);
-  const open = source.canopy ? paintedBy(source.canopy.open) : [];
-  const furled = source.canopy ? paintedBy(source.canopy.furled) : [];
+// The terrain's top lies a layer and a half above the bench, so a model with no plate stands a
+// layer up and sinks its foot half a layer into the ground rather than floating over it.
+export const ON_TERRAIN_LIFT = 1;
 
+function boundsOf(source: VoxelModelSource, painted: readonly (readonly PaintedVoxel[])[]) {
   let minX = Infinity;
   let minY = Infinity;
   let minZ = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   let maxZ = -Infinity;
-  for (const voxels of [painted, open, furled]) {
+  for (const voxels of painted) {
     for (const { x, y, z } of voxels) {
       minX = Math.min(minX, x);
       minY = Math.min(minY, y);
@@ -721,6 +725,24 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       maxZ = Math.max(maxZ, z);
     }
   }
+  if (source.onTerrain) {
+    minY -= ON_TERRAIN_LIFT;
+    const tile = TILE_VOXELS / (source.scale ?? 1);
+    minX = Math.min(minX, 0);
+    minZ = Math.min(minZ, 0);
+    maxX = Math.max(maxX, source.tiles.x * tile - 1);
+    maxZ = Math.max(maxZ, source.tiles.z * tile - 1);
+  }
+  return { minX, minY, minZ, maxX, maxY, maxZ };
+}
+
+export function buildModel(source: VoxelModelSource): VoxelModel {
+  const painted = paintedBy(source.build);
+  if (painted.length === 0) throw new Error(`Model "${source.id}" painted no voxels`);
+  const open = source.canopy ? paintedBy(source.canopy.open) : [];
+  const furled = source.canopy ? paintedBy(source.canopy.furled) : [];
+
+  const { minX, minY, minZ, maxX, maxY, maxZ } = boundsOf(source, [painted, open, furled]);
 
   const shifted = (voxels: readonly PaintedVoxel[]): PaintedVoxel[] =>
     voxels

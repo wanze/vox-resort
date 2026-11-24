@@ -1,4 +1,4 @@
-import { bed, BARK, crown, LEAF, limb, noise, plinth } from './foliage.ts';
+import { BARK, crown, LEAF, limb, noise } from './foliage.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
@@ -8,14 +8,12 @@ export default defineModel({
   sound: 'trees',
   scenery: 0.5,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const N = 15;
     const PETAL = [0xd45c8d, 0xef7ba6, 0xf7bcd4] as const;
     const bark = { colors: [BARK.brownDark, BARK.brown] as const, limit: N };
-
-    plinth(b, N);
-    bed(b, 4, 11, 4, 11);
 
     limb(b, [7.5, 2, 7.5], [7, 11, 8], 1.8, 1.1, bark);
 

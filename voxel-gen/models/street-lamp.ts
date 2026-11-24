@@ -8,6 +8,7 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.2,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   emissive: [GLOW],
   lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],
   build: (b: VoxelBuilder) => {
@@ -15,8 +16,6 @@ export default defineModel({
     const box = b.box.bind(b);
 
     const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
       stone: 0x8f8a80,
       stoneDark: 0x777268,
       post: 0x3a4048,
@@ -24,18 +23,6 @@ export default defineModel({
       trim: 0x5a6270,
       glow: GLOW,
     };
-
-    const N = 15;
-
-    box(0, N, 0, 1, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 1, 0, C.baseDark);
-      set(x, 1, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 1, z, C.baseDark);
-      set(N, 1, z, C.baseDark);
-    }
 
     const cx = 7;
     const cz = 7;

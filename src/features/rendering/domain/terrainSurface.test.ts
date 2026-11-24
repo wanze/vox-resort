@@ -6,6 +6,7 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import {
   geometriesOf,
+  GRASS_LEVEL,
   joinColumns,
   retileColumns,
   startsOf as columnStartsOf,
@@ -133,14 +134,31 @@ function windingAgreesWithNormal(surface: SurfaceGeometry, quad: number): boolea
 
 const NOTHING = { grass: null, sand: null };
 
+const beach = (tileZ: number, surface: 'sand' | 'water'): TerrainEdit => ({
+  tileX: 20,
+  tileZ,
+  level: 0,
+  surface,
+});
+
+// As the mesh stores it, so a height read back compares exactly.
+const grassOn = (level: number): number => Math.fround(levelHeight(level) + GRASS_LEVEL);
+
+function cornerHeightsOf(surface: SurfaceGeometry, quad: number): number[] {
+  return [0, 1, 2, 3].map((corner) => surface.positions[(quad * 4 + corner) * 3 + 1]!);
+}
+
 describe('terrainSurfacesFor', () => {
-  it('draws nothing at all on flat land with no shore', () => {
-    expect(terrainSurfacesFor(request(null))).toMatchObject({
+  it('lays flat land with no shore as grass at its own height, and nothing else', () => {
+    const surfaces = terrainSurfacesFor(request(null));
+    expect(surfaces).toMatchObject({
       sea: null,
       water: null,
-      ground: NOTHING,
+      ground: { sand: null },
       risers: NOTHING,
     });
+    const heights = new Set(quadsOf(surfaces.ground.grass!).map((quad) => quad.y));
+    expect(heights).toEqual(new Set([grassOn(0)]));
   });
 
   it('builds both surfaces for a plot with a coast', () => {
@@ -297,7 +315,8 @@ describe('terrainSurfacesFor', () => {
 describe('the terraces', () => {
   it('draws no raised ground and no slopes on flat land, however much sea', () => {
     const { ground, risers } = terrainSurfacesFor(request(shore()));
-    expect({ grass: ground.grass, risers }).toEqual({ grass: null, risers: NOTHING });
+    expect(risers).toEqual(NOTHING);
+    expect(new Set(quadsOf(ground.grass!).map((quad) => quad.y))).toEqual(new Set([grassOn(0)]));
   });
 
   it('draws a bench and a riser for a terraced plot with no sea at all', () => {
@@ -306,10 +325,10 @@ describe('the terraces', () => {
     expect(risers.grass).not.toBeNull();
   });
 
-  it('lays each bench at its own level and none at sea level', () => {
+  it('lays each bench at its own level, the plain below them too', () => {
     const { ground: terraces } = terrainSurfacesFor(request(null, 640, terraced()));
     const heights = new Set(quadsOf(terraces.grass!).map((quad) => quad.y));
-    expect([...heights].toSorted((a, b) => a - b)).toEqual([levelHeight(1), levelHeight(2)]);
+    expect([...heights].toSorted((a, b) => a - b)).toEqual([grassOn(0), grassOn(1), grassOn(2)]);
   });
 
   it('faces every bench straight up', () => {
@@ -426,8 +445,8 @@ describe('the terraces', () => {
       expect({ index, z0: quad.z0 }).toEqual({ index, z0: column[index]!.z1 });
     }
     const heights = column.map((quad) => quad.y);
-    expect(heights).toContain(levelHeight(2));
-    expect(heights).toContain(levelHeight(1));
+    expect(heights).toContain(grassOn(2));
+    expect(heights).toContain(grassOn(1));
   });
 
   it('closes the slot a wandering step leaves between two columns', () => {
@@ -460,7 +479,7 @@ describe('the terraces', () => {
         ys.push(risers.positions[(quad * 4 + corner) * 3 + 1]!);
       }
     }
-    expect(new Set(ys)).toEqual(new Set([0, levelHeight(1)]));
+    expect(new Set(ys)).toEqual(new Set([grassOn(0), grassOn(1)]));
   });
 
   it('keeps every bench clear of the sand, column by column', () => {
@@ -493,7 +512,7 @@ describe('the terraces', () => {
       expect(quad.y).toBeCloseTo(levelHeight(1) + SAND_LEVEL, 5);
     }
     expect(new Set(quadsOf(terraces.grass!).map((quad) => quad.y))).toEqual(
-      new Set([levelHeight(2)]),
+      new Set([grassOn(0), grassOn(2)]),
     );
     expect(risers.sand).not.toBeNull();
     expect(risers.grass).not.toBeNull();
@@ -624,11 +643,16 @@ const inChannel = (quad: { x0: number; x1: number; z0: number; z1: number }): bo
   quad.x0 >= 20 * TILE && quad.x1 <= 22 * TILE && quad.z0 >= 4 * TILE && quad.z1 <= 12 * TILE;
 
 describe('the banks', () => {
-  it('darkens a band of sand along the waterline, level with the dry sand', () => {
+  it('runs a band of wet sand down from the dry sand to just above the water', () => {
     const coast = shore();
     const { details } = terrainSurfacesFor(request(coast));
     const wet = quadsOf(details.wetSand!);
-    for (const quad of wet) expect(quad.y).toBeCloseTo(SAND_LEVEL, 5);
+    for (let quad = 0; quad < details.wetSand!.quadCount; quad++) {
+      const heights = cornerHeightsOf(details.wetSand!, quad);
+      expect(Math.max(...heights)).toBeCloseTo(SAND_LEVEL, 5);
+      expect(Math.min(...heights)).toBeLessThan(SAND_LEVEL);
+      expect(Math.min(...heights)).toBeGreaterThan(SEA_LEVEL);
+    }
     for (let tileX = 10; tileX < 30; tileX++) {
       const edge = waterStartZ(coast, tileX) * TILE;
       const band = wet.filter((quad) => quad.x0 >= tileX * TILE && quad.x1 <= (tileX + 1) * TILE);
@@ -641,13 +665,14 @@ describe('the banks', () => {
     expect(terrainSurfacesFor(request(null, 640, dunes)).details.wetSand).toBeNull();
   });
 
-  it('edges a river through grass with a kerb a voxel high, outside the channel', () => {
+  it('edges a river through grass with a kerb just over the grass, outside the channel', () => {
     const { details } = terrainSurfacesFor(request(null, 640, null, channel()));
     const kerb = details.kerb!;
     const tops = quadsOf(kerb).filter((_, quad) => normalsOf(kerb)[quad]!.y > 0.99);
     expect(tops.length).toBeGreaterThan(0);
     for (const quad of tops) {
-      expect(quad.y).toBeCloseTo(1, 5);
+      expect(quad.y).toBeGreaterThan(GRASS_LEVEL);
+      expect(quad.y).toBeLessThan(2);
       expect(inChannel(quad)).toBe(false);
     }
   });
@@ -661,7 +686,7 @@ describe('the banks', () => {
     }
   });
 
-  it('leaves the kerb off a bank something stands on', () => {
+  it('leaves the kerb off a bank something stands on, whose own side faces the water', () => {
     const banks = Array.from({ length: 8 }, (_, row) => [`19,${row + 4}`, `22,${row + 4}`]).flat();
     const { details } = terrainSurfacesFor(request(null, 640, null, channel(), banks));
     const alongside = (quad: { z0: number; z1: number }): boolean =>
@@ -670,6 +695,36 @@ describe('the banks', () => {
       expect(quad.x0 >= 19 * TILE && quad.x1 <= 20 * TILE).toBe(false);
       expect(quad.x0 >= 22 * TILE && quad.x1 <= 23 * TILE).toBe(false);
     }
+  });
+
+  it('runs a slope down to the water at its foot, not to the grass it would have met', () => {
+    const edits: TerrainEdit[] = [
+      { tileX: 20, tileZ: 20, level: 1, surface: 'grass' },
+      { tileX: 20, tileZ: 21, level: 0, surface: 'water' },
+    ];
+    const { risers } = terrainSurfacesFor(request(null, 640, null, edits));
+    const heights = Array.from({ length: risers.grass!.quadCount }, (_, quad) =>
+      cornerHeightsOf(risers.grass!, quad),
+    ).flat();
+    expect(heights).toContain(Math.fround(SEA_LEVEL));
+  });
+
+  it('closes wet sand off from grass beside it, so no gap shows under the grass', () => {
+    const alone = terrainSurfacesFor(request(null, 640, null, [beach(20, 'sand')]));
+    const banked = terrainSurfacesFor(
+      request(null, 640, null, [beach(20, 'sand'), beach(21, 'water')]),
+    );
+    expect(alone.risers.sand).toBeNull();
+    expect(banked.risers.sand!.quadCount).toBeGreaterThan(0);
+  });
+
+  it('stops the wall under something standing at the bench it stands on', () => {
+    const edits: TerrainEdit[] = [{ tileX: 20, tileZ: 20, level: 1, surface: 'grass' }];
+    const { risers } = terrainSurfacesFor(request(null, 640, null, edits, ['20,20']));
+    const heights = Array.from({ length: risers.grass!.quadCount }, (_, quad) =>
+      cornerHeightsOf(risers.grass!, quad),
+    ).flat();
+    expect(Math.max(...heights)).toBe(levelHeight(1));
   });
 
   it('rounds a dune off at its crest, but leaves a grass step sharp', () => {

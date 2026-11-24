@@ -1225,7 +1225,7 @@ describe('an errand over the sand', () => {
         hash = Math.imul(hash ^ byte, 16777619) >>> 0;
       }
     }
-    expect(hash).toBe(2894628438);
+    expect(hash).toBe(1811117000);
   });
 
   it('carries a restored crowd on exactly as the saved one goes on', () => {

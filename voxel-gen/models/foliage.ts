@@ -1,11 +1,5 @@
 import type { Color, VoxelBuilder } from '../voxelgen.ts';
 
-const GROUND = {
-  base: 0xcdb98f,
-  baseDark: 0xb5a274,
-  soil: 0x6f5636,
-} as const;
-
 export const BARK = {
   brown: 0x8a6a3f,
   brownDark: 0x6f5330,
@@ -28,21 +22,6 @@ export function noise(x: number, y: number, z: number, salt: number): number {
     Math.imul(salt, 2246822519);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-// Runs to the edge of the footprint, as the README's fill rule requires.
-export function plinth(b: VoxelBuilder, n: number): void {
-  b.box(0, n, 0, 1, 0, n, GROUND.base);
-  for (let i = 0; i <= n; i++) {
-    b.set(i, 1, 0, GROUND.baseDark);
-    b.set(i, 1, n, GROUND.baseDark);
-    b.set(0, 1, i, GROUND.baseDark);
-    b.set(n, 1, i, GROUND.baseDark);
-  }
-}
-
-export function bed(b: VoxelBuilder, x0: number, x1: number, z0: number, z1: number): void {
-  b.box(x0, x1, 1, 1, z0, z1, GROUND.soil);
 }
 
 export interface CrownOptions {

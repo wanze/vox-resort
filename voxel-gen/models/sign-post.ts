@@ -1,10 +1,7 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type Color, type VoxelBuilder } from '../voxelgen.ts';
 
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 const POST = { x: 7, x1: 8, z: 7, z1: 8 } as const;
 
@@ -30,11 +27,10 @@ export default defineModel({
   label: 'Sign Post',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { stucco, teak } = PALETTE;
-
-    plinth(b, SLAB);
 
     const top = GROUND + POST_HEIGHT - 1;
     box(POST.x, POST.x1, GROUND, top, POST.z, POST.z1, teak.base);

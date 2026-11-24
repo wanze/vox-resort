@@ -5,7 +5,7 @@ import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { benchFraming, type BenchStyles, type BenchView } from '../../bench/domain/benchConfig';
 import { repeatPlot } from '../../bench/domain/plotRepeat';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { createTileOccupancy } from '../../build/domain/tileOccupancy';
+import { createTileOccupancy, showsGround } from '../../build/domain/tileOccupancy';
 import {
   hireOf,
   OBJECT_TYPES,
@@ -345,7 +345,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const occupancy = createTileOccupancy(claimingOn(plot.layout));
   const surfaces = terrainSurfacesFor({
     terrain,
-    isClear: (x, z) => occupancy.keyAt({ x, z }) === undefined,
+    isClear: (x, z) => showsGround(occupancy, { x, z }),
     shore,
     center: { x: framing.target.x, z: framing.target.z },
     reach: worldExtentOf(bounds) * TERRAIN_SPREAD,

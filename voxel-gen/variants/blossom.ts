@@ -1,6 +1,5 @@
 import { crown, limb, noise } from '../models/foliage.ts';
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const EDGE = 15;
@@ -22,11 +21,10 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.5,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
-    const { bloom, sand, stucco, teak } = PALETTE;
-    const ground = plinth(b, { x: 0, z: 0, w: 16, d: 16, height: 2, stone: sand });
-    const soil = ground - 1;
-    b.box(3, 12, soil, soil, 3, 12, teak.deep);
+    const { bloom, stucco, teak } = PALETTE;
+    const ground = 0;
 
     const bark = { colors: [teak.shade, teak.deep] as const, limit: EDGE, floor: ground };
     limb(b, [7.5, ground, 7.5], [7.5, ground + FORK, 8], 1.4, 1, bark);
@@ -50,13 +48,6 @@ export default defineModel({
       if (color !== stucco.light) continue;
       if (b.has(x, y - 1, z)) continue;
       if (noise(x, y, z, 71) < 0.22) b.set(x, y, z, bloom.light);
-    }
-
-    // Petals fallen into the bed, painted into its surface so they cost no height.
-    for (let z = 3; z <= 12; z++) {
-      for (let x = 3; x <= 12; x++) {
-        if (noise(x, soil, z, 83) < 0.14) b.set(x, soil, z, stucco.light);
-      }
     }
   },
 });

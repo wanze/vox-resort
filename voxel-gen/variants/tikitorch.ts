@@ -1,5 +1,4 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const { amber, bloom } = PALETTE;
@@ -22,6 +21,7 @@ export default defineModel({
   label: 'Tiki Torch B',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   emissive: [FLAME.root, FLAME.body, FLAME.tip],
   // One light between the pair: two lights this close bake to the same glow at twice the cost.
   lights: [
@@ -36,7 +36,7 @@ export default defineModel({
   ],
   build: (b: VoxelBuilder) => {
     const { foliage, grass, stone, thatch } = PALETTE;
-    const ground = plinth(b, { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand });
+    const ground = 0;
 
     b.box(3, 12, ground, BED - 2, 3, 12, stone.light);
     b.box(4, 11, BED - 1, BED - 1, 4, 11, foliage.base);

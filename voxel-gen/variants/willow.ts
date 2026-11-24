@@ -1,6 +1,5 @@
 import { noise } from '../models/foliage.ts';
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type Color, type VoxelBuilder } from '../voxelgen.ts';
 
 const EDGE = 31;
@@ -68,9 +67,10 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.4,
   tiles: { x: 2, z: 2 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
-    const { grass, sand, teak } = PALETTE;
-    const ground = plinth(b, { x: 0, z: 0, w: 32, d: 32, height: 2, stone: sand });
+    const { grass, teak } = PALETTE;
+    const ground = 0;
     b.box(10, 21, ground - 1, ground - 1, 10, 21, teak.deep);
 
     b.box(13, 18, ground, ground + 1, 13, 18, teak.shade);

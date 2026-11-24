@@ -63,6 +63,7 @@ export default defineModel({
   label: 'Sun Lounger',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   // z is the hips: the figure runs four voxels back and three forward, so at 8
   // the head lands on the backrest rise and the feet at the end of the pad.
   seats: [{ x: 3, y: PAD + 1, z: 8, facing: 0, pose: 'lie' }],

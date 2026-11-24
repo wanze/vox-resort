@@ -161,6 +161,9 @@ export interface Router {
   // Sends the whole party to the venue as checking in does; false for anybody not free. A party
   // resting on the beach, invited to the beach, stays where it is until the event's end.
   invite(person: number, venue: number): boolean;
+  // Ends the party's rest on the sand now, so it walks back up and is free to be invited to an
+  // event of its own; a party watching a show on the beach stays for it.
+  callOffTheSand(person: number): void;
   // One array lookup rather than an object: read per tick for every guest.
   isWaitingAt(person: number): boolean;
   // Inside or in the line, -1 otherwise; a lookup for the reason isWaitingAt is one.
@@ -1398,6 +1401,15 @@ export function createRouter(parts: {
       state.homeward[person] = 0;
       setPartyVenue(goals, guests, person, venue);
       return true;
+    },
+
+    callOffTheSand(person) {
+      const beach = beachIndex();
+      if (beach < 0 || person < 0 || person >= goals.count) return;
+      for (const member of partyOf(guests, person)) {
+        if (!restingOnBeach(member, beach) || watching(member)) continue;
+        state.occupancy.until[member] = Math.min(state.occupancy.until[member]!, now);
+      }
     },
 
     tick(at) {

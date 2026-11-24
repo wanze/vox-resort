@@ -1,12 +1,9 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const GLOW = PALETTE.amber.light;
 
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 // One voxel wide, which a sixteen-voxel tile cannot centre: it stands half a voxel off, too
 // little to see.
@@ -22,6 +19,7 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.2,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   emissive: [GLOW],
   // Dimmer and nearer than the street lamp's, as it hangs lower; still enough to light a path.
   lights: [{ x: POST.x, y: GLASS.y1, z: POST.z, color: GLOW, intensity: 70, distance: 38 }],
@@ -34,8 +32,6 @@ export default defineModel({
       box(x - 1, x + 1, y, y, z, z, color);
       box(x, x, y, y, z - 1, z + 1, color);
     };
-
-    plinth(b, SLAB);
 
     cross(GROUND, stone.base);
     box(x, x, GROUND + 1, GLASS.y - 1, z, z, metal.shade);

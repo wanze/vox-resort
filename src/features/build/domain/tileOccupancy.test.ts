@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { place, type LayoutItem } from '../../layout/domain/resortLayout';
-import { createTileOccupancy, footprintTiles } from './tileOccupancy';
+import { createTileOccupancy, footprintTiles, showsGround } from './tileOccupancy';
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -86,5 +86,19 @@ describe('ground nothing is standing on', () => {
     expect(occupancy.isFree({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(true);
     expect(occupancy.keyAt({ x: 3, z: 4 })).toBeUndefined();
     expect(occupancy.size).toBe(0);
+  });
+});
+
+describe('showsGround', () => {
+  it('shows the ground on an empty tile and under a palm, never under a plated model', () => {
+    const occupancy = createTileOccupancy([
+      place(COTTAGE, 'cottage@0,0', 0, 0),
+      place(item('palm'), 'palm@5,5', 5, 5),
+      place(item('palm-b'), 'palm-b#2', 6, 5),
+    ]);
+    expect(showsGround(occupancy, { x: 9, z: 9 })).toBe(true);
+    expect(showsGround(occupancy, { x: 5, z: 5 })).toBe(true);
+    expect(showsGround(occupancy, { x: 6, z: 5 })).toBe(true);
+    expect(showsGround(occupancy, { x: 1, z: 2 })).toBe(false);
   });
 });

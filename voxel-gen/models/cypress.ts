@@ -1,4 +1,4 @@
-import { bed, BARK, LEAF, limb, noise, plinth } from './foliage.ts';
+import { BARK, LEAF, limb, noise } from './foliage.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
@@ -8,13 +8,11 @@ export default defineModel({
   sound: 'trees',
   scenery: 0.4,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const N = 15;
     const NEEDLE = [LEAF.darkest, LEAF.darkest, LEAF.dark, LEAF.mid] as const;
-
-    plinth(b, N);
-    bed(b, 5, 10, 5, 10);
 
     // Only the foot of the trunk is ever visible; the foliage swallows the rest.
     limb(b, [7.5, 2, 7.5], [7.5, 10, 7.5], 1.4, 1.0, {

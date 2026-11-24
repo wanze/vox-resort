@@ -90,6 +90,12 @@ export function objectTypeGroups(): readonly ObjectTypeGroup[] {
   })).filter((group) => group.types.length > 0);
 }
 
+const ON_TERRAIN: ReadonlySet<string> = new Set(
+  OBJECT_TYPES.filter((type) => type.model.onTerrain).map((type) => type.id),
+);
+
+export const standsOnTerrain = (id: string): boolean => ON_TERRAIN.has(id);
+
 export function objectTypeById(id: string): ObjectTypeDefinition {
   const found = OBJECT_TYPES.find((type) => type.id === id);
   if (!found) throw new Error(`Unknown object type "${id}"`);

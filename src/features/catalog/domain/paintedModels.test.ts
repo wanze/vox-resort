@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
-import { allVoxelsOf } from '../../../../voxel-gen/voxelgen.ts';
+import { allVoxelsOf, ON_TERRAIN_LIFT } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor } from './materials';
 import {
   LITTER_MODELS,
@@ -119,8 +119,19 @@ describe('the painted object types', () => {
           hi[axis] = Math.max(hi[axis], voxel[axis]);
         }
       }
-      expect(lo).toEqual({ x: 0, y: 0, z: 0 });
-      expect(hi).toEqual({ x: model.width - 1, y: model.height - 1, z: model.depth - 1 });
+      const corner = { x: 0, y: 0, z: 0 };
+      const far = { x: model.width - 1, y: model.height - 1, z: model.depth - 1 };
+      if (model.onTerrain) {
+        // Sized by its tiles, so it may stand clear of their edges, and lifted onto the terrain.
+        expect(lo.y).toBe(ON_TERRAIN_LIFT);
+        expect(hi.y).toBe(far.y);
+        expect(Math.min(lo.x, lo.z)).toBeGreaterThanOrEqual(0);
+        expect(hi.x).toBeLessThanOrEqual(far.x);
+        expect(hi.z).toBeLessThanOrEqual(far.z);
+        continue;
+      }
+      expect(lo).toEqual(corner);
+      expect(hi).toEqual(far);
     }
   });
 

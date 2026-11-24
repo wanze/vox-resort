@@ -6,30 +6,17 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.8,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
 
     const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
       plinth: 0xbdb6a6,
       plinthDark: 0xa49d8c,
       marble: 0xecebe4,
       marbleShade: 0xd6d5cc,
     };
-
-    const N = 15;
-
-    box(0, N, 0, 1, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 1, 0, C.baseDark);
-      set(x, 1, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 1, z, C.baseDark);
-      set(N, 1, z, C.baseDark);
-    }
 
     box(4, 11, 2, 6, 4, 11, C.plinth);
     for (let x = 4; x <= 11; x++) {

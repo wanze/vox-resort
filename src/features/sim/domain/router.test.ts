@@ -1642,6 +1642,22 @@ describe('a visit to the beach', () => {
     expect(router.invite(family[0]!, 0)).toBe(false);
   });
 
+  it('calls a party off the sand for an event of its own, free to be invited once it is up', () => {
+    const { router, crowd } = onTheBeach(family, { venues: [kiosk] });
+    expect(untilSettled(crowd, family)).toBe(true);
+    // Long before the stay would have run out by itself.
+    const stayEnds = router.restingUntil(family[0]!);
+    expect(stayEnds).toBeGreaterThan(40);
+    router.callOffTheSand(family[0]!);
+    const allFree = (): boolean => family.every((person) => router.isFree(person));
+    for (let step = 0, tick = 1; tick < stayEnds && !allFree(); step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (step % TICKS_EVERY === 0) router.tick(tick++);
+    }
+    expect(allFree()).toBe(true);
+    expect(router.invite(family[0]!, 0)).toBe(true);
+  });
+
   it('is not a venue on a plot with no beach', () => {
     const { router } = routerOn(networkOf(street(8)), [], wanting(0, 'fun'));
     router.step(0, 0);
@@ -1707,10 +1723,13 @@ describe('a building on the beach', () => {
     let backAt = -1;
     for (let step = 0; step < 4000 && backAt === -1; step++) {
       stepCrowd(crowd, MAX_STEP);
+      // Looked for before the tick: a visit shorter than a tick starts and ends inside one.
+      if (router.visitOf(0) !== null && isWaiting(crowd, 0) && inShower(crowd, 0)) {
+        heldInside = true;
+      }
       if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
       const visiting = router.visitOf(0) !== null;
       if (!visiting && !isRoaming(crowd, 0) && crowd.z[0]! > 12 * TILE_VOXELS) onTheSand = true;
-      if (visiting && isWaiting(crowd, 0) && inShower(crowd, 0)) heldInside = true;
       if (heldInside && !visiting && crowd.node[0]! >= 0) backAt = crowd.node[0]!;
     }
     expect(onTheSand, 'never walked out over the sand').toBe(true);
@@ -1724,8 +1743,10 @@ describe('a building on the beach', () => {
     let step = 0;
     const inside = (people: Crowd): boolean =>
       router.visitOf(0) !== null && isWaiting(people, 0) && inShower(people, 0);
-    for (; step < 4000 && !inside(crowd); step++) {
+    // Looked for before the tick: a visit shorter than a tick starts and ends inside one.
+    for (; step < 4000; step++) {
       stepCrowd(crowd, MAX_STEP);
+      if (inside(crowd)) break;
       if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
     }
     expect(inside(crowd), 'never stood in the shower').toBe(true);
@@ -3226,7 +3247,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(140)",
+        "claims": "Array(141)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3289,7 +3310,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(101)",
+        "claims": "Array(82)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3347,10 +3368,10 @@ describe('on the reference resort', () => {
         "working": "Uint8Array(40)",
       }
     `);
-    expect(digestOf(a.router)).toMatchInlineSnapshot(`"151ea7c51dfff9da"`);
-    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"4795ce3212b448c4"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"90632031a8ddbbd6"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"fed3adf0b7e610f1"`);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"4cbefd61e846ad1d"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"297efedb0d7f3f80"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"dec54d50125f1275"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"6b3396b21fc696a1"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {

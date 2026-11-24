@@ -1,5 +1,4 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type Color, type VoxelBuilder } from '../voxelgen.ts';
 
 const EDGE = 15;
@@ -61,9 +60,10 @@ export default defineModel({
   category: 'grounds',
   scenery: 0.4,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
-    const { sand, teak } = PALETTE;
-    const ground = plinth(b, { x: 0, z: 0, w: 16, d: 16, height: 2, stone: sand });
+    const { teak } = PALETTE;
+    const ground = 0;
     const [baseX, baseZ] = trunkAt(0, CROWN - ground);
     const bedX = Math.floor(baseX);
     const bedZ = Math.floor(baseZ);

@@ -7,7 +7,8 @@ const PLOT = { x1: 95, z1: 63 } as const;
 // where they stand behind the play instead of in front of it.
 const COURT = { x0: 16, x1: 79, z0: 20, z1: 51 } as const;
 
-const SURFACE = 0;
+// The court's top meets the beach, whose sand stands a course and a half over the bench.
+const SURFACE = 1;
 const GROUND = SURFACE + 1;
 
 const NET_X = 47;
@@ -104,8 +105,8 @@ export default defineModel({
     const box = b.box.bind(b);
     const { amber, bloom, metal, sand, stucco, teak, thatch, water } = PALETTE;
 
-    // One course, flush with the beach: blob shadows need the model's own ground plate.
-    box(0, PLOT.x1, SURFACE, SURFACE, 0, PLOT.z1, sand.base);
+    // Flush with the beach: blob shadows need the model's own ground plate.
+    box(0, PLOT.x1, 0, SURFACE, 0, PLOT.z1, sand.base);
     // Raked playing sand is a different material from the beach round it.
     box(COURT.x0, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z1, sand.light);
     // Blue tape, as tournaments lay it, so this court does not read as a repaint of the white one.

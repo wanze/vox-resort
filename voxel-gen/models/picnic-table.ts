@@ -1,13 +1,9 @@
-// The slab is two layers to match PAVING_VOXELS, so there is no step up from the paving beside it.
 // On the amenities shelf, not grounds: dressing grows no spur, and a table nobody can walk to is useless.
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { flowerBox } from '../parts/props.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const SLAB = { x: 0, z: 0, w: 32, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 const PLANK = GROUND + 1;
 const HIPS = PLANK + 1;
@@ -33,6 +29,7 @@ export default defineModel({
   label: 'Picnic Table',
   category: 'amenities',
   tiles: { x: 2, z: 1 },
+  onTerrain: true,
   seats: [
     ...SITTERS.map((x) => ({ x, y: HIPS, z: NORTH_HIPS, facing: 0 as const })),
     ...SITTERS.map((x) => ({ x, y: HIPS, z: SOUTH_HIPS, facing: 2 as const })),
@@ -40,8 +37,6 @@ export default defineModel({
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { teak } = PALETTE;
-
-    plinth(b, SLAB);
 
     for (const [x, x1] of LEGS) {
       box(x, x1, GROUND, TOP - 1, TABLE.z, TABLE.z1, teak.deep);

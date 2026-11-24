@@ -91,6 +91,9 @@ marks an entrance where guests arrive and leave. `shade: true` shades the sand
 under the model: it is no obstacle there, nobody resting under it burns, and in
 a heatwave parties look for it, so stand its posts in the corners, clear of the
 towels.
+`onTerrain: true` drops the ground plate: a small prop such as a tree, lamp or
+bench stands straight on the terrain, and its `tiles` rather than its voxels give
+its size, so it keeps the place a plated model had.
 `nameplate` marks a blank board (`x0`-`x1`, `y0`-`y1`, each face's `surface`
 layer and `outward` side, and an `ink` colour) where the app letters the resort's
 name; paint the board blank and leave the layer in front of it empty.

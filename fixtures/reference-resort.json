@@ -15830,7 +15830,7 @@
       "z": 3424
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@130,228",
       "rotation": 0,
@@ -15838,13 +15838,13 @@
       "tileZ": 228,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2081,
+      "width": 16,
+      "x": 2080,
       "y": 0,
-      "z": 3651
+      "z": 3648
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@131,228",
       "rotation": 0,
@@ -15852,13 +15852,13 @@
       "tileZ": 228,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2097,
+      "width": 16,
+      "x": 2096,
       "y": 0,
-      "z": 3651
+      "z": 3648
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@132,228",
       "rotation": 0,
@@ -15866,13 +15866,13 @@
       "tileZ": 228,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2113,
+      "width": 16,
+      "x": 2112,
       "y": 0,
-      "z": 3651
+      "z": 3648
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@133,228",
       "rotation": 0,
@@ -15880,13 +15880,13 @@
       "tileZ": 228,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2129,
+      "width": 16,
+      "x": 2128,
       "y": 0,
-      "z": 3651
+      "z": 3648
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@134,228",
       "rotation": 0,
@@ -15894,13 +15894,13 @@
       "tileZ": 228,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2145,
+      "width": 16,
+      "x": 2144,
       "y": 0,
-      "z": 3651
+      "z": 3648
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@130,230",
       "rotation": 0,
@@ -15908,13 +15908,13 @@
       "tileZ": 230,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2081,
+      "width": 16,
+      "x": 2080,
       "y": 0,
-      "z": 3683
+      "z": 3680
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@131,230",
       "rotation": 0,
@@ -15922,13 +15922,13 @@
       "tileZ": 230,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2097,
+      "width": 16,
+      "x": 2096,
       "y": 0,
-      "z": 3683
+      "z": 3680
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@132,230",
       "rotation": 0,
@@ -15936,13 +15936,13 @@
       "tileZ": 230,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2113,
+      "width": 16,
+      "x": 2112,
       "y": 0,
-      "z": 3683
+      "z": 3680
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@133,230",
       "rotation": 0,
@@ -15950,13 +15950,13 @@
       "tileZ": 230,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2129,
+      "width": 16,
+      "x": 2128,
       "y": 0,
-      "z": 3683
+      "z": 3680
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@134,230",
       "rotation": 0,
@@ -15964,10 +15964,10 @@
       "tileZ": 230,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2145,
+      "width": 16,
+      "x": 2144,
       "y": 0,
-      "z": 3683
+      "z": 3680
     },
     {
       "depth": 16,
@@ -17048,7 +17048,7 @@
       "z": 2976
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@130,232",
       "rotation": 0,
@@ -17056,13 +17056,13 @@
       "tileZ": 232,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2081,
+      "width": 16,
+      "x": 2080,
       "y": 0,
-      "z": 3715
+      "z": 3712
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@131,232",
       "rotation": 0,
@@ -17070,13 +17070,13 @@
       "tileZ": 232,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2097,
+      "width": 16,
+      "x": 2096,
       "y": 0,
-      "z": 3715
+      "z": 3712
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@132,232",
       "rotation": 0,
@@ -17084,13 +17084,13 @@
       "tileZ": 232,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2113,
+      "width": 16,
+      "x": 2112,
       "y": 0,
-      "z": 3715
+      "z": 3712
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@133,232",
       "rotation": 0,
@@ -17098,13 +17098,13 @@
       "tileZ": 232,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2129,
+      "width": 16,
+      "x": 2128,
       "y": 0,
-      "z": 3715
+      "z": 3712
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@134,232",
       "rotation": 0,
@@ -17112,10 +17112,10 @@
       "tileZ": 232,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2145,
+      "width": 16,
+      "x": 2144,
       "y": 0,
-      "z": 3715
+      "z": 3712
     },
     {
       "depth": 16,
@@ -18574,7 +18574,7 @@
       "z": 3360
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@113,229",
       "rotation": 0,
@@ -18582,13 +18582,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1809,
+      "width": 16,
+      "x": 1808,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@114,229",
       "rotation": 0,
@@ -18596,13 +18596,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1825,
+      "width": 16,
+      "x": 1824,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@115,229",
       "rotation": 0,
@@ -18610,13 +18610,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1841,
+      "width": 16,
+      "x": 1840,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@116,229",
       "rotation": 0,
@@ -18624,13 +18624,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1857,
+      "width": 16,
+      "x": 1856,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@117,229",
       "rotation": 0,
@@ -18638,13 +18638,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1873,
+      "width": 16,
+      "x": 1872,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@118,229",
       "rotation": 0,
@@ -18652,13 +18652,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1889,
+      "width": 16,
+      "x": 1888,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@119,229",
       "rotation": 0,
@@ -18666,13 +18666,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1905,
+      "width": 16,
+      "x": 1904,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@120,229",
       "rotation": 0,
@@ -18680,13 +18680,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1921,
+      "width": 16,
+      "x": 1920,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@113,231",
       "rotation": 0,
@@ -18694,13 +18694,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1809,
+      "width": 16,
+      "x": 1808,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@114,231",
       "rotation": 0,
@@ -18708,13 +18708,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1825,
+      "width": 16,
+      "x": 1824,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@115,231",
       "rotation": 0,
@@ -18722,13 +18722,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1841,
+      "width": 16,
+      "x": 1840,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@116,231",
       "rotation": 0,
@@ -18736,13 +18736,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1857,
+      "width": 16,
+      "x": 1856,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@117,231",
       "rotation": 0,
@@ -18750,13 +18750,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1873,
+      "width": 16,
+      "x": 1872,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@118,231",
       "rotation": 0,
@@ -18764,13 +18764,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1889,
+      "width": 16,
+      "x": 1888,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@119,231",
       "rotation": 0,
@@ -18778,13 +18778,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1905,
+      "width": 16,
+      "x": 1904,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@120,231",
       "rotation": 0,
@@ -18792,13 +18792,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1921,
+      "width": 16,
+      "x": 1920,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@113,233",
       "rotation": 0,
@@ -18806,13 +18806,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1809,
+      "width": 16,
+      "x": 1808,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@114,233",
       "rotation": 0,
@@ -18820,13 +18820,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1825,
+      "width": 16,
+      "x": 1824,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@115,233",
       "rotation": 0,
@@ -18834,13 +18834,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1841,
+      "width": 16,
+      "x": 1840,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@116,233",
       "rotation": 0,
@@ -18848,13 +18848,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1857,
+      "width": 16,
+      "x": 1856,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@117,233",
       "rotation": 0,
@@ -18862,13 +18862,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1873,
+      "width": 16,
+      "x": 1872,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@118,233",
       "rotation": 0,
@@ -18876,13 +18876,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1889,
+      "width": 16,
+      "x": 1888,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@119,233",
       "rotation": 0,
@@ -18890,13 +18890,13 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1905,
+      "width": 16,
+      "x": 1904,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger-b",
       "key": "sun-lounger-b@120,233",
       "rotation": 0,
@@ -18904,10 +18904,10 @@
       "tileZ": 233,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 1921,
+      "width": 16,
+      "x": 1920,
       "y": 0,
-      "z": 3731
+      "z": 3728
     },
     {
       "depth": 16,
@@ -20674,7 +20674,7 @@
       "z": 3040
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@146,231",
       "rotation": 0,
@@ -20682,13 +20682,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2337,
+      "width": 16,
+      "x": 2336,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@147,231",
       "rotation": 0,
@@ -20696,13 +20696,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2353,
+      "width": 16,
+      "x": 2352,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@148,231",
       "rotation": 0,
@@ -20710,13 +20710,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2369,
+      "width": 16,
+      "x": 2368,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@149,231",
       "rotation": 0,
@@ -20724,13 +20724,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2385,
+      "width": 16,
+      "x": 2384,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@150,231",
       "rotation": 0,
@@ -20738,13 +20738,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2401,
+      "width": 16,
+      "x": 2400,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@146,229",
       "rotation": 0,
@@ -20752,13 +20752,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2337,
+      "width": 16,
+      "x": 2336,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@147,229",
       "rotation": 0,
@@ -20766,13 +20766,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2353,
+      "width": 16,
+      "x": 2352,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@148,229",
       "rotation": 0,
@@ -20780,13 +20780,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2369,
+      "width": 16,
+      "x": 2368,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@149,229",
       "rotation": 0,
@@ -20794,13 +20794,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2385,
+      "width": 16,
+      "x": 2384,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@150,229",
       "rotation": 0,
@@ -20808,13 +20808,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2401,
+      "width": 16,
+      "x": 2400,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@151,231",
       "rotation": 0,
@@ -20822,13 +20822,13 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2417,
+      "width": 16,
+      "x": 2416,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@151,229",
       "rotation": 0,
@@ -20836,10 +20836,10 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2417,
+      "width": 16,
+      "x": 2416,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
       "depth": 16,
@@ -21164,7 +21164,7 @@
       "z": 3760
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@146,227",
       "rotation": 0,
@@ -21172,13 +21172,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2337,
+      "width": 16,
+      "x": 2336,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@147,227",
       "rotation": 0,
@@ -21186,13 +21186,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2353,
+      "width": 16,
+      "x": 2352,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@148,227",
       "rotation": 0,
@@ -21200,13 +21200,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2369,
+      "width": 16,
+      "x": 2368,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@149,227",
       "rotation": 0,
@@ -21214,13 +21214,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2385,
+      "width": 16,
+      "x": 2384,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@150,227",
       "rotation": 0,
@@ -21228,13 +21228,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2401,
+      "width": 16,
+      "x": 2400,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@151,227",
       "rotation": 0,
@@ -21242,13 +21242,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2417,
+      "width": 16,
+      "x": 2416,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@152,227",
       "rotation": 0,
@@ -21256,13 +21256,13 @@
       "tileZ": 227,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2433,
+      "width": 16,
+      "x": 2432,
       "y": 0,
-      "z": 3635
+      "z": 3632
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@152,229",
       "rotation": 0,
@@ -21270,13 +21270,13 @@
       "tileZ": 229,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2433,
+      "width": 16,
+      "x": 2432,
       "y": 0,
-      "z": 3667
+      "z": 3664
     },
     {
-      "depth": 10,
+      "depth": 16,
       "id": "sun-lounger",
       "key": "sun-lounger@152,231",
       "rotation": 0,
@@ -21284,10 +21284,10 @@
       "tileZ": 231,
       "tilesX": 1,
       "tilesZ": 1,
-      "width": 13,
-      "x": 2433,
+      "width": 16,
+      "x": 2432,
       "y": 0,
-      "z": 3699
+      "z": 3696
     },
     {
       "depth": 16,

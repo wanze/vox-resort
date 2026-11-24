@@ -1,12 +1,7 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-// Two layers of sand, level with the two-layer paving and its sandy path, so the
-// bench is no step up from the walk.
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 const PLANK = GROUND + 1;
 const HIPS = PLANK + 1;
@@ -24,12 +19,11 @@ export default defineModel({
   label: 'Bench',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   seats: SITTERS.map((x) => ({ x, y: HIPS, z: SEAT.z + 1, facing: 0 as const })),
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { teak } = PALETTE;
-
-    plinth(b, SLAB);
 
     for (const x of [SEAT.x + 1, SEAT.x1 - 1]) {
       box(x, x + 1, GROUND, GROUND, SEAT.z, SEAT.z1, teak.deep);

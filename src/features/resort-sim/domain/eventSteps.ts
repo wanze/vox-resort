@@ -323,6 +323,16 @@ function callLatecomers(resort: SimState, now: number, sand: () => readonly Audi
   }
 }
 
+function callOffTheSand(resort: SimState, run: EventRun, parties: readonly number[]): void {
+  const { guests, router } = resort;
+  const asked = new Set(run.parties);
+  const left = new Set(parties.filter((party) => !asked.has(party)));
+  if (left.size === 0) return;
+  for (let person = 0; person < guests.count; person++) {
+    if (left.has(guests.party[person]!)) router.callOffTheSand(person);
+  }
+}
+
 function callTheGroups(resort: SimState, now: number, sand: () => readonly AudienceParty[]): void {
   if (resort.bookings.accepted.length === 0) return;
   for (const run of resort.events.runs) {
@@ -330,6 +340,10 @@ function callTheGroups(resort: SimState, now: number, sand: () => readonly Audie
     if (group === undefined) continue;
     const booking = resort.bookings.accepted.find((each) => each.id === group);
     if (!booking) continue;
+    // A group's own event is the reason it came: a party lying on the beach gets up for it, and
+    // a hungry one comes all the same.
+    const own = eventKindOf(run.occurrence).private === true;
+    if (own && now < run.occurrence.start) callOffTheSand(resort, run, booking.staying);
     inviteTo(
       resort,
       run,
@@ -339,7 +353,7 @@ function callTheGroups(resort: SimState, now: number, sand: () => readonly Audie
           parties: booking.staying,
           guests: resort.guests,
           isFree: (person) => resort.router.isFree(person),
-          urgency: (person) => urgencyBesidesFun(resort, person),
+          urgency: (person) => (own ? 0 : urgencyBesidesFun(resort, person)),
           now,
         }),
       sand,

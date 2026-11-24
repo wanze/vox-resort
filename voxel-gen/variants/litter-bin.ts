@@ -1,10 +1,7 @@
 import { PALETTE } from '../palette.ts';
-import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
-
-const GROUND = SLAB.height;
+const GROUND = 0;
 
 // Whitewashed like the walls around it, so a bin by a villa reads as built in, not bought.
 const BODY = { x: 5, x1: 10, z: 5, z1: 10 } as const;
@@ -20,12 +17,11 @@ export default defineModel({
   label: 'Litter Bin B',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   binReach: 3,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { metal, stone, stucco } = PALETTE;
-
-    plinth(b, SLAB);
 
     box(FOOT.x, FOOT.x1, GROUND, GROUND, FOOT.z, FOOT.z1, stone.base);
     const top = GROUND + BODY_HEIGHT;

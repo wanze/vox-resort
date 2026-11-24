@@ -7,14 +7,12 @@ export default defineModel({
   sound: 'trees',
   scenery: 0.4,
   tiles: { x: 1, z: 1 },
+  onTerrain: true,
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
 
     const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
-      soil: 0x6f5636,
       trunk: 0x8a6a3f,
       trunkDark: 0x6f5330,
       frondA: 0x2f7d45,
@@ -22,19 +20,6 @@ export default defineModel({
       frondTip: 0x62b56f,
       coconut: 0x5a3f26,
     };
-
-    const N = 15;
-
-    box(0, N, 0, 1, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 1, 0, C.baseDark);
-      set(x, 1, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 1, z, C.baseDark);
-      set(N, 1, z, C.baseDark);
-    }
-    box(5, 10, 1, 1, 5, 10, C.soil);
 
     const topY = 40;
     let tx = 7;

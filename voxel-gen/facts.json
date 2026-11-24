@@ -1337,7 +1337,7 @@
         "binReach": 0,
         "mosaic": null,
         "width": 16,
-        "height": 7,
+        "height": 6,
         "depth": 2,
         "emissive": [],
         "water": [],
@@ -1348,9 +1348,47 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 128,
-        "dayVoxelCount": 128,
-        "dominantColor": 14997956,
+        "voxelCount": 54,
+        "dayVoxelCount": 54,
+        "dominantColor": 12234910,
+        "solidTops": [0],
+        "turnless": false
+      }
+    },
+    {
+      "family": "boardwalk-railing",
+      "model": {
+        "id": "boardwalk-railing",
+        "label": "Boardwalk Handrail",
+        "category": "grounds",
+        "tiles": {
+          "x": 1,
+          "z": 1
+        },
+        "groundDecides": true,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 16,
+        "height": 6,
+        "depth": 2,
+        "emissive": [],
+        "water": [],
+        "windows": [],
+        "lights": [],
+        "seats": [],
+        "placement": {},
+        "venue": null,
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 54,
+        "dayVoxelCount": 54,
+        "dominantColor": 7228459,
         "solidTops": [0],
         "turnless": false
       }
@@ -1444,7 +1482,7 @@
       "family": "stair-railing-left",
       "model": {
         "id": "stair-railing-left",
-        "label": "Stair Balustrade (Left)",
+        "label": "Stair Railing (Left)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1471,9 +1509,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 219,
-        "dayVoxelCount": 219,
-        "dominantColor": 12562055,
+        "voxelCount": 117,
+        "dayVoxelCount": 117,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }
@@ -1482,7 +1520,7 @@
       "family": "stair-railing-right",
       "model": {
         "id": "stair-railing-right",
-        "label": "Stair Balustrade (Right)",
+        "label": "Stair Railing (Right)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1509,9 +1547,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 219,
-        "dayVoxelCount": 219,
-        "dominantColor": 12562055,
+        "voxelCount": 117,
+        "dayVoxelCount": 117,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }
@@ -1596,7 +1634,7 @@
       "family": "ramp-foot-railing-left",
       "model": {
         "id": "ramp-foot-railing-left",
-        "label": "Ramp Balustrade (Foot, Left)",
+        "label": "Ramp Railing (Foot, Left)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1623,9 +1661,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 184,
-        "dayVoxelCount": 184,
-        "dominantColor": 14466709,
+        "voxelCount": 82,
+        "dayVoxelCount": 82,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }
@@ -1634,7 +1672,7 @@
       "family": "ramp-foot-railing-right",
       "model": {
         "id": "ramp-foot-railing-right",
-        "label": "Ramp Balustrade (Foot, Right)",
+        "label": "Ramp Railing (Foot, Right)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1661,9 +1699,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 184,
-        "dayVoxelCount": 184,
-        "dominantColor": 14466709,
+        "voxelCount": 82,
+        "dayVoxelCount": 82,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }
@@ -1672,7 +1710,7 @@
       "family": "ramp-head-railing-left",
       "model": {
         "id": "ramp-head-railing-left",
-        "label": "Ramp Balustrade (Head, Left)",
+        "label": "Ramp Railing (Head, Left)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1699,9 +1737,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 240,
-        "dayVoxelCount": 240,
-        "dominantColor": 14466709,
+        "voxelCount": 138,
+        "dayVoxelCount": 138,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }
@@ -1710,7 +1748,7 @@
       "family": "ramp-head-railing-right",
       "model": {
         "id": "ramp-head-railing-right",
-        "label": "Ramp Balustrade (Head, Right)",
+        "label": "Ramp Railing (Head, Right)",
         "category": "grounds",
         "tiles": {
           "x": 1,
@@ -1737,9 +1775,9 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 240,
-        "dayVoxelCount": 240,
-        "dominantColor": 14466709,
+        "voxelCount": 138,
+        "dayVoxelCount": 138,
+        "dominantColor": 12234910,
         "solidTops": [0],
         "turnless": false
       }

@@ -1,21 +1,11 @@
-import { PALETTE } from '../palette.ts';
-import { balustrade, rampTreadAt } from '../parts/flight.ts';
+import { postRailing, rampTreadAt, WHITE } from '../parts/flight.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
   id: 'ramp-foot-railing-right',
-  label: 'Ramp Balustrade (Foot, Right)',
+  label: 'Ramp Railing (Foot, Right)',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
   groundDecides: true,
-  build: (b: VoxelBuilder) =>
-    balustrade(
-      b,
-      (z) => rampTreadAt('foot', z),
-      {
-        wall: PALETTE.sand.base,
-        cap: PALETTE.stucco.base,
-      },
-      'right',
-    ),
+  build: (b: VoxelBuilder) => postRailing(b, (z) => rampTreadAt('foot', z), WHITE, 'right'),
 });

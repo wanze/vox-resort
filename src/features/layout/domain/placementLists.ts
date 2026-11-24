@@ -1,4 +1,5 @@
 import {
+  BOARDWALK_RAILING_ID,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,
@@ -19,6 +20,7 @@ export const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
 // baked as though they stood on the tile they only lean against.
 export const RAIL_IDS: ReadonlySet<string> = new Set([
   RAILING_ID,
+  BOARDWALK_RAILING_ID,
   PIER_RAILING_ID,
   KERB_ID,
   ...CLIMB_RAILING_IDS,

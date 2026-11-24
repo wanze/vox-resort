@@ -30,7 +30,7 @@ import {
   keepStyle,
   layoutResort,
   kerbedIfUnkerbed,
-  woodenClimbsOf,
+  woodOnTheDunesOf,
   type Placement,
   type ResortLayout,
   type StyleOf,
@@ -236,7 +236,7 @@ function plotOfWorld(world: SavedWorld, plan: ResortPlan): Plot {
   const { placements, props, tilesX, tilesZ } = world;
   const items = OBJECT_TYPES.map(layoutItemFor);
   const terrain = terrainFor(plan);
-  const { paths, rails: woodenRails } = woodenClimbsOf(world.paths, world.rails, items, (x, z) =>
+  const { paths, rails: woodenRails } = woodOnTheDunesOf(world.paths, world.rails, items, (x, z) =>
     terrain.surfaceOf(x, z),
   );
   const rails = kerbedIfUnkerbed(woodenRails, paths, items, terrain);

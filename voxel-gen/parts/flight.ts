@@ -15,7 +15,7 @@ const PAVING = {
   pavers: [0xc3b189, 0xb6a379, 0xcdbc95],
 } as const;
 
-// The stone balustrade's wall, so a flank reads as one wall from the ground to the cap.
+// Lighter than the grout, so the flank under the railing is one pale face rather than two tones.
 const STONE_FLANK: Color = 0xbfae87;
 
 const PAVING_FLIGHT: FlightColors = {
@@ -89,7 +89,7 @@ export interface RampFinish {
 
 const SLABS: RampFinish = {
   bank: PALETTE.stone.shade,
-  // The ramp balustrade's wall, as STONE_FLANK is the flight's.
+  // Pale for the same reason as STONE_FLANK: the grey bank read as a second material.
   flank: PALETTE.sand.base,
   surface: (x, row) => {
     const lane = Math.floor(x / SLAB.width);
@@ -112,50 +112,41 @@ export function ramp(b: VoxelBuilder, half: RampHalf, finish: RampFinish = SLABS
 
 const RAIL_HEIGHT = 4;
 
-const FLANK = 2;
-
 // Drawn flush, the buried footing would z-fight the paving's own flank. It cannot be left out:
 // voxelgen shifts a model onto its origin, which would drop the parapet.
 const BURIED_IN = 1;
 
-export interface BalustradeColors {
-  readonly wall: Color;
-  readonly cap: Color;
-}
-
 export type Flank = 'left' | 'right';
 
-// One flank, laid along the north edge as every edge rail is, so a wide climb is railed on its
+const POST_PITCH = 5;
+
+export interface RailingColors {
+  readonly post: Color;
+  readonly rail: Color;
+}
+
+export const TIMBER: RailingColors = { post: PALETTE.teak.shade, rail: PALETTE.teak.light };
+
+// The edge handrail's white, so a stone climb is railed like the path at its top.
+export const WHITE: RailingColors = { post: PALETTE.stucco.shade, rail: PALETTE.stucco.base };
+
+// Posts and rails rather than a wall, open so the flank shows the climb's own face under it. Laid
+// along the north edge as every edge rail is, one voxel thick, so a wide climb is railed on its
 // outer flanks only. Turned onto the left flank x runs up the climb, onto the right flank down it:
 // a mirror is not a quarter turn, so each flank is its own model.
-export function balustrade(
+export function postRailing(
   b: VoxelBuilder,
   treadAt: (z: number) => number,
-  colors: BalustradeColors,
+  colors: RailingColors,
   flank: Flank,
 ): void {
   for (let x = 0; x <= N; x++) {
     const tread = treadAt(flank === 'left' ? N - x : x);
     const footing = Math.min(N - BURIED_IN, Math.max(BURIED_IN, x));
-    b.box(x, x, tread + 1, tread + RAIL_HEIGHT - 1, 0, FLANK - 1, colors.wall);
-    b.box(x, x, tread + RAIL_HEIGHT, tread + RAIL_HEIGHT, 0, FLANK - 1, colors.cap);
-    b.box(footing, footing, 0, tread, BURIED_IN, FLANK - 1, colors.wall);
-  }
-}
-
-const POST_PITCH = 5;
-
-// Posts and rails in the bridges' timber rather than a wall: open, so the flank shows the climb's
-// own face under it. One voxel thick on the outer edge, as a bridge parapet is.
-export function timberRailing(b: VoxelBuilder, treadAt: (z: number) => number, flank: Flank): void {
-  const { teak } = PALETTE;
-  for (let x = 0; x <= N; x++) {
-    const tread = treadAt(flank === 'left' ? N - x : x);
-    const footing = Math.min(N - BURIED_IN, Math.max(BURIED_IN, x));
-    b.box(x, x, tread + 1, tread + 1, 0, 0, teak.shade);
-    if (x % POST_PITCH === 0) b.box(x, x, tread + 2, tread + RAIL_HEIGHT - 1, 0, 0, teak.shade);
-    b.box(x, x, tread + RAIL_HEIGHT, tread + RAIL_HEIGHT, 0, 0, teak.light);
+    b.box(x, x, tread + 1, tread + 1, 0, 0, colors.post);
+    if (x % POST_PITCH === 0) b.box(x, x, tread + 2, tread + RAIL_HEIGHT - 1, 0, 0, colors.post);
+    b.box(x, x, tread + RAIL_HEIGHT, tread + RAIL_HEIGHT, 0, 0, colors.rail);
     // Stops under the tread: nothing stands over it to hide a top face level with the tread's.
-    b.box(footing, footing, 0, tread - 1, BURIED_IN, BURIED_IN, teak.shade);
+    if (tread > 0) b.box(footing, footing, 0, tread - 1, BURIED_IN, BURIED_IN, colors.post);
   }
 }

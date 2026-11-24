@@ -110,6 +110,8 @@ const PEDALO_RENTAL_ID = 'pedalo-rental';
 
 export const RAILING_ID = 'railing';
 
+export const BOARDWALK_RAILING_ID = 'boardwalk-railing';
+
 export const PIER_RAILING_ID = 'pier-railing';
 
 export const KERB_ID = 'kerb';
@@ -128,8 +130,10 @@ const BOARDWALK_RAMP_FOOT_RAILING_RIGHT_ID = 'boardwalk-ramp-foot-railing-right'
 const BOARDWALK_RAMP_HEAD_RAILING_LEFT_ID = 'boardwalk-ramp-head-railing-left';
 const BOARDWALK_RAMP_HEAD_RAILING_RIGHT_ID = 'boardwalk-ramp-head-railing-right';
 
-// Laid instead of the stone piece where sand lies under the whole climb, decking at both its ends.
+// Laid instead of the stone piece on the dunes: a climb with sand under its whole length, decking
+// at both its ends, and the handrail along a boardwalk.
 export const WOODEN_IDS: ReadonlyMap<string, string> = new Map([
+  [RAILING_ID, BOARDWALK_RAILING_ID],
   [STAIRS_ID, BOARDWALK_STAIRS_ID],
   [RAMP_FOOT_ID, BOARDWALK_RAMP_FOOT_ID],
   [RAMP_HEAD_ID, BOARDWALK_RAMP_HEAD_ID],
@@ -180,6 +184,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   HEDGE_ID,
   BENCH_ID,
   RAILING_ID,
+  BOARDWALK_RAILING_ID,
   PIER_RAILING_ID,
   KERB_ID,
   ...CLIMB_RAILING_IDS,

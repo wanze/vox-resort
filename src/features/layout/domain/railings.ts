@@ -26,6 +26,7 @@ export type ClimbRailKind =
 export type RailKind =
   | ClimbRailKind
   | 'edge'
+  | 'deck-edge'
   | 'pier'
   | 'kerb'
   | 'span'
@@ -80,7 +81,11 @@ export function railsAt(
   const level = levelOf(tile.x, tile.z);
   // Pier rails carry a lantern, being walked out into the dark. Open water counts
   // as a drop: pier and sea are both at sea level, so the heights alone say nothing.
-  const kind: RailKind = isWater(tile.x, tile.z) ? 'pier' : 'edge';
+  const kind: RailKind = isWater(tile.x, tile.z)
+    ? 'pier'
+    : isDecked(tile.x, tile.z)
+      ? 'deck-edge'
+      : 'edge';
   const drops = CLIMBS.filter(({ dx, dz }) => {
     const beside = { x: tile.x + dx, z: tile.z + dz };
     if (isPaved(beside.x, beside.z)) return false;

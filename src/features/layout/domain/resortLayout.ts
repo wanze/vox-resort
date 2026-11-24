@@ -778,6 +778,7 @@ export function railModelsIn(items: readonly LayoutItem[]): RailModels {
     'ramp-head-left': byId.get(RAMP_HEAD_RAILING_LEFT_ID),
     'ramp-head-right': byId.get(RAMP_HEAD_RAILING_RIGHT_ID),
     edge: byId.get(RAILING_ID),
+    'deck-edge': wooden(RAILING_ID),
     // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
     pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
     kerb: byId.get(KERB_ID),
@@ -826,9 +827,9 @@ const STONE_CLIMBS: ReadonlyMap<string, ClimbKind> = new Map([
   [RAMP_HEAD_ID, 'ramp-head'],
 ]);
 
-// A world saved before wooden climbs existed has stone ones between its decking; swapped on load
-// as a fresh layout would lay them. The two are drawn to the same extents, so only the id changes.
-export function woodenClimbsOf(
+// A world saved before wooden climbs and handrails existed has stone ones on its dunes; swapped on
+// load as a fresh layout would lay them. The two are drawn to the same extents, so only the id changes.
+export function woodOnTheDunesOf(
   paths: readonly Placement[],
   rails: readonly Placement[],
   items: readonly LayoutItem[],
@@ -839,6 +840,7 @@ export function woodenClimbsOf(
   const wooden = new Set(
     paths
       .filter((path) => {
+        if (path.id === BOARDWALK_ID) return decked(path.tileX, path.tileZ);
         const kind = STONE_CLIMBS.get(path.id);
         const tile = { x: path.tileX, z: path.tileZ };
         return kind !== undefined && isDeckedClimb({ tile, rotation: path.rotation, kind }, decked);

@@ -64,6 +64,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'staircase',
   'stairs',
   'boardwalk-stairs',
+  'boardwalk-railing',
   'boardwalk-stair-railing-left',
   'boardwalk-stair-railing-right',
   'boardwalk-ramp-foot',

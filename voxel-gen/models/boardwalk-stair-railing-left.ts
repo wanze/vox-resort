@@ -1,4 +1,4 @@
-import { flightTreadAt, timberRailing } from '../parts/flight.ts';
+import { flightTreadAt, postRailing, TIMBER } from '../parts/flight.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
@@ -7,5 +7,5 @@ export default defineModel({
   category: 'grounds',
   tiles: { x: 1, z: 1 },
   groundDecides: true,
-  build: (b: VoxelBuilder) => timberRailing(b, flightTreadAt, 'left'),
+  build: (b: VoxelBuilder) => postRailing(b, flightTreadAt, TIMBER, 'left'),
 });

@@ -7,7 +7,7 @@ import {
   derivedKey,
   isPathNetworkConnected,
   kerbedIfUnkerbed,
-  woodenClimbsOf,
+  woodOnTheDunesOf,
   layoutResort,
   occupiedTiles,
   pathTilesFor,
@@ -1276,7 +1276,7 @@ describe('wooden climbs', () => {
   });
 
   it('turns a saved world’s stone climbs on the dunes to the wood a fresh layout lays', () => {
-    const loaded = woodenClimbsOf(
+    const loaded = woodOnTheDunesOf(
       layout.paths.map(inStone),
       layout.rails.map(inStone),
       types,
@@ -1289,6 +1289,6 @@ describe('wooden climbs', () => {
   it('leaves a world alone when the catalogue has no wooden climb', () => {
     const stone = layout.paths.map(inStone);
     const withoutWood = types.filter((type) => !STONE.has(type.id));
-    expect(woodenClimbsOf(stone, [], withoutWood, surfaceOf).paths).toEqual(stone);
+    expect(woodOnTheDunesOf(stone, [], withoutWood, surfaceOf).paths).toEqual(stone);
   });
 });

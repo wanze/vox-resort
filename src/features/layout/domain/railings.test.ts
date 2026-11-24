@@ -135,6 +135,25 @@ describe('railsAt', () => {
     ]);
   });
 
+  it('rails a drop beside decking with the wooden handrail', () => {
+    const paved = [
+      { x: 0, z: 1 },
+      { x: 1, z: 1 },
+      { x: 2, z: 1 },
+    ];
+    const rails = railsAt(
+      { x: 1, z: 1 },
+      pavedOf(paved),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      allSand,
+    );
+    expect(rails).toEqual([{ tile: { x: 1, z: 1 }, rotation: 2, kind: 'deck-edge' }]);
+  });
+
   it('guards a flight from decking to decking with the wooden balustrade', () => {
     const paved = [
       { x: 1, z: 1 },

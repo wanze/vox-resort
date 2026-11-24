@@ -1068,7 +1068,7 @@ describe('the hill a generated plot gets', () => {
     for (const set of SWEEP.filter((candidate) => candidate.tilesZ >= 100)) {
       const plan = planOf(set);
       const terrain = terrainFor(plan);
-      const { rails } = layoutResort(ITEMS, plan);
+      const rails = layoutResort(ITEMS, plan).rails.map(inStone);
       const columns = new Set(
         rails
           .filter(

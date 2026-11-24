@@ -8,6 +8,7 @@ import beach_shower from './beach-shower.ts';
 import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
+import boardwalk_railing from './boardwalk-railing.ts';
 import boardwalk_ramp_foot from './boardwalk-ramp-foot.ts';
 import boardwalk_ramp_foot_railing_left from './boardwalk-ramp-foot-railing-left.ts';
 import boardwalk_ramp_foot_railing_right from './boardwalk-ramp-foot-railing-right.ts';
@@ -107,6 +108,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   boardwalk_ramp_foot,
   boardwalk_ramp_head,
   railing,
+  boardwalk_railing,
   kerb,
   pier_railing,
   stair_railing_left,

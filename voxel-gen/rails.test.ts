@@ -10,6 +10,7 @@ const PAIRS: readonly (readonly [string, string])[] = [
   ['path', 'railing'],
   ['path', 'kerb'],
   ['boardwalk', 'railing'],
+  ['boardwalk', 'boardwalk-railing'],
   ['jetty', 'railing'],
   ['jetty', 'pier-railing'],
   ['bridge', 'bridge-railing'],

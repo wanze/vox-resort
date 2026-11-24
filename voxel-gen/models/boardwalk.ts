@@ -1,8 +1,9 @@
 // Exactly as tall as path.ts, so the two butt together without a step.
+import { DECK_BOARD_DEPTH, DECKING } from '../parts/decking.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 // Four-voxel boards: a plank every two voxels is a pattern the greedy mesher cannot merge.
-const BOARD_DEPTH = 4;
+const BOARD_DEPTH = DECK_BOARD_DEPTH;
 
 export default defineModel({
   id: 'boardwalk',
@@ -13,13 +14,8 @@ export default defineModel({
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
 
-    const C = {
-      joist: 0x6b563c,
-      boardA: 0xb98f5f,
-      boardB: 0xa87f52,
-      boardC: 0xc59a68,
-    };
-    const boards = [C.boardA, C.boardB, C.boardC];
+    const C = DECKING;
+    const boards = DECKING.boards;
 
     const N = 15;
 

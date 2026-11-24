@@ -14,6 +14,10 @@ const pavedOf = (tiles: readonly Tile[]) => {
 
 const ramps = (): boolean => false;
 
+const allSand = (): boolean => true;
+
+const sandBelowTheStep = (_x: number, z: number): boolean => z === 2;
+
 const sides = (rails: readonly RailTile[]): number[] => rails.map((rail) => rail.rotation);
 
 describe('railsAt', () => {
@@ -48,6 +52,78 @@ describe('railsAt', () => {
     expect(railsAt({ x: 1, z: 2 }, pavedOf([{ x: 1, z: 2 }]), bench)).toEqual([]);
   });
 
+  it('kerbs a path where open ground beside it stands at its own level', () => {
+    const paved = [
+      { x: 0, z: 1 },
+      { x: 1, z: 1 },
+      { x: 2, z: 1 },
+    ];
+    const flat = groundOf(['000', '000', '000']);
+    const rails = railsAt(
+      { x: 1, z: 1 },
+      pavedOf(paved),
+      flat,
+      undefined,
+      undefined,
+      undefined,
+      () => true,
+    );
+    expect(rails.map((rail) => rail.kind)).toEqual(['kerb', 'kerb']);
+    expect(sides(rails).toSorted()).toEqual([0, 2]);
+  });
+
+  it('rails the drop and kerbs the level side of one tile', () => {
+    const paved = [
+      { x: 0, z: 1 },
+      { x: 1, z: 1 },
+      { x: 2, z: 1 },
+    ];
+    const kinds = railsAt(
+      { x: 1, z: 1 },
+      pavedOf(paved),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      () => true,
+    )
+      .map((rail) => rail.kind)
+      .toSorted();
+    expect(kinds).toEqual(['edge', 'kerb']);
+  });
+
+  it('kerbs no paving the ground does not kerb, nor beside higher ground', () => {
+    const tile = { x: 1, z: 2 };
+    expect(railsAt(tile, pavedOf([tile]), groundOf(['000', '000', '000']))).toEqual([]);
+    const besideRise = railsAt(
+      tile,
+      pavedOf([tile]),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      () => true,
+    );
+    expect(besideRise.map((rail) => rail.kind)).toEqual(['kerb', 'kerb', 'kerb']);
+  });
+
+  it('kerbs neither flank of a flight', () => {
+    const paved = [
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ];
+    const rails = railsAt(
+      { x: 1, z: 2 },
+      pavedOf(paved),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      () => true,
+    );
+    expect(rails.some((rail) => rail.kind === 'kerb')).toBe(false);
+  });
+
   it('guards a flight up both flanks, each on the edge it stands along', () => {
     const paved = [
       { x: 1, z: 1 },
@@ -57,6 +133,35 @@ describe('railsAt', () => {
       { tile: { x: 1, z: 2 }, rotation: 1, kind: 'flight-left' },
       { tile: { x: 1, z: 2 }, rotation: 3, kind: 'flight-right' },
     ]);
+  });
+
+  it('guards a flight from decking to decking with the wooden balustrade', () => {
+    const paved = [
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ];
+    const rails = railsAt(
+      { x: 1, z: 2 },
+      pavedOf(paved),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      allSand,
+    );
+    expect(rails.map((rail) => rail.kind)).toEqual(['deck-flight-left', 'deck-flight-right']);
+    const climbingOff = railsAt(
+      { x: 1, z: 2 },
+      pavedOf(paved),
+      bench,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sandBelowTheStep,
+    );
+    expect(climbingOff.map((rail) => rail.kind)).toEqual(['flight-left', 'flight-right']);
   });
 
   it('turns the flanks with the climb, the left one a quarter turn on from it', () => {

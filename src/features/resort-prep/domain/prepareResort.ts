@@ -29,6 +29,8 @@ import {
 import {
   keepStyle,
   layoutResort,
+  kerbedIfUnkerbed,
+  woodenClimbsOf,
   type Placement,
   type ResortLayout,
   type StyleOf,
@@ -230,8 +232,14 @@ function layOut(
 // The layout and the lists are the same placements in the same order, as a fresh plot's are,
 // so the first build and every rebuild after an edit number nodes and seats alike. Each list is
 // an array of its own, since the edit mode pushes and splices the plot's.
-function plotOfWorld(world: SavedWorld): Plot {
-  const { placements, props, paths, rails, tilesX, tilesZ } = world;
+function plotOfWorld(world: SavedWorld, plan: ResortPlan): Plot {
+  const { placements, props, tilesX, tilesZ } = world;
+  const items = OBJECT_TYPES.map(layoutItemFor);
+  const terrain = terrainFor(plan);
+  const { paths, rails: woodenRails } = woodenClimbsOf(world.paths, world.rails, items, (x, z) =>
+    terrain.surfaceOf(x, z),
+  );
+  const rails = kerbedIfUnkerbed(woodenRails, paths, items, terrain);
   return {
     layout: { placements, props, paths, rails, tilesX, tilesZ },
     placements: [...placements],
@@ -315,7 +323,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const plan = planOf(request.source);
   const plot =
     request.source.kind === 'saved'
-      ? plotOfWorld(request.source.world)
+      ? plotOfWorld(request.source.world, plan)
       : layOut(plan, request.repeat, styleOfFor(request, plan), mosaicFor(request, plan));
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);

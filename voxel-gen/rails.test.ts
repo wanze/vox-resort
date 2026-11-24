@@ -8,6 +8,7 @@ import { buildModel, TILE_VOXELS, type VoxelModelSource } from './voxelgen.ts';
 // plane as the paving would z-fight. Bottom faces are culled and exempt.
 const PAIRS: readonly (readonly [string, string])[] = [
   ['path', 'railing'],
+  ['path', 'kerb'],
   ['boardwalk', 'railing'],
   ['jetty', 'railing'],
   ['jetty', 'pier-railing'],
@@ -109,12 +110,18 @@ describe('the parapets on a bridge ramp', () => {
 const FLANK_RAILS: readonly (readonly [string, string, Turn, (z: number) => number])[] = [
   ['stairs', 'stair-railing-left', 1, flightTreadAt],
   ['stairs', 'stair-railing-right', 3, flightTreadAt],
+  ['boardwalk-stairs', 'boardwalk-stair-railing-left', 1, flightTreadAt],
+  ['boardwalk-stairs', 'boardwalk-stair-railing-right', 3, flightTreadAt],
   ['staircase', 'stair-railing-left', 1, flightTreadAt],
   ['staircase', 'stair-railing-right', 3, flightTreadAt],
   ['ramp-foot', 'ramp-foot-railing-left', 1, (z) => rampTreadAt('foot', z)],
   ['ramp-foot', 'ramp-foot-railing-right', 3, (z) => rampTreadAt('foot', z)],
   ['ramp-head', 'ramp-head-railing-left', 1, (z) => rampTreadAt('head', z)],
   ['ramp-head', 'ramp-head-railing-right', 3, (z) => rampTreadAt('head', z)],
+  ['boardwalk-ramp-foot', 'boardwalk-ramp-foot-railing-left', 1, (z) => rampTreadAt('foot', z)],
+  ['boardwalk-ramp-foot', 'boardwalk-ramp-foot-railing-right', 3, (z) => rampTreadAt('foot', z)],
+  ['boardwalk-ramp-head', 'boardwalk-ramp-head-railing-left', 1, (z) => rampTreadAt('head', z)],
+  ['boardwalk-ramp-head', 'boardwalk-ramp-head-railing-right', 3, (z) => rampTreadAt('head', z)],
 ];
 
 describe('the balustrades up the flanks of a climb', () => {

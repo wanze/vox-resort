@@ -14,6 +14,9 @@ import {
   RAMP_HEAD_ID,
   STAIRCASE_ID,
   STAIRS_ID,
+  BOARDWALK_STAIRS_ID,
+  BOARDWALK_RAMP_FOOT_ID,
+  BOARDWALK_RAMP_HEAD_ID,
 } from '../../layout/domain/resortPlan';
 import type { Rotation } from '../../layout/domain/rotation';
 import { tileKey } from '../../layout/domain/tileKey';
@@ -454,9 +457,12 @@ function spansAmong(
 
 const CLIMB_IDS: ReadonlyMap<string, ClimbKind> = new Map([
   [STAIRS_ID, 'stairs'],
+  [BOARDWALK_STAIRS_ID, 'stairs'],
   [STAIRCASE_ID, 'stairs'],
   [RAMP_FOOT_ID, 'ramp-foot'],
   [RAMP_HEAD_ID, 'ramp-head'],
+  [BOARDWALK_RAMP_FOOT_ID, 'ramp-foot'],
+  [BOARDWALK_RAMP_HEAD_ID, 'ramp-head'],
 ]);
 
 const towards = (rotation: Rotation) => CLIMBS.find((climb) => climb.rotation === rotation)!;

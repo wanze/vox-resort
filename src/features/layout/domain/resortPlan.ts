@@ -65,10 +65,14 @@ export const BOARDWALK_ID = 'boardwalk';
 
 export const STAIRS_ID = 'stairs';
 
+export const BOARDWALK_STAIRS_ID = 'boardwalk-stairs';
+
 export const STAIRCASE_ID = 'staircase';
 
 export const RAMP_FOOT_ID = 'ramp-foot';
 export const RAMP_HEAD_ID = 'ramp-head';
+export const BOARDWALK_RAMP_FOOT_ID = 'boardwalk-ramp-foot';
+export const BOARDWALK_RAMP_HEAD_ID = 'boardwalk-ramp-head';
 
 export const JETTY_ID = 'jetty';
 
@@ -76,13 +80,19 @@ export const BRIDGE_ID = 'bridge';
 
 export const BRIDGE_RAMP_ID = 'bridge-ramp';
 
+// Paving a guest walks across level, not up or over.
+export const FLAT_PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, ...MOSAIC_IDS]);
+
 export const PAVING_IDS: ReadonlySet<string> = new Set([
   PATH_ID,
   BOARDWALK_ID,
   STAIRS_ID,
+  BOARDWALK_STAIRS_ID,
   STAIRCASE_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
+  BOARDWALK_RAMP_FOOT_ID,
+  BOARDWALK_RAMP_HEAD_ID,
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
@@ -102,21 +112,48 @@ export const RAILING_ID = 'railing';
 
 export const PIER_RAILING_ID = 'pier-railing';
 
+export const KERB_ID = 'kerb';
+
 export const STAIR_RAILING_LEFT_ID = 'stair-railing-left';
 export const STAIR_RAILING_RIGHT_ID = 'stair-railing-right';
+const BOARDWALK_STAIR_RAILING_LEFT_ID = 'boardwalk-stair-railing-left';
+const BOARDWALK_STAIR_RAILING_RIGHT_ID = 'boardwalk-stair-railing-right';
 
 export const RAMP_FOOT_RAILING_LEFT_ID = 'ramp-foot-railing-left';
 export const RAMP_FOOT_RAILING_RIGHT_ID = 'ramp-foot-railing-right';
 export const RAMP_HEAD_RAILING_LEFT_ID = 'ramp-head-railing-left';
 export const RAMP_HEAD_RAILING_RIGHT_ID = 'ramp-head-railing-right';
+const BOARDWALK_RAMP_FOOT_RAILING_LEFT_ID = 'boardwalk-ramp-foot-railing-left';
+const BOARDWALK_RAMP_FOOT_RAILING_RIGHT_ID = 'boardwalk-ramp-foot-railing-right';
+const BOARDWALK_RAMP_HEAD_RAILING_LEFT_ID = 'boardwalk-ramp-head-railing-left';
+const BOARDWALK_RAMP_HEAD_RAILING_RIGHT_ID = 'boardwalk-ramp-head-railing-right';
+
+// Laid instead of the stone piece where sand lies under the whole climb, decking at both its ends.
+export const WOODEN_IDS: ReadonlyMap<string, string> = new Map([
+  [STAIRS_ID, BOARDWALK_STAIRS_ID],
+  [RAMP_FOOT_ID, BOARDWALK_RAMP_FOOT_ID],
+  [RAMP_HEAD_ID, BOARDWALK_RAMP_HEAD_ID],
+  [STAIR_RAILING_LEFT_ID, BOARDWALK_STAIR_RAILING_LEFT_ID],
+  [STAIR_RAILING_RIGHT_ID, BOARDWALK_STAIR_RAILING_RIGHT_ID],
+  [RAMP_FOOT_RAILING_LEFT_ID, BOARDWALK_RAMP_FOOT_RAILING_LEFT_ID],
+  [RAMP_FOOT_RAILING_RIGHT_ID, BOARDWALK_RAMP_FOOT_RAILING_RIGHT_ID],
+  [RAMP_HEAD_RAILING_LEFT_ID, BOARDWALK_RAMP_HEAD_RAILING_LEFT_ID],
+  [RAMP_HEAD_RAILING_RIGHT_ID, BOARDWALK_RAMP_HEAD_RAILING_RIGHT_ID],
+]);
 
 export const CLIMB_RAILING_IDS: readonly string[] = [
   STAIR_RAILING_LEFT_ID,
   STAIR_RAILING_RIGHT_ID,
+  BOARDWALK_STAIR_RAILING_LEFT_ID,
+  BOARDWALK_STAIR_RAILING_RIGHT_ID,
   RAMP_FOOT_RAILING_LEFT_ID,
   RAMP_FOOT_RAILING_RIGHT_ID,
   RAMP_HEAD_RAILING_LEFT_ID,
   RAMP_HEAD_RAILING_RIGHT_ID,
+  BOARDWALK_RAMP_FOOT_RAILING_LEFT_ID,
+  BOARDWALK_RAMP_FOOT_RAILING_RIGHT_ID,
+  BOARDWALK_RAMP_HEAD_RAILING_LEFT_ID,
+  BOARDWALK_RAMP_HEAD_RAILING_RIGHT_ID,
 ];
 
 export const BRIDGE_RAILING_ID = 'bridge-railing';
@@ -128,9 +165,12 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   PATH_ID,
   BOARDWALK_ID,
   STAIRS_ID,
+  BOARDWALK_STAIRS_ID,
   STAIRCASE_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
+  BOARDWALK_RAMP_FOOT_ID,
+  BOARDWALK_RAMP_HEAD_ID,
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
@@ -141,6 +181,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   BENCH_ID,
   RAILING_ID,
   PIER_RAILING_ID,
+  KERB_ID,
   ...CLIMB_RAILING_IDS,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,

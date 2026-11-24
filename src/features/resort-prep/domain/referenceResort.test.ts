@@ -11,7 +11,20 @@ import { referenceWorldOf } from './referenceResort';
 import { planOfWorld } from './savedWorld';
 
 // Append-only: a new model goes onto the reference resort, or onto this list on purpose.
-const NOT_IN_REFERENCE: readonly string[] = [];
+// Kerbs and wooden climbs are laid when a world loads, not stored in the fixture until it is
+// next refreshed.
+const NOT_IN_REFERENCE: readonly string[] = [
+  'boardwalk-stairs',
+  'boardwalk-ramp-foot',
+  'boardwalk-ramp-head',
+  'kerb',
+  'boardwalk-stair-railing-left',
+  'boardwalk-stair-railing-right',
+  'boardwalk-ramp-foot-railing-left',
+  'boardwalk-ramp-foot-railing-right',
+  'boardwalk-ramp-head-railing-left',
+  'boardwalk-ramp-head-railing-right',
+];
 
 const world = referenceWorldOf(json);
 const plan = planOfWorld(world);

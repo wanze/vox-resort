@@ -8,6 +8,15 @@ import beach_shower from './beach-shower.ts';
 import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
+import boardwalk_ramp_foot from './boardwalk-ramp-foot.ts';
+import boardwalk_ramp_foot_railing_left from './boardwalk-ramp-foot-railing-left.ts';
+import boardwalk_ramp_foot_railing_right from './boardwalk-ramp-foot-railing-right.ts';
+import boardwalk_ramp_head from './boardwalk-ramp-head.ts';
+import boardwalk_ramp_head_railing_left from './boardwalk-ramp-head-railing-left.ts';
+import boardwalk_ramp_head_railing_right from './boardwalk-ramp-head-railing-right.ts';
+import boardwalk_stair_railing_left from './boardwalk-stair-railing-left.ts';
+import boardwalk_stair_railing_right from './boardwalk-stair-railing-right.ts';
+import boardwalk_stairs from './boardwalk-stairs.ts';
 import bridge from './bridge.ts';
 import bridge_ramp from './bridge-ramp.ts';
 import bridge_ramp_railing_left from './bridge-ramp-railing-left.ts';
@@ -31,6 +40,7 @@ import hotel from './hotel.ts';
 import house from './house.ts';
 import icecream from './icecream.ts';
 import jetty from './jetty.ts';
+import kerb from './kerb.ts';
 import kids_club from './kids-club.ts';
 import lifeguard_tower from './lifeguard-tower.ts';
 import litter_bin from './litter-bin.ts';
@@ -89,18 +99,28 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   bridge,
   bridge_ramp,
   stairs,
+  boardwalk_stairs,
   staircase,
   ...MOSAIC_MODELS,
   ramp_foot,
   ramp_head,
+  boardwalk_ramp_foot,
+  boardwalk_ramp_head,
   railing,
+  kerb,
   pier_railing,
   stair_railing_left,
   stair_railing_right,
+  boardwalk_stair_railing_left,
+  boardwalk_stair_railing_right,
   ramp_foot_railing_left,
   ramp_foot_railing_right,
   ramp_head_railing_left,
   ramp_head_railing_right,
+  boardwalk_ramp_foot_railing_left,
+  boardwalk_ramp_foot_railing_right,
+  boardwalk_ramp_head_railing_left,
+  boardwalk_ramp_head_railing_right,
   bridge_railing,
   bridge_ramp_railing_left,
   bridge_ramp_railing_right,

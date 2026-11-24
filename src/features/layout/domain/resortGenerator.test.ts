@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { layoutResort, streetTiles } from './resortLayout';
+import { layoutResort, streetTiles, type Placement } from './resortLayout';
 import { tileKey } from './tileKey';
 import {
   BOARDWALK_ID,
@@ -12,11 +12,13 @@ import {
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
+  KERB_ID,
   RAILING_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
   STAIR_RAILING_LEFT_ID,
   STAIRS_ID,
+  WOODEN_IDS,
   type Plaza,
 } from './resortPlan';
 import { elevationFor, levelAt, maxLevelOf, raisedTilesOf } from './elevation';
@@ -42,6 +44,11 @@ import {
   type GeneratorType,
   type ResortParams,
 } from './resortGenerator';
+
+const STONE_OF = new Map([...WOODEN_IDS].map(([stone, wood]) => [wood, stone]));
+
+// Wood or stone is the ground's say, not the climb's: these read only which climb was laid.
+const inStone = (tile: Placement): Placement => ({ ...tile, id: STONE_OF.get(tile.id) ?? tile.id });
 
 const TYPES: GeneratorType[] = ORIGINAL_TYPES.map((type) => ({
   id: type.id,
@@ -445,7 +452,7 @@ describe('the shore a generated plot gets', () => {
     const shore = shoreFor(plan)!;
     const elevation = elevationFor(plan)!;
     const terrain = terrainFor(plan);
-    const { paths } = layoutResort(ITEMS, plan);
+    const paths = layoutResort(ITEMS, plan).paths.map(inStone);
     const paved = new Set(paths.map((tile) => `${tile.tileX},${tile.tileZ}`));
     const heads = new Set(
       paths.filter((tile) => tile.id === RAMP_HEAD_ID).map((tile) => `${tile.tileX},${tile.tileZ}`),
@@ -1050,8 +1057,9 @@ describe('the hill a generated plot gets', () => {
     const terrain = terrainFor(plan);
     const offDune = rails.filter(
       (rail) =>
-        terrain.surfaceOf(rail.tileX, rail.tileZ) !== 'sand' ||
-        terrain.levelOf(rail.tileX, rail.tileZ) !== 3,
+        rail.id !== KERB_ID &&
+        (terrain.surfaceOf(rail.tileX, rail.tileZ) !== 'sand' ||
+          terrain.levelOf(rail.tileX, rail.tileZ) !== 3),
     );
     expect(offDune.length).toBeLessThan(paths.length / 6);
   });
@@ -1079,7 +1087,7 @@ describe('the hill a generated plot gets', () => {
     for (const seed of [1, 2, 3]) {
       const plan = generateResort(TYPES, params({ seed }));
       const terrain = terrainFor(plan);
-      const { paths } = layoutResort(ITEMS, plan);
+      const paths = layoutResort(ITEMS, plan).paths.map(inStone);
       const onDune = paths.filter(
         (tile) =>
           terrain.surfaceOf(tile.tileX, tile.tileZ) === 'sand' &&

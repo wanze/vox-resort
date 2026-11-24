@@ -14,11 +14,13 @@ import {
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,
   DERIVED_IDS,
+  FLAT_PAVING_IDS,
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
   PATH_ID,
   PIER_RAILING_ID,
+  KERB_ID,
   RAILING_ID,
   RAMP_FOOT_ID,
   RAMP_FOOT_RAILING_LEFT_ID,
@@ -29,6 +31,7 @@ import {
   STAIR_RAILING_LEFT_ID,
   STAIR_RAILING_RIGHT_ID,
   STAIRS_ID,
+  WOODEN_IDS,
   type Bend,
   type PathEdge,
   type PathNode,
@@ -39,13 +42,13 @@ import type { Ground } from './ground';
 import type { Terrain } from './terrain';
 import { terrainFor } from './terrain';
 import { levelHeight, straddledTile, type LevelProvider } from './elevation';
-import { climbTilesFor, type ClimbKind } from './climbs';
+import { climbTilesFor, isDeckedClimb, type ClimbKind, type ClimbTile } from './climbs';
 import { CLIMBS, type PavedProvider } from './stairs';
-import { railTilesFor, type RailKind, type RailTile } from './railings';
+import { kerbsAt, railTilesFor, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
 import { rotateExtent, ROTATIONS, type Extent, type Rotation } from './rotation';
-import { tileKey } from './tileKey';
+import { pavedLookup, tileKey } from './tileKey';
 
 const LAMP_SPACING = 5;
 
@@ -738,13 +741,38 @@ function climbItemsIn(byId: ReadonlyMap<string, LayoutItem>): ClimbItems {
   };
 }
 
+function climbItemFor(
+  climb: ClimbTile,
+  climbItems: ClimbItems,
+  isDecked: PavedProvider,
+  byId: ReadonlyMap<string, LayoutItem>,
+): LayoutItem | undefined {
+  const stone = climbItems[climb.kind];
+  return stone && isDeckedClimb(climb, isDecked) ? inWoodWherePossible(byId, stone.id) : stone;
+}
+
 export type RailModels = { readonly [kind in RailKind]: LayoutItem | undefined };
+
+// The stone piece where the catalogue has no wooden one, so the climb is still walled.
+function inWoodWherePossible(
+  byId: ReadonlyMap<string, LayoutItem>,
+  id: string,
+): LayoutItem | undefined {
+  return byId.get(WOODEN_IDS.get(id) ?? id) ?? byId.get(id);
+}
 
 export function railModelsIn(items: readonly LayoutItem[]): RailModels {
   const byId = new Map(items.map((item) => [item.id, item]));
+  const wooden = (id: string): LayoutItem | undefined => inWoodWherePossible(byId, id);
   return {
     'flight-left': byId.get(STAIR_RAILING_LEFT_ID),
     'flight-right': byId.get(STAIR_RAILING_RIGHT_ID),
+    'deck-flight-left': wooden(STAIR_RAILING_LEFT_ID),
+    'deck-flight-right': wooden(STAIR_RAILING_RIGHT_ID),
+    'deck-ramp-foot-left': wooden(RAMP_FOOT_RAILING_LEFT_ID),
+    'deck-ramp-foot-right': wooden(RAMP_FOOT_RAILING_RIGHT_ID),
+    'deck-ramp-head-left': wooden(RAMP_HEAD_RAILING_LEFT_ID),
+    'deck-ramp-head-right': wooden(RAMP_HEAD_RAILING_RIGHT_ID),
     'ramp-foot-left': byId.get(RAMP_FOOT_RAILING_LEFT_ID),
     'ramp-foot-right': byId.get(RAMP_FOOT_RAILING_RIGHT_ID),
     'ramp-head-left': byId.get(RAMP_HEAD_RAILING_LEFT_ID),
@@ -752,10 +780,79 @@ export function railModelsIn(items: readonly LayoutItem[]): RailModels {
     edge: byId.get(RAILING_ID),
     // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
     pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
+    kerb: byId.get(KERB_ID),
     span: byId.get(BRIDGE_RAILING_ID),
     'ramp-left': byId.get(BRIDGE_RAMP_RAILING_LEFT_ID),
     'ramp-right': byId.get(BRIDGE_RAMP_RAILING_RIGHT_ID),
   };
+}
+
+// Only paving on grass: a boardwalk is laid on the sand it would be kerbed against.
+export function kerbedOn(surfaceOf: (tileX: number, tileZ: number) => Ground): PavedProvider {
+  return (tileX, tileZ) => surfaceOf(tileX, tileZ) === 'grass';
+}
+
+// Paving on sand is decking, so a flight there is asked of the ground as the decking is.
+export function deckedOn(surfaceOf: (tileX: number, tileZ: number) => Ground): PavedProvider {
+  return (tileX, tileZ) => surfaceOf(tileX, tileZ) === 'sand';
+}
+
+// A world saved before kerbs existed is kerbed on load. Read off the paving it was saved with, as a
+// saved world keeps no record of which climbs it chose ramps for.
+export function kerbedIfUnkerbed(
+  rails: readonly Placement[],
+  paths: readonly Placement[],
+  items: readonly LayoutItem[],
+  terrain: Pick<Terrain, 'levelOf' | 'surfaceOf'>,
+): readonly Placement[] {
+  const models = railModelsIn(items);
+  if (!models.kerb || rails.some((rail) => rail.id === KERB_ID)) return rails;
+  const levelOf: LevelProvider = (tileX, tileZ) => terrain.levelOf(tileX, tileZ);
+  const isWater = (tileX: number, tileZ: number): boolean =>
+    terrain.surfaceOf(tileX, tileZ) === 'water';
+  const isPaved = pavedLookup(paths.map((path) => ({ x: path.tileX, z: path.tileZ })));
+  const kerbs = paths
+    .filter(
+      (path) =>
+        FLAT_PAVING_IDS.has(path.id) && terrain.surfaceOf(path.tileX, path.tileZ) === 'grass',
+    )
+    .flatMap((path) => kerbsAt({ x: path.tileX, z: path.tileZ }, isPaved, levelOf, isWater));
+  return [...rails, ...railPlacementsFor(models, kerbs, levelOf)];
+}
+
+const STONE_CLIMBS: ReadonlyMap<string, ClimbKind> = new Map([
+  [STAIRS_ID, 'stairs'],
+  [RAMP_FOOT_ID, 'ramp-foot'],
+  [RAMP_HEAD_ID, 'ramp-head'],
+]);
+
+// A world saved before wooden climbs existed has stone ones between its decking; swapped on load
+// as a fresh layout would lay them. The two are drawn to the same extents, so only the id changes.
+export function woodenClimbsOf(
+  paths: readonly Placement[],
+  rails: readonly Placement[],
+  items: readonly LayoutItem[],
+  surfaceOf: (tileX: number, tileZ: number) => Ground,
+): { readonly paths: readonly Placement[]; readonly rails: readonly Placement[] } {
+  const ids = new Set(items.map((item) => item.id));
+  const decked = deckedOn(surfaceOf);
+  const wooden = new Set(
+    paths
+      .filter((path) => {
+        const kind = STONE_CLIMBS.get(path.id);
+        const tile = { x: path.tileX, z: path.tileZ };
+        return kind !== undefined && isDeckedClimb({ tile, rotation: path.rotation, kind }, decked);
+      })
+      .map((path) => tileKey(path.tileX, path.tileZ)),
+  );
+  if (wooden.size === 0) return { paths, rails };
+  const swap = (placement: Placement): Placement => {
+    const id = WOODEN_IDS.get(placement.id);
+    if (id === undefined || !ids.has(id)) return placement;
+    if (!wooden.has(tileKey(placement.tileX, placement.tileZ))) return placement;
+    return { ...placement, id, key: placement.key.replace(`${placement.id}@`, `${id}@`) };
+  };
+  return { paths: paths.map(swap), rails: rails.map(swap) };
 }
 
 // Shared with the pointer, so a rail drawn by hand does not land a voxel off the one beside it.
@@ -842,10 +939,11 @@ export function layoutResort(
   const spans = new Map(
     spanTilesFor(paved, raised).map((span) => [tileKey(span.tile.x, span.tile.z), span]),
   );
+  const isDecked = deckedOn(surfaceOf);
   const paths = paved.map((tile) => {
     const span = spans.get(tileKey(tile.x, tile.z));
     const found = span ? undefined : climbs.get(tileKey(tile.x, tile.z));
-    const climbItem = found && climbItems[found.kind];
+    const climbItem = found && climbItemFor(found, climbItems, isDecked, byId);
     const paving = span
       ? span.kind === 'ramp'
         ? bridgeRamp
@@ -871,7 +969,7 @@ export function layoutResort(
   // alone would say there was nothing to fall into.
   const rails = railPlacementsFor(
     railModelsIn(items),
-    railTilesFor(paved, levelOf, overWater, raised, wantsStairs),
+    railTilesFor(paved, levelOf, overWater, raised, wantsStairs, kerbedOn(surfaceOf), isDecked),
     levelOf,
   );
 

@@ -9,7 +9,13 @@ import { PAVING_IDS } from '../../layout/domain/resortPlan';
 import { groundTakes } from '../../layout/domain/placementGround';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
-import { CLIMB_REACH, climbKindAt, type ClimbKind } from '../../layout/domain/climbs';
+import {
+  CLIMB_REACH,
+  climbKindAt,
+  isDeckedClimb,
+  type ClimbKind,
+  type ClimbTile,
+} from '../../layout/domain/climbs';
 import { spanAt, type SpanProvider } from '../../layout/domain/spans';
 import { borderedSides, type MosaicKit } from '../../layout/domain/mosaic';
 import type { Rotation } from '../../layout/domain/rotation';
@@ -46,6 +52,8 @@ export interface PavingRules {
   readonly bridge: LayoutItem | null;
   readonly bridgeRamp: LayoutItem | null;
   readonly stairs: LayoutItem | null;
+  // Keyed by the stone piece it stands in for, where sand lies under the whole climb.
+  readonly inWood: ReadonlyMap<string, LayoutItem>;
   readonly staircase: LayoutItem | null;
   readonly rampFoot: LayoutItem | null;
   readonly rampHead: LayoutItem | null;
@@ -75,10 +83,16 @@ export const wantsStairsOf =
     rules.isWater(tileX, tileZ) ||
     isStaircase(rules.pavedWith(tileX, tileZ), rules);
 
-function climbItemOf(kind: ClimbKind, chosen: boolean, rules: PavingRules): LayoutItem | null {
+function stoneItemOf(kind: ClimbKind, chosen: boolean, rules: PavingRules): LayoutItem | null {
   if (kind === 'ramp-foot') return rules.rampFoot;
   if (kind === 'ramp-head') return rules.rampHead;
   return chosen ? rules.staircase : rules.stairs;
+}
+
+function climbItemOf(climb: ClimbTile, chosen: boolean, rules: PavingRules): LayoutItem | null {
+  const stone = stoneItemOf(climb.kind, chosen, rules);
+  if (!stone || !isDeckedClimb(climb, rules.isSand)) return stone;
+  return rules.inWood.get(stone.id) ?? stone;
 }
 
 function climbOn(
@@ -89,7 +103,7 @@ function climbOn(
   wantsStairs: PavedProvider,
 ): Paving | null {
   const climb = climbKindAt(tile, isPaved, rules.levelOf, wantsStairs);
-  const item = climb && climbItemOf(climb.kind, chosen, rules);
+  const item = climb && climbItemOf(climb, chosen, rules);
   return item ? { item, rotation: climb.rotation } : null;
 }
 
@@ -158,7 +172,9 @@ export function repaves(
 }
 
 export function fellBackToStairs(laid: Paving, rules: PavingRules): boolean {
-  return laid.item.id === rules.stairs?.id && rules.rampFoot !== null && rules.rampHead !== null;
+  const stairs = rules.stairs && (rules.inWood.get(rules.stairs.id) ?? rules.stairs);
+  const flight = laid.item.id === rules.stairs?.id || laid.item.id === stairs?.id;
+  return flight && rules.rampFoot !== null && rules.rampHead !== null;
 }
 
 // One place, so pavingAt and standsOn cannot drift apart and stand a bridge on ground that refuses it.
@@ -187,7 +203,13 @@ export interface Relaid {
 }
 
 const CLIMB_PIECES = (rules: PavingRules): ReadonlySet<string | undefined> =>
-  new Set([rules.stairs?.id, rules.staircase?.id, rules.rampFoot?.id, rules.rampHead?.id]);
+  new Set([
+    rules.stairs?.id,
+    rules.staircase?.id,
+    rules.rampFoot?.id,
+    rules.rampHead?.id,
+    ...[...rules.inWood.values()].map((item) => item.id),
+  ]);
 
 const SPAN = 2 * CLIMB_REACH + 1;
 

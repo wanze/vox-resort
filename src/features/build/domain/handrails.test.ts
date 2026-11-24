@@ -72,6 +72,8 @@ const rules = (parts: Partial<HandrailRules> = {}): HandrailRules => ({
   isWater: () => false,
   isSpan: () => false,
   wantsStairs: () => true,
+  isKerbed: () => false,
+  isDecked: () => false,
   models: railModelsIn(CATALOGUE),
   standing: () => [],
   ...parts,

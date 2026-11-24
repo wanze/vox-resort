@@ -15,20 +15,43 @@ const PAVING = {
   pavers: [0xc3b189, 0xb6a379, 0xcdbc95],
 } as const;
 
+// The stone balustrade's wall, so a flank reads as one wall from the ground to the cap.
+const STONE_FLANK: Color = 0xbfae87;
+
+const PAVING_FLIGHT: FlightColors = {
+  body: PAVING.grout,
+  flank: STONE_FLANK,
+  treads: PAVING.pavers,
+};
+
 const N = TILE_VOXELS - 1;
 
 const TREADS = LEVEL_VOXELS;
 
 const GOING = TILE_VOXELS / TREADS;
 
+export interface FlightColors {
+  readonly body: Color;
+  // The outer face under the treads, the one seen from beside the climb.
+  readonly flank: Color;
+  readonly treads: readonly Color[];
+}
+
+function flanks(b: VoxelBuilder, top: number, z0: number, z1: number, color: Color): void {
+  if (top <= 0) return;
+  b.box(0, 0, 0, top - 1, z0, z1, color);
+  b.box(N, N, 0, top - 1, z0, z1, color);
+}
+
 // The lowest tread is one voxel above path.ts's slab; each tread's exposed south face is the riser.
-export function flight(b: VoxelBuilder): void {
+export function flight(b: VoxelBuilder, colors: FlightColors = PAVING_FLIGHT): void {
   for (let step = 0; step < TREADS; step++) {
     const top = flightTreadAt(step * GOING);
     const z0 = step * GOING;
     const z1 = z0 + GOING - 1;
-    b.box(0, N, 0, top - 1, z0, z1, PAVING.grout);
-    b.box(0, N, top, top, z0, z1, PAVING.pavers[step % PAVING.pavers.length]!);
+    b.box(0, N, 0, top - 1, z0, z1, colors.body);
+    flanks(b, top, z0, z1, colors.flank);
+    b.box(0, N, top, top, z0, z1, colors.treads[step % colors.treads.length]!);
   }
 }
 
@@ -47,7 +70,7 @@ function rampRow(half: RampHalf, z: number): number {
   return (half === 'head' ? TILE_VOXELS : 0) + N - z;
 }
 
-const courseOf = (row: number): number => Math.floor((row + RAMP_GOING / 2) / RAMP_GOING);
+export const courseOf = (row: number): number => Math.floor((row + RAMP_GOING / 2) / RAMP_GOING);
 
 export function rampTreadAt(half: RampHalf, z: number): number {
   return PAVING_VOXELS - 1 + courseOf(rampRow(half, z));
@@ -57,19 +80,33 @@ export function rampTreadAt(half: RampHalf, z: number): number {
 // ramp where a course steps up made every riser read as a stair.
 const SLAB = { width: 8, length: 8 } as const;
 
-export function ramp(b: VoxelBuilder, half: RampHalf): void {
-  const bank: Color = PALETTE.stone.shade;
+export interface RampFinish {
+  readonly bank: Color;
+  readonly flank: Color;
+  // The colour of one voxel of the walking surface, counted along the climb across both tiles.
+  readonly surface: (x: number, row: number) => Color;
+}
+
+const SLABS: RampFinish = {
+  bank: PALETTE.stone.shade,
+  // The ramp balustrade's wall, as STONE_FLANK is the flight's.
+  flank: PALETTE.sand.base,
+  surface: (x, row) => {
+    const lane = Math.floor(x / SLAB.width);
+    const along = row + (lane % 2) * (SLAB.length / 2);
+    const isGrout = x % SLAB.width === 0 || along % SLAB.length === 0;
+    const slab = Math.floor(along / SLAB.length) + lane;
+    return isGrout ? PAVING.grout : PAVING.pavers[slab % PAVING.pavers.length]!;
+  },
+};
+
+export function ramp(b: VoxelBuilder, half: RampHalf, finish: RampFinish = SLABS): void {
   for (let z = 0; z <= N; z++) {
     const row = rampRow(half, z);
     const top = rampTreadAt(half, z);
-    if (top > 0) b.box(0, N, 0, top - 1, z, z, bank);
-    for (let x = 0; x <= N; x++) {
-      const lane = Math.floor(x / SLAB.width);
-      const along = row + (lane % 2) * (SLAB.length / 2);
-      const isGrout = x % SLAB.width === 0 || along % SLAB.length === 0;
-      const slab = Math.floor(along / SLAB.length) + lane;
-      b.set(x, top, z, isGrout ? PAVING.grout : PAVING.pavers[slab % PAVING.pavers.length]!);
-    }
+    if (top > 0) b.box(0, N, 0, top - 1, z, z, finish.bank);
+    flanks(b, top, z, z, finish.flank);
+    for (let x = 0; x <= N; x++) b.set(x, top, z, finish.surface(x, row));
   }
 }
 
@@ -103,5 +140,22 @@ export function balustrade(
     b.box(x, x, tread + 1, tread + RAIL_HEIGHT - 1, 0, FLANK - 1, colors.wall);
     b.box(x, x, tread + RAIL_HEIGHT, tread + RAIL_HEIGHT, 0, FLANK - 1, colors.cap);
     b.box(footing, footing, 0, tread, BURIED_IN, FLANK - 1, colors.wall);
+  }
+}
+
+const POST_PITCH = 5;
+
+// Posts and rails in the bridges' timber rather than a wall: open, so the flank shows the climb's
+// own face under it. One voxel thick on the outer edge, as a bridge parapet is.
+export function timberRailing(b: VoxelBuilder, treadAt: (z: number) => number, flank: Flank): void {
+  const { teak } = PALETTE;
+  for (let x = 0; x <= N; x++) {
+    const tread = treadAt(flank === 'left' ? N - x : x);
+    const footing = Math.min(N - BURIED_IN, Math.max(BURIED_IN, x));
+    b.box(x, x, tread + 1, tread + 1, 0, 0, teak.shade);
+    if (x % POST_PITCH === 0) b.box(x, x, tread + 2, tread + RAIL_HEIGHT - 1, 0, 0, teak.shade);
+    b.box(x, x, tread + RAIL_HEIGHT, tread + RAIL_HEIGHT, 0, 0, teak.light);
+    // Stops under the tread: nothing stands over it to hide a top face level with the tread's.
+    b.box(footing, footing, 0, tread - 1, BURIED_IN, BURIED_IN, teak.shade);
   }
 }

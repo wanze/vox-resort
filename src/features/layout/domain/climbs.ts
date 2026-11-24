@@ -83,6 +83,22 @@ export function climbKindAt(
 
 export const CLIMB_REACH = 3;
 
+// Along the climb from the tile: a flight runs from its own tile up to the next, a ramp's two halves
+// from the foot up to the tile above the head. Both halves read the same tiles, so they agree.
+const CLIMB_SPAN: { readonly [kind in ClimbKind]: readonly number[] } = {
+  stairs: [0, 1],
+  'ramp-foot': [0, 1, 2],
+  'ramp-head': [-1, 0, 1],
+};
+
+// Sand under the whole climb is decking at both its ends, so the climb between is wood too.
+export function isDeckedClimb(climb: ClimbTile, isDecked: PavedProvider): boolean {
+  const { dx, dz } = climbTowards(climb.rotation);
+  return CLIMB_SPAN[climb.kind].every((step) =>
+    isDecked(climb.tile.x + dx * step, climb.tile.z + dz * step),
+  );
+}
+
 export function climbTilesFor(
   paved: readonly Tile[],
   levelOf: LevelProvider,

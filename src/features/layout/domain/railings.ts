@@ -1,5 +1,5 @@
 import { CLIMBS, type PavedProvider } from './stairs';
-import { climbKindAt } from './climbs';
+import { climbKindAt, isDeckedClimb } from './climbs';
 import { spanAt, type SpanProvider } from './spans';
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
@@ -16,9 +16,21 @@ const NO_SPAN: SpanProvider = () => false;
 
 const NO_RAMPS: PavedProvider = () => true;
 
-export type ClimbRailKind = `${'flight' | 'ramp-foot' | 'ramp-head'}-${'left' | 'right'}`;
+const NO_KERBS: PavedProvider = () => false;
 
-export type RailKind = ClimbRailKind | 'edge' | 'pier' | 'span' | 'ramp-left' | 'ramp-right';
+const NO_DECKING: PavedProvider = () => false;
+
+export type ClimbRailKind =
+  `${'' | 'deck-'}${'flight' | 'ramp-foot' | 'ramp-head'}-${'left' | 'right'}`;
+
+export type RailKind =
+  | ClimbRailKind
+  | 'edge'
+  | 'pier'
+  | 'kerb'
+  | 'span'
+  | 'ramp-left'
+  | 'ramp-right';
 
 export interface RailTile {
   readonly tile: Tile;
@@ -45,6 +57,8 @@ export function railsAt(
   isWater: WaterProvider = NO_WATER,
   isSpan: SpanProvider = NO_SPAN,
   wantsStairs: PavedProvider = NO_RAMPS,
+  isKerbed: PavedProvider = NO_KERBS,
+  isDecked: PavedProvider = NO_DECKING,
 ): RailTile[] {
   // Spans take their own parapets: an ordinary rail stands at the tile's ground
   // height, which for a bridge is in the river.
@@ -54,11 +68,12 @@ export function railsAt(
     // Each flank on its own edge, so a wide staircase or ramp is railed down its outer flanks and
     // left open down its middle.
     const piece = climb.kind === 'stairs' ? 'flight' : climb.kind;
+    const finish = isDeckedClimb(climb, isDecked) ? 'deck-' : '';
     return FLANKS.flatMap(({ turn, side }) => {
       const edge = normalizeRotation(climb.rotation + turn);
       const { dx, dz } = stepOf(edge);
       if (isPaved(tile.x + dx, tile.z + dz)) return [];
-      return [{ tile, rotation: edge, kind: `${piece}-${side}` as const }];
+      return [{ tile, rotation: edge, kind: `${finish}${piece}-${side}` as const }];
     });
   }
 
@@ -66,11 +81,27 @@ export function railsAt(
   // Pier rails carry a lantern, being walked out into the dark. Open water counts
   // as a drop: pier and sea are both at sea level, so the heights alone say nothing.
   const kind: RailKind = isWater(tile.x, tile.z) ? 'pier' : 'edge';
-  return CLIMBS.filter(({ dx, dz }) => {
+  const drops = CLIMBS.filter(({ dx, dz }) => {
     const beside = { x: tile.x + dx, z: tile.z + dz };
     if (isPaved(beside.x, beside.z)) return false;
     return levelOf(beside.x, beside.z) < level || isWater(beside.x, beside.z);
   }).map(({ rotation }) => ({ tile, rotation, kind }));
+  return isKerbed(tile.x, tile.z) ? [...drops, ...kerbsAt(tile, isPaved, levelOf, isWater)] : drops;
+}
+
+// Only where the ground beside is level: a drop takes a rail, and a rise has its own face.
+export function kerbsAt(
+  tile: Tile,
+  isPaved: PavedProvider,
+  levelOf: LevelProvider,
+  isWater: WaterProvider,
+): RailTile[] {
+  const level = levelOf(tile.x, tile.z);
+  return CLIMBS.filter(({ dx, dz }) => {
+    const beside = { x: tile.x + dx, z: tile.z + dz };
+    if (isPaved(beside.x, beside.z) || isWater(beside.x, beside.z)) return false;
+    return levelOf(beside.x, beside.z) === level;
+  }).map(({ rotation }) => ({ tile, rotation, kind: 'kerb' as const }));
 }
 
 function spanRailsAt(tile: Tile, isPaved: PavedProvider, isSpan: SpanProvider): RailTile[] {
@@ -94,7 +125,11 @@ export function railTilesFor(
   isWater: WaterProvider = NO_WATER,
   isSpan: SpanProvider = NO_SPAN,
   wantsStairs: PavedProvider = NO_RAMPS,
+  isKerbed: PavedProvider = NO_KERBS,
+  isDecked: PavedProvider = NO_DECKING,
 ): RailTile[] {
   const isPaved = pavedLookup(paved);
-  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater, isSpan, wantsStairs));
+  return paved.flatMap((tile) =>
+    railsAt(tile, isPaved, levelOf, isWater, isSpan, wantsStairs, isKerbed, isDecked),
+  );
 }

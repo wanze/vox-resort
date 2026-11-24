@@ -11,6 +11,9 @@ import {
   RAMP_HEAD_ID,
   STAIRCASE_ID,
   STAIRS_ID,
+  BOARDWALK_STAIRS_ID,
+  BOARDWALK_RAMP_FOOT_ID,
+  BOARDWALK_RAMP_HEAD_ID,
 } from '../../layout/domain/resortPlan';
 import { MOSAIC_PIECES } from '../../../../voxel-gen/mosaics/pieces.ts';
 import { mosaicFit, type MosaicKit } from '../../layout/domain/mosaic';
@@ -42,6 +45,9 @@ const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
 const PATH = item(PATH_ID);
 const BOARDWALK = item(BOARDWALK_ID);
 const STAIRS = item(STAIRS_ID);
+const DECK_STAIRS = item(BOARDWALK_STAIRS_ID);
+const DECK_RAMP_FOOT = item(BOARDWALK_RAMP_FOOT_ID);
+const DECK_RAMP_HEAD = item(BOARDWALK_RAMP_HEAD_ID);
 const STAIRCASE = item(STAIRCASE_ID);
 const RAMP_FOOT = item(RAMP_FOOT_ID);
 const RAMP_HEAD = item(RAMP_HEAD_ID);
@@ -71,6 +77,11 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   bridge: BRIDGE,
   bridgeRamp: BRIDGE_RAMP,
   stairs: STAIRS,
+  inWood: new Map([
+    [STAIRS_ID, DECK_STAIRS],
+    [RAMP_FOOT_ID, DECK_RAMP_FOOT],
+    [RAMP_HEAD_ID, DECK_RAMP_HEAD],
+  ]),
   staircase: STAIRCASE,
   rampFoot: RAMP_FOOT,
   rampHead: RAMP_HEAD,
@@ -183,14 +194,24 @@ describe('pavingAt', () => {
     expect(pavingAt(PATH, { x: 2, z: 8 }, 0, shore).item).toBe(PATH);
   });
 
-  it('lays a flight rather than decking where a step reaches the sand', () => {
+  it('lays a flight rather than decking where a step climbs off the sand', () => {
     const laid = pavingAt(
       PATH,
       { x: 0, z: 1 },
       0,
-      rules({ pavedWith: paved({ '0,0': PATH }), levelOf: benchAt(1), isSand: () => true }),
+      rules({ pavedWith: paved({ '0,0': PATH }), levelOf: benchAt(1), isSand: (_x, z) => z >= 1 }),
     );
     expect(laid).toEqual({ item: STAIRS, rotation: 0 });
+  });
+
+  it('lays a wooden flight where decking climbs to decking', () => {
+    const dunes = rules({
+      pavedWith: paved({ '0,0': BOARDWALK }),
+      levelOf: benchAt(1),
+      isSand: () => true,
+    });
+    expect(pavingAt(PATH, { x: 0, z: 1 }, 0, dunes)).toEqual({ item: DECK_STAIRS, rotation: 0 });
+    expect(pavingAt(STAIRCASE, { x: 0, z: 1 }, 0, dunes).item).toBe(STAIRCASE);
   });
 
   it('paves sand in flagstones when the catalogue has no decking', () => {

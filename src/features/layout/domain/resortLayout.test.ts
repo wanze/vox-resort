@@ -6,6 +6,8 @@ import {
   decorationsFor,
   derivedKey,
   isPathNetworkConnected,
+  kerbedIfUnkerbed,
+  woodenClimbsOf,
   layoutResort,
   occupiedTiles,
   pathTilesFor,
@@ -17,6 +19,7 @@ import {
   streetTiles,
   widthOffsets,
   type LayoutItem,
+  type Placement,
   type ResortLayout,
 } from './resortLayout';
 import { tileKey } from './tileKey';
@@ -24,6 +27,8 @@ import {
   BEACH_LAMP_ID,
   BENCH_ID,
   BOARDWALK_ID,
+  BOARDWALK_RAMP_FOOT_ID,
+  BOARDWALK_RAMP_HEAD_ID,
   BRIDGE_ID,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_ID,
@@ -32,6 +37,7 @@ import {
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
+  KERB_ID,
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
@@ -41,6 +47,7 @@ import {
   STAIR_RAILING_LEFT_ID,
   STAIR_RAILING_RIGHT_ID,
   STAIRS_ID,
+  WOODEN_IDS,
   type ResortPlan,
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
@@ -378,6 +385,35 @@ describe('handrails', () => {
 
   it('lays no rails at all when the catalogue has none', () => {
     expect(layoutResort([item(PATH_ID)], bench).rails).toEqual([]);
+  });
+
+  // With the flight's own model, so the flight is not laid as flat paving.
+  const kerbItems = [...railItems, item(STAIRS_ID), flankItem(KERB_ID)];
+
+  it('kerbs the level edges of the walks and leaves the step to its rail', () => {
+    const { rails } = layoutResort(kerbItems, bench);
+    const kerbs = rails.filter((rail) => rail.id === KERB_ID);
+    expect(kerbs.length).toBeGreaterThan(0);
+    const railed = new Set(
+      rails
+        .filter((rail) => rail.id !== KERB_ID)
+        .map((rail) => `${rail.tileX},${rail.tileZ},${rail.rotation}`),
+    );
+    for (const kerb of kerbs) {
+      expect(railed.has(`${kerb.tileX},${kerb.tileZ},${kerb.rotation}`)).toBe(false);
+    }
+    expect(kerbs.some((kerb) => kerb.tileX === 0 && kerb.tileZ === 2)).toBe(false);
+  });
+
+  it('kerbs a world saved before kerbs as a new one is kerbed, once', () => {
+    const { rails, paths } = layoutResort(kerbItems, bench);
+    const terrain = terrainFor(bench);
+    const unkerbed = rails.filter((rail) => rail.id !== KERB_ID);
+    const loaded = kerbedIfUnkerbed(unkerbed, paths, kerbItems, terrain);
+    expect(loaded.map((rail) => rail.key).toSorted()).toEqual(
+      rails.map((rail) => rail.key).toSorted(),
+    );
+    expect(kerbedIfUnkerbed(loaded, paths, kerbItems, terrain)).toBe(loaded);
   });
 });
 
@@ -1193,5 +1229,66 @@ describe('turning a building to open its door onto paving', () => {
         isPathNetworkConnected(before.paths.map((tile) => ({ x: tile.tileX, z: tile.tileZ }))),
       );
     });
+  });
+});
+
+describe('wooden climbs', () => {
+  const types: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
+    id: type.id,
+    tilesX: type.model.tiles.x,
+    tilesZ: type.model.tiles.z,
+    width: type.model.width,
+    depth: type.model.depth,
+    category: type.category,
+  }));
+  const plan = generateResort(
+    ORIGINAL_TYPES.map((type) => ({
+      id: type.id,
+      tilesX: type.model.tiles.x,
+      tilesZ: type.model.tiles.z,
+      category: type.category,
+      placement: type.model.placement,
+    })),
+    clampParams({ tilesX: 112, tilesZ: 100, seed: 3, density: 0.7 }),
+  );
+  const layout = layoutResort(types, plan);
+  const terrain = terrainFor(plan);
+  const surfaceOf = (x: number, z: number) => terrain.surfaceOf(x, z);
+  const STONE = new Map([...WOODEN_IDS].map(([stone, wood]) => [wood, stone]));
+  const inStone = (placement: Placement): Placement => {
+    const id = STONE.get(placement.id);
+    return id
+      ? { ...placement, id, key: placement.key.replace(`${placement.id}@`, `${id}@`) }
+      : placement;
+  };
+
+  it('climbs the dunes in wood, railed in wood, and leaves the grass its stone', () => {
+    const wooden = layout.paths.filter((path) => STONE.has(path.id));
+    expect(new Set(wooden.map((path) => path.id))).toEqual(
+      new Set([BOARDWALK_RAMP_FOOT_ID, BOARDWALK_RAMP_HEAD_ID]),
+    );
+    expect(wooden.every((path) => surfaceOf(path.tileX, path.tileZ) === 'sand')).toBe(true);
+    const climbs = new Set(wooden.map((path) => tileKey(path.tileX, path.tileZ)));
+    const railed = layout.rails.filter((rail) => climbs.has(tileKey(rail.tileX, rail.tileZ)));
+    expect(railed.length).toBeGreaterThan(0);
+    expect(railed.filter((rail) => !STONE.has(rail.id))).toEqual([]);
+    expect(layout.paths.some((path) => path.id === RAMP_HEAD_ID)).toBe(true);
+  });
+
+  it('turns a saved world’s stone climbs on the dunes to the wood a fresh layout lays', () => {
+    const loaded = woodenClimbsOf(
+      layout.paths.map(inStone),
+      layout.rails.map(inStone),
+      types,
+      surfaceOf,
+    );
+    expect(loaded.paths).toEqual(layout.paths);
+    expect(loaded.rails).toEqual(layout.rails);
+  });
+
+  it('leaves a world alone when the catalogue has no wooden climb', () => {
+    const stone = layout.paths.map(inStone);
+    const withoutWood = types.filter((type) => !STONE.has(type.id));
+    expect(woodenClimbsOf(stone, [], withoutWood, surfaceOf).paths).toEqual(stone);
   });
 });

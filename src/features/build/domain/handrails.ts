@@ -23,6 +23,8 @@ export interface HandrailRules {
   // Without it a hand-drawn crossing gets rails stood in the river, inside its own deck.
   readonly isSpan: SpanProvider;
   readonly wantsStairs: PavedProvider;
+  readonly isKerbed: PavedProvider;
+  readonly isDecked: PavedProvider;
   readonly models: RailModels;
   readonly standing: StandingRails;
 }
@@ -43,7 +45,8 @@ const AROUND: readonly { readonly dx: number; readonly dz: number }[] = Array.fr
 
 // Asked after the tile and any flight it made are laid, so the rule reads the final paving.
 export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
-  const { pavedWith, levelOf, isWater, isSpan, wantsStairs, models, standing } = rules;
+  const { pavedWith, levelOf, isWater, isSpan, wantsStairs, isKerbed, isDecked, models, standing } =
+    rules;
   const isPaved: PavedProvider = (tileX, tileZ) => pavedWith(tileX, tileZ) !== null;
   const stand: Placement[] = [];
   const lift: Placement[] = [];
@@ -57,7 +60,7 @@ export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
     }
     const wanted = railPlacementsFor(
       models,
-      railsAt(around, isPaved, levelOf, isWater, isSpan, wantsStairs),
+      railsAt(around, isPaved, levelOf, isWater, isSpan, wantsStairs, isKerbed, isDecked),
       levelOf,
     );
     const wantedKeys = new Set(wanted.map((rail) => rail.key));

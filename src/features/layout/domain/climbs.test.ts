@@ -3,7 +3,7 @@ import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { elevationFor, levelAt, type LevelProvider } from './elevation';
 import { clampParams, generateResort } from './resortGenerator';
 import { layoutResort, type LayoutItem, type Tile } from './resortLayout';
-import { climbKindAt, climbTilesFor } from './climbs';
+import { climbKindAt, climbTilesFor, isDeckedClimb } from './climbs';
 import { stairTilesFor, type PavedProvider } from './stairs';
 
 const tiles = (...pairs: readonly [number, number][]): Tile[] => pairs.map(([x, z]) => ({ x, z }));
@@ -158,5 +158,32 @@ describe('climbKindAt', () => {
     const oneByOne = paved.flatMap((tile) => climbKindAt(tile, isPaved, levelOf, nowhere) ?? []);
     expect(oneByOne).toEqual(whole);
     expect(whole.some((climb) => climb.kind === 'ramp-head')).toBe(true);
+  });
+});
+
+const dunes = (_x: number, z: number): boolean => z >= 0 && z <= 2;
+
+const belowTheTop = (_x: number, z: number): boolean => z >= 1;
+
+describe('isDeckedClimb', () => {
+  const flight = { tile: { x: 0, z: 1 }, rotation: 0, kind: 'stairs' } as const;
+
+  it('takes a flight for wood where sand lies under both its ends', () => {
+    expect(isDeckedClimb(flight, () => true)).toBe(true);
+  });
+
+  it('keeps a flight stone where either end is off the sand', () => {
+    expect(isDeckedClimb(flight, (_x, z) => z === 1)).toBe(false);
+    expect(isDeckedClimb(flight, (_x, z) => z === 0)).toBe(false);
+  });
+
+  it('asks both halves of a ramp the same three tiles, from its foot to above its head', () => {
+    const foot = { tile: { x: 0, z: 2 }, rotation: 0, kind: 'ramp-foot' } as const;
+    const head = { tile: { x: 0, z: 1 }, rotation: 0, kind: 'ramp-head' } as const;
+    expect([isDeckedClimb(foot, dunes), isDeckedClimb(head, dunes)]).toEqual([true, true]);
+    expect([isDeckedClimb(foot, belowTheTop), isDeckedClimb(head, belowTheTop)]).toEqual([
+      false,
+      false,
+    ]);
   });
 });

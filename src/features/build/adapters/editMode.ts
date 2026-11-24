@@ -9,7 +9,7 @@ import {
 import { buildCostOf, costToStand, DIG_COST, refundOf } from '../../catalog/domain/prices';
 import { blobOf } from '../../catalog/domain/placementFacts';
 import type { LayoutItem, Placement } from '../../layout/domain/resortLayout';
-import { railModelsIn } from '../../layout/domain/resortLayout';
+import { deckedOn, kerbedOn, railModelsIn } from '../../layout/domain/resortLayout';
 import { listOf } from '../../layout/domain/placementLists';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
 import {
@@ -19,6 +19,7 @@ import {
   JETTY_ID,
   PATH_ID,
   STAIRS_ID,
+  WOODEN_IDS,
   STAIRCASE_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
@@ -216,6 +217,12 @@ export function createEditMode(parts: {
     bridge: pavingItem(BRIDGE_ID),
     bridgeRamp: pavingItem(BRIDGE_RAMP_ID),
     stairs: pavingItem(STAIRS_ID),
+    inWood: new Map(
+      [...WOODEN_IDS].flatMap(([stone, wood]) => {
+        const item = pavingItem(wood);
+        return item ? [[stone, item] as const] : [];
+      }),
+    ),
     staircase: pavingItem(STAIRCASE_ID),
     rampFoot: pavingItem(RAMP_FOOT_ID),
     rampHead: pavingItem(RAMP_HEAD_ID),
@@ -243,6 +250,8 @@ export function createEditMode(parts: {
     isWater: paving.isWater,
     isSpan: raisedProvider(paving),
     wantsStairs: wantsStairsOf(paving),
+    isKerbed: kerbedOn((tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ)),
+    isDecked: deckedOn((tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ)),
     models: railModelsIn(catalogue),
     standing: (tileX, tileZ) => resort().railIndex.at(tileX, tileZ),
   };

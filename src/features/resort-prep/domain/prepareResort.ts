@@ -65,6 +65,8 @@ import { bakeSkyVisibility, occludes } from '../../lighting/domain/skyVisibility
 import {
   SEA_LEVEL,
   TERRAIN_SPREAD,
+  geometriesOf,
+  startsOf,
   terrainSurfacesFor,
   type SurfaceGeometry,
   type TerrainSurfaces,
@@ -379,12 +381,8 @@ export function preparedTransferables(prepared: PreparedResort): ArrayBuffer[] {
   const { surfaces, lighting } = prepared;
   const buffers = new Set<ArrayBufferLike>([
     ...(lighting ? [lighting.grid.irradiance.buffer, lighting.grid.direction.buffer] : []),
-    ...[surfaces.sea, surfaces.water, surfaces.ground.grass, surfaces.ground.sand]
-      .concat(surfaces.risers.grass, surfaces.risers.sand)
-      .flatMap(surfaceBuffers),
-    ...[surfaces.columns.water, surfaces.columns.ground.grass, surfaces.columns.ground.sand]
-      .concat(surfaces.columns.risers.grass, surfaces.columns.risers.sand)
-      .map((starts) => starts.buffer),
+    ...geometriesOf(surfaces).flatMap(surfaceBuffers),
+    ...startsOf(surfaces.columns).map((starts) => starts.buffer),
   ]);
   return [...buffers] as ArrayBuffer[];
 }

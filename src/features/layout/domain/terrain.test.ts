@@ -6,6 +6,7 @@ import {
   createTerrain,
   MAX_TERRAIN_LEVEL,
   terrainFor,
+  touchesWater,
   type TerrainEdit,
   type TerrainPlan,
 } from './terrain';
@@ -167,6 +168,24 @@ describe('terrainFor', () => {
         },
       }),
     ).toThrow(/meet at column/);
+  });
+});
+
+const inland = () => createTerrain({ shore: null, elevation: null, tilesX: 20, tilesZ: 20 });
+
+describe('touchesWater', () => {
+  it('holds for a pond and every tile round it, diagonals too', () => {
+    const terrain = inland();
+    terrain.set(10, 10, { level: 0, surface: 'water' });
+    expect(touchesWater(terrain, 10, 10)).toBe(true);
+    expect(touchesWater(terrain, 9, 9)).toBe(true);
+    expect(touchesWater(terrain, 11, 10)).toBe(true);
+  });
+
+  it('does not hold two tiles off', () => {
+    const terrain = inland();
+    terrain.set(10, 10, { level: 0, surface: 'water' });
+    expect(touchesWater(terrain, 12, 10)).toBe(false);
   });
 });
 

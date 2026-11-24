@@ -52,15 +52,21 @@ import { createSeaMaterial } from './seaMaterial';
 import { createRiverMaterial } from './riverMaterial';
 import type { WaterMaterial } from './waterSurface';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { PALETTE } from '../../../../voxel-gen/palette.ts';
+import { duneFace, stoneCourses } from './landTones';
 
 const GROUND_COLOR = 0x5d7a45;
 
-const SAND_COLOR = 0xd8c69c;
+// The palette's own sand, so a model's sand plate (a court, a playground) lies flush unseen.
+const SAND_COLOR = PALETTE.sand.base;
+const WET_SAND_COLOR = PALETTE.sand.shade;
 
-// Grass risers are bare earth so the step reads even in full sun; sand risers
-// stay sand, a shade down, because earth turned the dune into a quarry.
+// Grass risers are laid stone, so a drop reads as a retaining wall; sand risers stay sand, a
+// shade down, because earth turned the dune into a quarry.
 const RISER_COLOR = 0x6b5a3e;
 const SAND_RISER_COLOR = 0xc0ab7f;
+
+const KERB_COLOR = PALETTE.stone.shade;
 
 // A path slab stands two voxels above the ground: the tightest depth gap in the scene.
 const DEPTH_STEPS = 2 ** 24;
@@ -182,10 +188,11 @@ function landMaterial(
   color: number,
   lightVolume: BakedLightVolume | null,
   shade: GroundShade | undefined,
+  pattern?: Node<'vec3'>,
 ): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0 });
-  const albedo = vec3(...linearRgbOf(color));
-  if (shade) material.colorNode = shade(albedo);
+  const albedo = pattern ?? vec3(...linearRgbOf(color));
+  material.colorNode = shade ? shade(albedo) : albedo;
   if (lightVolume) {
     material.emissiveNode = lightVolume.lampLight(albedo);
     material.aoNode = lightVolume.skyVisibility();
@@ -225,8 +232,6 @@ function layGround(
   };
 }
 
-// Sand is one flat tone on purpose: wet bands and per-column wobble read as dirt
-// from the distance the resort is seen at.
 interface TerrainMeshes {
   readonly group: Group;
   dispose(): void;
@@ -267,7 +272,12 @@ interface TerrainPalette {
 
 const WHITE = new Color(0xffffff);
 
-const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, RISER_COLOR, SAND_RISER_COLOR] as const;
+const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, WET_SAND_COLOR, KERB_COLOR] as const;
+
+const patternedTones = (): readonly (readonly [number, Node<'vec3'>])[] => [
+  [RISER_COLOR, stoneCourses()],
+  [SAND_RISER_COLOR, duneFace(SAND_COLOR, SAND_RISER_COLOR)],
+];
 
 function createTerrainPalette(
   lightVolume: BakedLightVolume | null,
@@ -279,6 +289,9 @@ function createTerrainPalette(
   const sea = createSeaMaterial(lightVolume, skyAlong, swell, rough);
   const river = createRiverMaterial(lightVolume);
   const flat = new Map(FLAT_TONES.map((tone) => [tone, landMaterial(tone, lightVolume, shade)]));
+  for (const [tone, pattern] of patternedTones()) {
+    flat.set(tone, landMaterial(tone, lightVolume, shade, pattern));
+  }
   return {
     sea,
     river,
@@ -341,6 +354,8 @@ function layTerrain(
     [surfaces.ground.sand, SAND_COLOR],
     [surfaces.risers.grass, RISER_COLOR],
     [surfaces.risers.sand, SAND_RISER_COLOR],
+    [surfaces.details.wetSand, WET_SAND_COLOR],
+    [surfaces.details.kerb, KERB_COLOR],
   ]);
 
   return {

@@ -195,6 +195,13 @@ export function overlooksDrop(terrain: Terrain, tileX: number, tileZ: number): b
   return AROUND.some(([dx, dz]) => terrain.levelOf(tileX + dx, tileZ + dz) < level);
 }
 
+// The renderer draws a kerb on a bank only where nothing stands, so building there
+// re-lays the ground just as building over a drop does.
+export function touchesWater(terrain: Terrain, tileX: number, tileZ: number): boolean {
+  if (terrain.surfaceOf(tileX, tileZ) === 'water') return true;
+  return AROUND.some(([dx, dz]) => terrain.surfaceOf(tileX + dx, tileZ + dz) === 'water');
+}
+
 export function terrainFor(plan: TerrainPlan): Terrain {
   const shore = shoreFor(plan);
   const elevation = elevationFor(plan);

@@ -25,7 +25,7 @@ import {
   RAMP_HEAD_ID,
 } from '../../layout/domain/resortPlan';
 import type { Terrain } from '../../layout/domain/terrain';
-import { overlooksDrop } from '../../layout/domain/terrain';
+import { overlooksDrop, touchesWater } from '../../layout/domain/terrain';
 import type { Plot } from '../../resort-prep/domain/prepareResort';
 import { facesUnowned, ownsTile, type LandRights } from '../../land/domain/landRights';
 import { paintZone, type Zones } from '../../sim/domain/zones';
@@ -313,9 +313,13 @@ export function createEditMode(parts: {
     if (at !== -1) laid.splice(at, 1);
   };
 
-  // Only over a terrace drop: rebuilding the terrain per tile of a flat drag is too costly.
-  const reshapesGround = (placement: Placement): boolean =>
-    footprintTiles(placement).some((tile) => overlooksDrop(resort().terrain, tile.x, tile.z));
+  // Only over a terrace drop or a bank: rebuilding the terrain per tile of a flat drag is too costly.
+  const reshapesGround = (placement: Placement): boolean => {
+    const { terrain } = resort();
+    return footprintTiles(placement).some(
+      (tile) => overlooksDrop(terrain, tile.x, tile.z) || touchesWater(terrain, tile.x, tile.z),
+    );
+  };
 
   // Deferred until finished: blob shadows are sized from full height, and lanterns must not burn
   // over a foundation.

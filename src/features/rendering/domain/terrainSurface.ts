@@ -38,6 +38,12 @@ export type RiserSurface = 'grass' | 'sand';
 
 export type SurfacesBySurface = Readonly<Record<RiserSurface, SurfaceGeometry | null>>;
 
+export type Detail = 'wetSand' | 'kerb';
+
+const DETAILS: readonly Detail[] = ['wetSand', 'kerb'];
+
+export type DetailSurfaces = Readonly<Record<Detail, SurfaceGeometry | null>>;
+
 export interface TileColumns {
   readonly from: number;
   readonly to: number;
@@ -45,10 +51,13 @@ export interface TileColumns {
 
 type StartsBySurface = Readonly<Record<RiserSurface, Uint32Array>>;
 
+type StartsByDetail = Readonly<Record<Detail, Uint32Array>>;
+
 interface Starts {
   readonly water: Uint32Array;
   readonly ground: StartsBySurface;
   readonly risers: StartsBySurface;
+  readonly details: StartsByDetail;
 }
 
 // Where each column's quads start in each mesh, one entry past the last column, so a
@@ -65,7 +74,22 @@ export interface TerrainSurfaces {
   readonly water: SurfaceGeometry | null;
   readonly ground: SurfacesBySurface;
   readonly risers: SurfacesBySurface;
+  readonly details: DetailSurfaces;
   readonly columns: ColumnStarts;
+}
+
+export function geometriesOf(surfaces: TerrainSurfaces): (SurfaceGeometry | null)[] {
+  const { sea, water, ground, risers, details } = surfaces;
+  return [sea, water, ground.grass, ground.sand, risers.grass, risers.sand].concat(
+    DETAILS.map((detail) => details[detail]),
+  );
+}
+
+export function startsOf(columns: ColumnStarts): Uint32Array[] {
+  const { water, ground, risers, details } = columns;
+  return [water, ground.grass, ground.sand, risers.grass, risers.sand].concat(
+    DETAILS.map((detail) => details[detail]),
+  );
 }
 
 // In plot extents either side of the framed middle.
@@ -130,6 +154,32 @@ class SeaBuilder {
     };
   }
 }
+
+type Corner = readonly [number, number, number];
+
+type Out = readonly [number, number];
+
+const sub = (a: Corner, b: Corner): Corner => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+
+const cross = (a: Corner, b: Corner): Corner => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+
+const unit = (v: Corner): Corner => {
+  const length = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / length, v[1] / length, v[2] / length];
+};
+
+const diagonalNormal = (a: Corner, b: Corner, c: Corner, d: Corner): Corner =>
+  cross(sub(c, a), sub(d, b));
+
+// Three cuts a side: the crest and the foot each get a row of their own to lean.
+const SOFT_CUTS = 3;
+const SOFT_STEP = 1 / (SOFT_CUTS * 4);
+// How much of the slope's own normal is left at a crease; the rest points up.
+const SOFT_CREST = 0.45;
 
 class GroundBuilder {
   private readonly positions: number[] = [];
@@ -227,6 +277,71 @@ class GroundBuilder {
     );
   }
 
+  // Wound to face `out`, so a caller lists the corners in whatever order is natural.
+  facing(
+    outX: number,
+    outY: number,
+    outZ: number,
+    corners: readonly (readonly [number, number, number])[],
+  ): void {
+    const [a, b, c, d] = corners as [Corner, Corner, Corner, Corner];
+    const [nx, ny, nz] = diagonalNormal(a, b, c, d);
+    const [p, q, r, t] = nx * outX + ny * outY + nz * outZ < 0 ? [a, d, c, b] : [a, b, c, d];
+    this.patch(...p, ...q, ...r, ...t);
+  }
+
+  wall(ax: number, az: number, bx: number, bz: number, y0: number, y1: number, out: Out): void {
+    if (y1 <= y0) return;
+    this.facing(out[0], 0, out[1], [
+      [ax, y0, az],
+      [bx, y0, bz],
+      [bx, y1, bz],
+      [ax, y1, az],
+    ]);
+  }
+
+  // Cut into a grid with its normals leant up at the crest and the foot, so a dune's edge
+  // rounds off under the sun. The positions stay on the patch, so a neighbour still meets it.
+  softPatch(corners: readonly [Corner, Corner, Corner, Corner]): void {
+    const [a, b, c, d] = corners;
+    const low = Math.min(a[1], b[1], c[1], d[1]);
+    const rise = Math.max(a[1], b[1], c[1], d[1]) - low;
+    const at = (u: number, v: number): Corner => {
+      const mixed = (k: 0 | 1 | 2): number =>
+        (1 - u) * ((1 - v) * a[k] + v * b[k]) + u * ((1 - v) * d[k] + v * c[k]);
+      return [mixed(0), mixed(1), mixed(2)];
+    };
+    const normalAt = (u: number, v: number): Corner => {
+      const alongU = sub(at(Math.min(1, u + SOFT_STEP), v), at(Math.max(0, u - SOFT_STEP), v));
+      const alongV = sub(at(u, Math.min(1, v + SOFT_STEP)), at(u, Math.max(0, v - SOFT_STEP)));
+      const [nx, ny, nz] = unit(cross(alongV, alongU));
+      const height = rise > 0 ? (at(u, v)[1] - low) / rise : 0.5;
+      const lean = SOFT_CREST + (1 - SOFT_CREST) * (1 - Math.abs(2 * height - 1));
+      return unit([nx * lean, ny * lean + (1 - lean), nz * lean]);
+    };
+    for (let i = 0; i < SOFT_CUTS; i++) {
+      for (let j = 0; j < SOFT_CUTS; j++) {
+        const u0 = i / SOFT_CUTS;
+        const u1 = (i + 1) / SOFT_CUTS;
+        const v0 = j / SOFT_CUTS;
+        const v1 = (j + 1) / SOFT_CUTS;
+        const grid: [number, number][] = [
+          [u0, v0],
+          [u0, v1],
+          [u1, v1],
+          [u1, v0],
+        ];
+        for (const [u, v] of grid) {
+          this.positions.push(...at(u, v));
+          this.normals.push(...normalAt(u, v));
+        }
+        const base = this.quads * 4;
+        this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        this.quads++;
+      }
+    }
+  }
+
   build(): SurfaceGeometry | null {
     if (this.quads === 0) return null;
     return {
@@ -241,6 +356,8 @@ class GroundBuilder {
 
 type Builders = Record<RiserSurface, GroundBuilder>;
 
+type DetailBuilders = Record<Detail, GroundBuilder>;
+
 const newBuilders = (): Builders => ({
   grass: new GroundBuilder(),
   sand: new GroundBuilder(),
@@ -249,6 +366,16 @@ const newBuilders = (): Builders => ({
 const builtBy = (builders: Builders): SurfacesBySurface => ({
   grass: builders.grass.build(),
   sand: builders.sand.build(),
+});
+
+const newDetailBuilders = (): DetailBuilders => ({
+  wetSand: new GroundBuilder(),
+  kerb: new GroundBuilder(),
+});
+
+const builtDetails = (builders: DetailBuilders): DetailSurfaces => ({
+  wetSand: builders.wetSand.build(),
+  kerb: builders.kerb.build(),
 });
 
 // Numeric codes because a profile is an array per column over tens of thousands of tiles.
@@ -396,6 +523,7 @@ interface Meshes {
   readonly ground: Builders;
   readonly risers: Builders;
   readonly water: GroundBuilder;
+  readonly details: DetailBuilders;
 }
 
 interface ColumnSpan {
@@ -407,6 +535,10 @@ interface ColumnSpan {
 const topBuilder = (meshes: Meshes, code: GroundCode): GroundBuilder =>
   code === WATER ? meshes.water : meshes.ground[riserSurfaceOf(code)];
 
+// Wet sand needs nothing clear: a model's plate covers it anyway.
+const isBanked = (cut: Cut, surface: GroundCode, clear: () => boolean): boolean =>
+  cut.other === WATER && (surface === SAND || clear());
+
 function layCut(
   meshes: Meshes,
   columns: Neighbourhood,
@@ -414,6 +546,7 @@ function layCut(
   cut: Cut,
   span: ColumnSpan,
   bounds: RowBounds,
+  isClear: IsClear,
 ): void {
   const { here } = columns;
   const z0 = rowStart(bounds, row);
@@ -425,7 +558,9 @@ function layCut(
   const farZ = cut.dz < 0 ? z1 : z0;
   const bench = here.benches[row]!;
   const surface = here.surfaces[row]! as GroundCode;
-  if (here.drawn[row]) {
+  if (isBanked(cut, surface, () => isClear(span.tileX, bounds.firstRow + row))) {
+    layDiagonalBank(meshes, here, row, { cutX, farX, cutZ, farZ });
+  } else if (here.drawn[row]) {
     topBuilder(meshes, surface).half(farX, farZ, farX, cutZ, cutX, farZ, here.tops[row]!);
   }
   if (isDrawn(cut.other, bench)) {
@@ -553,20 +688,14 @@ function layTile(
   for (let i = 0; i < 3; i++) {
     for (let j = 0; j < 3; j++) {
       if (isFlat(i, j)) continue;
-      slopes.patch(
-        xs[i]!,
-        height(i, j),
-        zs[j]!,
-        xs[i]!,
-        height(i, j + 1),
-        zs[j + 1]!,
-        xs[i + 1]!,
-        height(i + 1, j + 1),
-        zs[j + 1]!,
-        xs[i + 1]!,
-        height(i + 1, j),
-        zs[j]!,
-      );
+      const corners: [Corner, Corner, Corner, Corner] = [
+        [xs[i]!, height(i, j), zs[j]!],
+        [xs[i]!, height(i, j + 1), zs[j + 1]!],
+        [xs[i + 1]!, height(i + 1, j + 1), zs[j + 1]!],
+        [xs[i + 1]!, height(i + 1, j), zs[j]!],
+      ];
+      if (surface === SAND) slopes.softPatch(corners);
+      else slopes.patch(...corners[0], ...corners[1], ...corners[2], ...corners[3]);
     }
   }
 
@@ -594,12 +723,183 @@ function layDetail(
     else layStandingTile(meshes, columns, row, span, bounds);
     return true;
   }
+  if (here.surfaces[row] === WATER) return !here.drawn[row];
   const cut = cutOf(columns, row);
   if (cut) {
-    layCut(meshes, columns, row, cut, span, bounds);
+    layCut(meshes, columns, row, cut, span, bounds, isClear);
     return true;
   }
-  return !here.drawn[row];
+  const sides = waterSides(columns, row);
+  if (sides === 0) return !here.drawn[row];
+  layBank(meshes, { here, row, sides, span, bounds }, isClear);
+  return true;
+}
+
+// In voxels. The kerb stands below a model's one-course plate and a path slab, so neither shows it.
+const WET_BAND = 3;
+const KERB_WIDTH = 2;
+const KERB_HEIGHT = 1;
+
+const WEST = 1;
+const EAST = 2;
+const NORTH = 4;
+const SOUTH = 8;
+const NORTH_WEST = 16;
+const NORTH_EAST = 32;
+const SOUTH_WEST = 64;
+const SOUTH_EAST = 128;
+
+// Only water level with the tile: a bank above or below it is a drop, which the slopes draw.
+function isWaterAt(profile: ColumnProfile, row: number, bench: number): boolean {
+  return (
+    row >= 0 &&
+    row < profile.benches.length &&
+    profile.surfaces[row] === WATER &&
+    profile.benches[row] === bench
+  );
+}
+
+function waterSides(columns: Neighbourhood, row: number): number {
+  const { west, here, east } = columns;
+  const bench = here.benches[row]!;
+  const at = (profile: ColumnProfile, along: number, bit: number): number =>
+    isWaterAt(profile, along, bench) ? bit : 0;
+  return (
+    at(west, row, WEST) |
+    at(east, row, EAST) |
+    at(here, row - 1, NORTH) |
+    at(here, row + 1, SOUTH) |
+    at(west, row - 1, NORTH_WEST) |
+    at(east, row - 1, NORTH_EAST) |
+    at(west, row + 1, SOUTH_WEST) |
+    at(east, row + 1, SOUTH_EAST)
+  );
+}
+
+// Per cell of the three by three, the sides whose water it lies against.
+const CELL_SIDES: readonly number[] = [
+  WEST | NORTH | NORTH_WEST,
+  WEST,
+  WEST | SOUTH | SOUTH_WEST,
+  NORTH,
+  0,
+  SOUTH,
+  EAST | NORTH | NORTH_EAST,
+  EAST,
+  EAST | SOUTH | SOUTH_EAST,
+];
+
+const bordersWater = (sides: number, i: number, j: number): boolean =>
+  (sides & CELL_SIDES[i * 3 + j]!) !== 0;
+
+function bandFrame(span: ColumnSpan, bounds: RowBounds, row: number, width: number) {
+  const z0 = (bounds.firstRow + row) * bounds.tileVoxels;
+  const z1 = z0 + bounds.tileVoxels;
+  return {
+    xs: [span.x0, span.x0 + width, span.x1 - width, span.x1],
+    zs: [z0, z0 + width, z1 - width, z1].map((z) => clampZ(bounds, z)),
+  };
+}
+
+interface BankTile {
+  readonly here: ColumnProfile;
+  readonly row: number;
+  readonly sides: number;
+  readonly span: ColumnSpan;
+  readonly bounds: RowBounds;
+}
+
+type CellTest = (i: number, j: number) => boolean;
+
+function eachCell(test: CellTest, lay: (i: number, j: number) => void): void {
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) if (test(i, j)) lay(i, j);
+  }
+}
+
+function layWetSand(meshes: Meshes, tile: BankTile): void {
+  const { xs, zs } = bandFrame(tile.span, tile.bounds, tile.row, WET_BAND);
+  const top = tile.here.tops[tile.row]!;
+  const wet: CellTest = (i, j) => bordersWater(tile.sides, i, j);
+  mergeFlat(
+    (i, j) => !wet(i, j),
+    (i0, i1, j0, j1) => meshes.ground.sand.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, top),
+  );
+  eachCell(wet, (i, j) => meshes.details.wetSand.top(xs[i]!, xs[i + 1]!, zs[j]!, zs[j + 1]!, top));
+}
+
+// Walls only where the next cell is not kerb too; at the tile's edge always, since a kerb
+// beside it hides a wall it does not need.
+function layKerb(meshes: Meshes, tile: BankTile, kerbed: CellTest): void {
+  const { xs, zs } = bandFrame(tile.span, tile.bounds, tile.row, KERB_WIDTH);
+  if (tile.here.drawn[tile.row]) {
+    const top = tile.here.tops[tile.row]!;
+    mergeFlat(
+      (i, j) => !kerbed(i, j),
+      (i0, i1, j0, j1) => meshes.ground.grass.top(xs[i0]!, xs[i1 + 1]!, zs[j0]!, zs[j1 + 1]!, top),
+    );
+  }
+  const kerb = meshes.details.kerb;
+  const bench = tile.here.benches[tile.row]!;
+  const height = bench + KERB_HEIGHT;
+  const open = (i: number, j: number): boolean =>
+    !(i >= 0 && i <= 2 && j >= 0 && j <= 2 && kerbed(i, j));
+  eachCell(kerbed, (i, j) => {
+    const [x0, x1, z0, z1] = [xs[i]!, xs[i + 1]!, zs[j]!, zs[j + 1]!];
+    kerb.top(x0, x1, z0, z1, height);
+    if (open(i - 1, j)) kerb.wall(x0, z0, x0, z1, bench, height, [-1, 0]);
+    if (open(i + 1, j)) kerb.wall(x1, z0, x1, z1, bench, height, [1, 0]);
+    if (open(i, j - 1)) kerb.wall(x0, z0, x1, z0, bench, height, [0, -1]);
+    if (open(i, j + 1)) kerb.wall(x0, z1, x1, z1, bench, height, [0, 1]);
+  });
+}
+
+// Sand darkens where the water reaches it; grass gets a stone kerb, unless something stands there.
+function layBank(meshes: Meshes, tile: BankTile, isClear: IsClear): void {
+  if (tile.here.surfaces[tile.row] === SAND) {
+    layWetSand(meshes, tile);
+    return;
+  }
+  const clear = isClear(tile.span.tileX, tile.bounds.firstRow + tile.row);
+  layKerb(meshes, tile, (i, j) => clear && bordersWater(tile.sides, i, j));
+}
+
+interface Diagonal {
+  readonly cutX: number;
+  readonly farX: number;
+  readonly cutZ: number;
+  readonly farZ: number;
+}
+
+// The own half of a tile mitred into water: the band runs along the diagonal, and the kerb is
+// closed at both tile edges, where the straight kerb beside it takes over.
+function layDiagonalBank(meshes: Meshes, here: ColumnProfile, row: number, at: Diagonal): void {
+  const { cutX, farX, cutZ, farZ } = at;
+  const surface = here.surfaces[row]! as GroundCode;
+  const sx = Math.sign(cutX - farX);
+  const sz = Math.sign(cutZ - farZ);
+  const width = surface === SAND ? WET_BAND : KERB_WIDTH;
+  const inset = width * Math.SQRT2;
+  const innerZ = cutZ - sz * inset;
+  const innerX = cutX - sx * inset;
+  const top = here.tops[row]!;
+  if (here.drawn[row]) {
+    topBuilder(meshes, surface).half(farX, farZ, farX, innerZ, innerX, farZ, top);
+  }
+  const bench = here.benches[row]!;
+  const band = surface === SAND ? meshes.details.wetSand : meshes.details.kerb;
+  const y = surface === SAND ? top : bench + KERB_HEIGHT;
+  band.facing(0, 1, 0, [
+    [farX, y, cutZ],
+    [cutX, y, farZ],
+    [innerX, y, farZ],
+    [farX, y, innerZ],
+  ]);
+  if (surface === SAND) return;
+  band.wall(farX, cutZ, cutX, farZ, bench, y, [sx, sz]);
+  band.wall(farX, innerZ, innerX, farZ, bench, y, [-sx, -sz]);
+  band.wall(farX, cutZ, farX, innerZ, bench, y, [-sx, 0]);
+  band.wall(cutX, farZ, innerX, farZ, bench, y, [0, -sz]);
 }
 
 // Walked so every segment's outward side is on its left, so all uprights wind the same way.
@@ -738,6 +1038,7 @@ interface LaidColumns {
   readonly water: SurfaceGeometry | null;
   readonly ground: SurfacesBySurface;
   readonly risers: SurfacesBySurface;
+  readonly details: DetailSurfaces;
   readonly starts: Starts;
 }
 
@@ -745,6 +1046,10 @@ const newStarts = (entries: number): Starts => ({
   water: new Uint32Array(entries),
   ground: { grass: new Uint32Array(entries), sand: new Uint32Array(entries) },
   risers: { grass: new Uint32Array(entries), sand: new Uint32Array(entries) },
+  details: {
+    wetSand: new Uint32Array(entries),
+    kerb: new Uint32Array(entries),
+  },
 });
 
 function markStarts(starts: Starts, meshes: Meshes, entry: number): void {
@@ -753,6 +1058,7 @@ function markStarts(starts: Starts, meshes: Meshes, entry: number): void {
     starts.ground[surface][entry] = meshes.ground[surface].count;
     starts.risers[surface][entry] = meshes.risers[surface].count;
   }
+  for (const detail of DETAILS) starts.details[detail][entry] = meshes.details[detail].count;
 }
 
 function layColumns(request: TerrainRequest, box: Box, from: number, to: number): LaidColumns {
@@ -762,6 +1068,7 @@ function layColumns(request: TerrainRequest, box: Box, from: number, to: number)
     ground: newBuilders(),
     risers: newBuilders(),
     water: new GroundBuilder(),
+    details: newDetailBuilders(),
   };
   const starts = newStarts(to - from + 2);
 
@@ -784,6 +1091,7 @@ function layColumns(request: TerrainRequest, box: Box, from: number, to: number)
     water: meshes.water.build(),
     ground: builtBy(meshes.ground),
     risers: builtBy(meshes.risers),
+    details: builtDetails(meshes.details),
     starts,
   };
 }
@@ -886,26 +1194,32 @@ function spliceMesh(old: PlacedMesh, fresh: PlacedMesh, at: number): PlacedMesh 
   };
 }
 
-function spliceBySurface(
-  old: SurfacesBySurface,
-  oldStarts: StartsBySurface,
-  fresh: SurfacesBySurface,
-  freshStarts: StartsBySurface,
+function spliceEach<Key extends string>(
+  keys: readonly Key[],
+  old: Readonly<Record<Key, SurfaceGeometry | null>>,
+  oldStarts: Readonly<Record<Key, Uint32Array>>,
+  fresh: Readonly<Record<Key, SurfaceGeometry | null>>,
+  freshStarts: Readonly<Record<Key, Uint32Array>>,
   at: number,
-): { readonly geometries: SurfacesBySurface; readonly starts: StartsBySurface } {
-  const splice = (surface: RiserSurface): PlacedMesh =>
-    spliceMesh(
-      { geometry: old[surface], starts: oldStarts[surface] },
-      { geometry: fresh[surface], starts: freshStarts[surface] },
+): {
+  readonly geometries: Record<Key, SurfaceGeometry | null>;
+  readonly starts: Record<Key, Uint32Array>;
+} {
+  const geometries = {} as Record<Key, SurfaceGeometry | null>;
+  const starts = {} as Record<Key, Uint32Array>;
+  for (const key of keys) {
+    const spliced = spliceMesh(
+      { geometry: old[key], starts: oldStarts[key] },
+      { geometry: fresh[key], starts: freshStarts[key] },
       at,
     );
-  const grass = splice('grass');
-  const sand = splice('sand');
-  return {
-    geometries: { grass: grass.geometry, sand: sand.geometry },
-    starts: { grass: grass.starts, sand: sand.starts },
-  };
+    geometries[key] = spliced.geometry;
+    starts[key] = spliced.starts;
+  }
+  return { geometries, starts };
 }
+
+const SURFACES: readonly RiserSurface[] = ['grass', 'sand'];
 
 const fitsBox = (columns: ColumnStarts, box: Box): boolean =>
   columns.first === box.columns.first &&
@@ -933,18 +1247,28 @@ export function retileColumns(
     { geometry: fresh.water, starts: fresh.starts.water },
     at,
   );
-  const ground = spliceBySurface(
+  const ground = spliceEach(
+    SURFACES,
     previous.ground,
     kept.ground,
     fresh.ground,
     fresh.starts.ground,
     at,
   );
-  const risers = spliceBySurface(
+  const risers = spliceEach(
+    SURFACES,
     previous.risers,
     kept.risers,
     fresh.risers,
     fresh.starts.risers,
+    at,
+  );
+  const details = spliceEach(
+    DETAILS,
+    previous.details,
+    kept.details,
+    fresh.details,
+    fresh.starts.details,
     at,
   );
   return {
@@ -952,10 +1276,12 @@ export function retileColumns(
     water: water.geometry,
     ground: ground.geometries,
     risers: risers.geometries,
+    details: details.geometries,
     columns: columnStartsOf(box, {
       water: water.starts,
       ground: ground.starts,
       risers: risers.starts,
+      details: details.starts,
     }),
   };
 }

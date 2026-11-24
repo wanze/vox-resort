@@ -5,8 +5,10 @@ import { shoreFor, waterEdgeZ, waterStartZ, type Shore } from '../../layout/doma
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import {
+  geometriesOf,
   joinColumns,
   retileColumns,
+  startsOf as columnStartsOf,
   SAND_LEVEL,
   SEA_LEVEL,
   terrainSurfacesFor,
@@ -219,8 +221,10 @@ describe('terrainSurfacesFor', () => {
   it('ends the sand exactly where the water begins', () => {
     const coast = shore();
     const columns = new Map<number, number>();
-    for (const quad of quadsOf(terrainSurfacesFor(request(coast)).ground.sand!)) {
-      columns.set(quad.x0, Math.max(columns.get(quad.x0) ?? -Infinity, quad.z1));
+    const { ground, details } = terrainSurfacesFor(request(coast));
+    for (const quad of [...quadsOf(ground.sand!), ...quadsOf(details.wetSand!)]) {
+      const column = Math.floor(quad.x0 / TILE) * TILE;
+      columns.set(column, Math.max(columns.get(column) ?? -Infinity, quad.z1));
     }
     for (let tileX = 10; tileX < 30; tileX++) {
       expect({ tileX, to: columns.get(tileX * TILE) }).toEqual({
@@ -607,8 +611,77 @@ describe('ground that was dug rather than grown', () => {
     );
     const inColumn = (surfaces: ReturnType<typeof terrainSurfacesFor>): number =>
       quadsOf(surfaces.ground.sand!).filter((quad) => quad.x0 === 20 * TILE).length;
-    expect(inColumn(bare)).toBe(1);
-    expect(inColumn(turfed)).toBe(2);
+    expect(inColumn(turfed)).toBe(inColumn(bare) + 1);
+  });
+});
+
+const vertexNormalsOf = (surface: SurfaceGeometry, quad: number): string[] =>
+  Array.from({ length: 4 }, (_, corner) =>
+    [0, 1, 2].map((axis) => surface.normals![(quad * 4 + corner) * 3 + axis]!.toFixed(4)).join(),
+  );
+
+const inChannel = (quad: { x0: number; x1: number; z0: number; z1: number }): boolean =>
+  quad.x0 >= 20 * TILE && quad.x1 <= 22 * TILE && quad.z0 >= 4 * TILE && quad.z1 <= 12 * TILE;
+
+describe('the banks', () => {
+  it('darkens a band of sand along the waterline, level with the dry sand', () => {
+    const coast = shore();
+    const { details } = terrainSurfacesFor(request(coast));
+    const wet = quadsOf(details.wetSand!);
+    for (const quad of wet) expect(quad.y).toBeCloseTo(SAND_LEVEL, 5);
+    for (let tileX = 10; tileX < 30; tileX++) {
+      const edge = waterStartZ(coast, tileX) * TILE;
+      const band = wet.filter((quad) => quad.x0 >= tileX * TILE && quad.x1 <= (tileX + 1) * TILE);
+      expect(band.some((quad) => quad.z1 === edge && quad.z0 === edge - 3)).toBe(true);
+    }
+  });
+
+  it('leaves sand with no water beside it dry', () => {
+    const dunes = terraced([{ level: 1, inset: 8, wave: 0, surface: 'sand' }]);
+    expect(terrainSurfacesFor(request(null, 640, dunes)).details.wetSand).toBeNull();
+  });
+
+  it('edges a river through grass with a kerb a voxel high, outside the channel', () => {
+    const { details } = terrainSurfacesFor(request(null, 640, null, channel()));
+    const kerb = details.kerb!;
+    const tops = quadsOf(kerb).filter((_, quad) => normalsOf(kerb)[quad]!.y > 0.99);
+    expect(tops.length).toBeGreaterThan(0);
+    for (const quad of tops) {
+      expect(quad.y).toBeCloseTo(1, 5);
+      expect(inChannel(quad)).toBe(false);
+    }
+  });
+
+  it('winds every kerb face to agree with its normal', () => {
+    const { details } = terrainSurfacesFor(request(null, 640, null, channel()));
+    for (const surface of [details.kerb!]) {
+      for (let quad = 0; quad < surface.quadCount; quad++) {
+        expect(windingAgreesWithNormal(surface, quad)).toBe(true);
+      }
+    }
+  });
+
+  it('leaves the kerb off a bank something stands on', () => {
+    const banks = Array.from({ length: 8 }, (_, row) => [`19,${row + 4}`, `22,${row + 4}`]).flat();
+    const { details } = terrainSurfacesFor(request(null, 640, null, channel(), banks));
+    const alongside = (quad: { z0: number; z1: number }): boolean =>
+      quad.z1 > 4 * TILE && quad.z0 < 12 * TILE;
+    for (const quad of quadsOf(details.kerb!).filter(alongside)) {
+      expect(quad.x0 >= 19 * TILE && quad.x1 <= 20 * TILE).toBe(false);
+      expect(quad.x0 >= 22 * TILE && quad.x1 <= 23 * TILE).toBe(false);
+    }
+  });
+
+  it('rounds a dune off at its crest, but leaves a grass step sharp', () => {
+    const rounded = (surface: SurfaceGeometry): boolean =>
+      Array.from(
+        { length: surface.quadCount },
+        (_, quad) => new Set(vertexNormalsOf(surface, quad)).size > 1,
+      ).some(Boolean);
+    const dunes = terraced([{ level: 1, inset: 8, wave: 0, surface: 'sand' }]);
+    const steps = terraced([{ level: 1, inset: 8, wave: 0 }]);
+    expect(rounded(terrainSurfacesFor(request(null, 640, dunes)).risers.sand!)).toBe(true);
+    expect(rounded(terrainSurfacesFor(request(null, 640, steps)).risers.grass!)).toBe(false);
   });
 });
 
@@ -635,18 +708,12 @@ function relayed(before: TerrainSurfaces, req: Request, changed: TileColumns): T
   return relaid;
 }
 
-const startsOf = (surfaces: TerrainSurfaces): readonly Uint32Array[] => {
-  const { water, ground, risers } = surfaces.columns;
-  return [water, ground.grass, ground.sand, risers.grass, risers.sand];
-};
+const startsOf = (surfaces: TerrainSurfaces): readonly Uint32Array[] =>
+  columnStartsOf(surfaces.columns);
 
-const meshesOf = (surfaces: TerrainSurfaces): readonly (SurfaceGeometry | null)[] => [
-  surfaces.water,
-  surfaces.ground.grass,
-  surfaces.ground.sand,
-  surfaces.risers.grass,
-  surfaces.risers.sand,
-];
+// Every mesh but the sea, which is laid over the whole box and has no columns to index.
+const meshesOf = (surfaces: TerrainSurfaces): readonly (SurfaceGeometry | null)[] =>
+  geometriesOf(surfaces).slice(1);
 
 const quadsPerColumn = (starts: Uint32Array): number[] =>
   [...starts.subarray(1)].map((start, i) => start - starts[i]!);
@@ -659,6 +726,15 @@ describe('retileColumns', () => {
     const after = relayed(before, req, { from: 20, to: 20 });
     expect(before.water).toBeNull();
     expect(after.water?.quadCount).toBe(1);
+  });
+
+  it('takes the kerb up when something is built on the bank', () => {
+    const { built, req } = editable(null);
+    req.terrain.set(20, 20, { level: 0, surface: 'water' });
+    const before = terrainSurfacesFor(req);
+    built.add('20,19');
+    const after = relayed(before, req, { from: 20, to: 20 });
+    expect(after.details.kerb!.quadCount).toBeLessThan(before.details.kerb!.quadCount);
   });
 
   it('takes the river away again when the tile goes back to its base', () => {

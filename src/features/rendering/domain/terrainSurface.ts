@@ -32,6 +32,9 @@ export interface SurfaceGeometry {
   // A slope lit as though it were a floor is a slope the sun cannot pick out.
   readonly normals: Float32Array | null;
   readonly shoreDistances: ShoreDistances | null;
+  // Per vertex, the height of its quad's highest corner: a grass riser's turf lip is measured down
+  // from the crest of its own drop, so a two-level drop gets one lip and not a band at each level.
+  readonly crests: Float32Array | null;
   readonly indices: Uint32Array;
   readonly quadCount: number;
 }
@@ -151,6 +154,7 @@ class SeaBuilder {
         edge: new Float32Array(this.edges),
         coast: new Float32Array(this.coasts),
       },
+      crests: null,
       indices: new Uint32Array(this.indices),
       quadCount: this.quads,
     };
@@ -186,6 +190,7 @@ const SOFT_CREST = 0.45;
 class GroundBuilder {
   private readonly positions: number[] = [];
   private readonly normals: number[] = [];
+  private readonly crests: number[] = [];
   private readonly indices: number[] = [];
   private quads = 0;
 
@@ -213,6 +218,8 @@ class GroundBuilder {
   ): void {
     this.positions.push(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz);
     this.normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz, nx, ny, nz);
+    const crest = Math.max(ay, by, cy, dy);
+    this.crests.push(crest, crest, crest, crest);
     const base = this.quads * 4;
     this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     this.quads++;
@@ -336,6 +343,7 @@ class GroundBuilder {
         for (const [u, v] of grid) {
           this.positions.push(...at(u, v));
           this.normals.push(...normalAt(u, v));
+          this.crests.push(low + rise);
         }
         const base = this.quads * 4;
         this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -350,6 +358,7 @@ class GroundBuilder {
       positions: new Float32Array(this.positions),
       normals: new Float32Array(this.normals),
       shoreDistances: null,
+      crests: new Float32Array(this.crests),
       indices: new Uint32Array(this.indices),
       quadCount: this.quads,
     };
@@ -1304,12 +1313,13 @@ function spliceNumbers(
   keep: number,
   resume: number,
   end: number,
+  perQuad: number,
 ): Float32Array {
-  const added = fresh.length / 12;
-  const out = new Float32Array((keep + added + end - resume) * 12);
-  out.set(old.subarray(0, keep * 12), 0);
-  out.set(fresh, keep * 12);
-  out.set(old.subarray(resume * 12, end * 12), (keep + added) * 12);
+  const added = fresh.length / perQuad;
+  const out = new Float32Array((keep + added + end - resume) * perQuad);
+  out.set(old.subarray(0, keep * perQuad), 0);
+  out.set(fresh, keep * perQuad);
+  out.set(old.subarray(resume * perQuad, end * perQuad), (keep + added) * perQuad);
   return out;
 }
 
@@ -1331,19 +1341,24 @@ function spliceMesh(old: PlacedMesh, fresh: PlacedMesh, at: number): PlacedMesh 
   const starts = spliceStarts(old.starts, fresh.starts, at);
   const quadCount = lastOf(starts);
   if (quadCount === 0) return { geometry: null, starts };
-  const numbers = (of: (geometry: SurfaceGeometry) => Float32Array | null): Float32Array =>
+  const numbers = (
+    of: (geometry: SurfaceGeometry) => Float32Array | null,
+    perQuad = 12,
+  ): Float32Array =>
     spliceNumbers(
       (old.geometry && of(old.geometry)) ?? NO_NUMBERS,
       (fresh.geometry && of(fresh.geometry)) ?? NO_NUMBERS,
       keep,
       resume,
       end,
+      perQuad,
     );
   return {
     geometry: {
       positions: numbers((geometry) => geometry.positions),
       normals: numbers((geometry) => geometry.normals),
       shoreDistances: null,
+      crests: numbers((geometry) => geometry.crests, 4),
       indices: quadIndices(quadCount),
       quadCount,
     },

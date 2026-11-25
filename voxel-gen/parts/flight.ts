@@ -130,10 +130,9 @@ export const TIMBER: RailingColors = { post: PALETTE.teak.shade, rail: PALETTE.t
 // The edge handrail's white, so a stone climb is railed like the path at its top.
 export const WHITE: RailingColors = { post: PALETTE.stucco.shade, rail: PALETTE.stucco.base };
 
-// Posts and rails rather than a wall, open so the flank shows the climb's own face under it. Laid
-// along the north edge as every edge rail is, one voxel thick, so a wide climb is railed on its
-// outer flanks only. Turned onto the left flank x runs up the climb, onto the right flank down it:
-// a mirror is not a quarter turn, so each flank is its own model.
+// Open posts and rails, so the flank shows the climb's face; one voxel thick on the north edge, so
+// a wide climb is railed on its outer flanks only. x runs up the climb on the left flank and down it
+// on the right: a mirror is not a quarter turn, so each flank is its own model.
 export function postRailing(
   b: VoxelBuilder,
   treadAt: (z: number) => number,

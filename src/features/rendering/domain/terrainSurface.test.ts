@@ -344,6 +344,16 @@ describe('the terraces', () => {
     }
   });
 
+  it('measures every riser from the bench at the top of its drop', () => {
+    const { risers } = terrainSurfacesFor(request(null, 640, terraced()));
+    const { crests, positions } = risers.grass!;
+    expect(crests!.length).toBe(positions.length / 3);
+    expect(new Set(crests)).toEqual(new Set([grassOn(1), grassOn(2)].map(Math.fround)));
+    for (let vertex = 0; vertex < crests!.length; vertex++) {
+      expect(positions[vertex * 3 + 1]!).toBeLessThanOrEqual(crests![vertex]!);
+    }
+  });
+
   it('cuts the slope into the tile above the step, never into the ground below', () => {
     const land = terraced([{ level: 1, inset: 8, wave: 0 }]);
     const { risers } = terrainSurfacesFor(request(null, 640, land));

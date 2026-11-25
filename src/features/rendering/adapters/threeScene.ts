@@ -53,7 +53,7 @@ import { createRiverMaterial } from './riverMaterial';
 import type { WaterMaterial } from './waterSurface';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
-import { duneFace, stoneCourses } from './landTones';
+import { duneFace, turfEdge } from './landTones';
 
 const GROUND_COLOR = 0x5d7a45;
 
@@ -61,9 +61,10 @@ const GROUND_COLOR = 0x5d7a45;
 const SAND_COLOR = PALETTE.sand.base;
 const WET_SAND_COLOR = PALETTE.sand.shade;
 
-// Grass risers are laid stone, so a drop reads as a retaining wall; sand risers stay sand, a
-// shade down, because earth turned the dune into a quarry.
+// Grass risers are layered earth under a lip of the lawn's own green, which marks the drop's edge
+// without the noise of laid stone; sand risers stay sand, as earth turned the dune into a quarry.
 const RISER_COLOR = 0x6b5a3e;
+const TURF_COLOR = GROUND_COLOR;
 const SAND_RISER_COLOR = 0xc0ab7f;
 
 const KERB_COLOR = PALETTE.stone.shade;
@@ -253,6 +254,7 @@ function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
     geometry.setAttribute('shoreEdgeDistance', new BufferAttribute(edge, 1));
     geometry.setAttribute('shoreCoastDistance', new BufferAttribute(coast, 1));
   }
+  if (surface.crests) geometry.setAttribute('crest', new BufferAttribute(surface.crests, 1));
   geometry.setIndex(new BufferAttribute(surface.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
@@ -275,7 +277,7 @@ const WHITE = new Color(0xffffff);
 const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, WET_SAND_COLOR, KERB_COLOR] as const;
 
 const patternedTones = (): readonly (readonly [number, Node<'vec3'>])[] => [
-  [RISER_COLOR, stoneCourses()],
+  [RISER_COLOR, turfEdge(TURF_COLOR)],
   [SAND_RISER_COLOR, duneFace(SAND_COLOR, SAND_RISER_COLOR)],
 ];
 

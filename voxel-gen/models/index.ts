@@ -42,6 +42,7 @@ import house from './house.ts';
 import icecream from './icecream.ts';
 import jetty from './jetty.ts';
 import kerb from './kerb.ts';
+import kerb_post from './kerb-post.ts';
 import kids_club from './kids-club.ts';
 import lifeguard_tower from './lifeguard-tower.ts';
 import litter_bin from './litter-bin.ts';
@@ -110,6 +111,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   railing,
   boardwalk_railing,
   kerb,
+  kerb_post,
   pier_railing,
   stair_railing_left,
   stair_railing_right,

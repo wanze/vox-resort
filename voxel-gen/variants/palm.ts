@@ -1,57 +1,37 @@
 import { PALETTE } from '../palette.ts';
-import { defineModel, type Color, type VoxelBuilder } from '../voxelgen.ts';
+import { palmFrond, type PalmFrond } from '../parts/palm.ts';
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const EDGE = 15;
-const CROWN = 38;
+// Low enough for the crown to read against the trunk; at 38 the fronds looked like a tuft on a pole.
+const CROWN = 30;
 
-// Rotated off the axes so no frond lines up with a tile edge and the crown reads round.
-const FRONDS = [
-  { turn: 0.2, reach: 7.4, droop: 7, leaf: PALETTE.foliage.base },
-  { turn: 1.1, reach: 7, droop: 8, leaf: PALETTE.foliage.base },
-  { turn: 2.0, reach: 7.4, droop: 7, leaf: PALETTE.foliage.base },
-  { turn: 2.95, reach: 7, droop: 8, leaf: PALETTE.foliage.base },
-  { turn: 3.85, reach: 7.4, droop: 7, leaf: PALETTE.foliage.base },
-  { turn: 4.75, reach: 7, droop: 8, leaf: PALETTE.foliage.base },
-  { turn: 5.6, reach: 7.2, droop: 7, leaf: PALETTE.foliage.base },
-  { turn: 0.65, reach: 4, droop: 1, leaf: PALETTE.grass.base },
-  { turn: 2.75, reach: 4, droop: 1, leaf: PALETTE.grass.base },
-  { turn: 4.85, reach: 4, droop: 1, leaf: PALETTE.grass.base },
-] as const;
+const { foliage, grass } = PALETTE;
 
-const clamp = (value: number): number => Math.min(EDGE, Math.max(0, value));
+// Rotated off the axes so no frond lines up with a tile edge and the crown reads round. The lower
+// fronds are a shade darker, which is what gives the crown depth from above.
+const FRONDS: readonly PalmFrond[] = [
+  ...Array.from({ length: 9 }, (_, index) => ({
+    turn: 0.2 + (index * 2 * Math.PI) / 9,
+    droop: index % 2 === 0 ? 8 : 10,
+    rib: index % 2 === 0 ? foliage.base : foliage.shade,
+    leaflet: index % 2 === 0 ? foliage.base : foliage.shade,
+    tip: foliage.light,
+  })),
+  ...[0.65, 2.75, 4.85].map((turn) => ({
+    turn,
+    reach: 4,
+    droop: 1,
+    rib: grass.base,
+    leaflet: grass.base,
+    tip: grass.light,
+  })),
+];
 
 // Rooted in the middle and bowing out on the way up, then back, so the crown sits
 // over the root and the fronds stay inside the tile.
 function trunkAt(y: number, top: number): readonly [number, number] {
   const bow = Math.sin((y / top) * Math.PI);
   return [7 + 2.5 * bow, 7 + 2 * bow];
-}
-
-function frond(
-  b: VoxelBuilder,
-  [cx, cz]: readonly [number, number],
-  turn: number,
-  reach: number,
-  droop: number,
-  leaf: Color,
-): void {
-  const dx = Math.cos(turn);
-  const dz = Math.sin(turn);
-  const leaflet = (x: number, y: number, z: number): void =>
-    b.set(clamp(Math.round(x)), y, clamp(Math.round(z)), leaf);
-  for (let step = 1; step <= reach * 2; step++) {
-    const t = step / (reach * 2);
-    const out = t * reach;
-    // Lifts off the crown before it droops, like a rib under its own weight.
-    const y = Math.round(CROWN + 2 + 3 * t - (droop + 3) * t * t);
-    const x = cx + dx * out;
-    const z = cz + dz * out;
-    leaflet(x, y, z);
-    // The leaflets hang a course below the rib, which is what makes a frond read as a frond.
-    if (t < 0.25 || t > 0.8) continue;
-    leaflet(x - dz, y - 1, z + dx);
-    leaflet(x + dz, y - 1, z - dx);
-  }
 }
 
 export default defineModel({
@@ -94,7 +74,7 @@ export default defineModel({
     }
 
     const centre = [topX + 0.5, topZ + 0.5] as const;
-    for (const { turn, reach, droop, leaf } of FRONDS) frond(b, centre, turn, reach, droop, leaf);
+    for (const frond of FRONDS) palmFrond(b, centre, CROWN, frond);
     b.box(topX, topX + 1, CROWN + 1, CROWN + 3, topZ, topZ + 1, PALETTE.grass.base);
   },
 });

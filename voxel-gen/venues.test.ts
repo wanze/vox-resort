@@ -39,6 +39,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'hedge',
   'jetty',
   'kerb',
+  'kerb-post',
   'lifeguard-tower',
   'litter-bin',
   'oak',

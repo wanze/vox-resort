@@ -29,7 +29,7 @@ import {
 import {
   keepStyle,
   layoutResort,
-  kerbedIfUnkerbed,
+  rekerbed,
   woodOnTheDunesOf,
   type Placement,
   type ResortLayout,
@@ -241,7 +241,7 @@ function plotOfWorld(world: SavedWorld, plan: ResortPlan): Plot {
   const { paths, rails: woodenRails } = woodOnTheDunesOf(world.paths, world.rails, items, (x, z) =>
     terrain.surfaceOf(x, z),
   );
-  const rails = kerbedIfUnkerbed(woodenRails, paths, items, terrain);
+  const rails = rekerbed(woodenRails, paths, placements, items, terrain);
   return {
     layout: { placements, props, paths, rails, tilesX, tilesZ },
     placements: [...placements],

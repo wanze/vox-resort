@@ -8,8 +8,9 @@ import {
 } from '../../catalog/domain/objectTypes';
 import { buildCostOf, costToStand, DIG_COST, refundOf } from '../../catalog/domain/prices';
 import { blobOf } from '../../catalog/domain/placementFacts';
-import type { LayoutItem, Placement } from '../../layout/domain/resortLayout';
+import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
 import { deckedOn, kerbedOn, railModelsIn } from '../../layout/domain/resortLayout';
+import { doorwayBeside, doorwaysOf } from '../../layout/domain/doorways';
 import { listOf } from '../../layout/domain/placementLists';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
 import {
@@ -244,6 +245,12 @@ export function createEditMode(parts: {
     return rights === null || !isGateway(placement.id) || facesUnowned(rights, placement, plan);
   };
 
+  const catalogueById = new Map(catalogue.map((item) => [item.id, item]));
+  const itemOf = (id: string): LayoutItem | undefined => catalogueById.get(id);
+  const standingAt = (tile: Tile): Placement | undefined => {
+    const key = occupancy.keyAt(tile);
+    return key === undefined ? undefined : placementOf(key);
+  };
   const handrails: HandrailRules = {
     pavedWith,
     levelOf: ground.levelOf,
@@ -252,6 +259,8 @@ export function createEditMode(parts: {
     wantsStairs: wantsStairsOf(paving),
     isKerbed: kerbedOn((tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ)),
     isDecked: deckedOn((tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ)),
+    isDoorway: doorwayBeside(standingAt, itemOf),
+    doorwaysOf: (placement) => doorwaysOf(placement, itemOf(placement.id)),
     models: railModelsIn(catalogue),
     standing: (tileX, tileZ) => resort().railIndex.at(tileX, tileZ),
   };

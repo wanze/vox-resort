@@ -2,7 +2,7 @@ import type { Camera } from 'three/webgpu';
 import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
 import { demolishAt } from '../domain/demolish';
 import type { PickGround } from '../domain/groundPick';
-import { reRailAround, type HandrailRules } from '../domain/handrails';
+import { reRailAround, reRailDoorsOf, type HandrailRules } from '../domain/handrails';
 import { mosaicStyleOf, remosaicked, unlaidBy, type PavingRules } from '../domain/paving';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
@@ -69,6 +69,7 @@ export function createDemolishPointer(options: DemolishPointerOptions): Demolish
       const paved = paving.pavedWith(tile.x, tile.z);
       onDemolish(standing);
       if (paved) settleAround(tile, paved);
+      reRailDoorsOf(standing, handrails, onRails);
     },
     onCancel: options.onCancel,
   });

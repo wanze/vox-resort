@@ -14,6 +14,10 @@ const pavedOf = (tiles: readonly Tile[]) => {
 
 const ramps = (): boolean => false;
 
+const kerbed = (): boolean => true;
+
+const southDoor = (_x: number, _z: number, rotation: number): boolean => rotation === 0;
+
 const allSand = (): boolean => true;
 
 const sandBelowTheStep = (_x: number, z: number): boolean => z === 2;
@@ -105,6 +109,67 @@ describe('railsAt', () => {
       () => true,
     );
     expect(besideRise.map((rail) => rail.kind)).toEqual(['kerb', 'kerb', 'kerb']);
+  });
+
+  it('leaves the kerb open across a doorway', () => {
+    const tile = { x: 1, z: 1 };
+    const flat = groundOf(['000', '000', '000']);
+    const at = (doorway?: typeof southDoor) =>
+      sides(
+        railsAt(
+          tile,
+          pavedOf([tile]),
+          flat,
+          undefined,
+          undefined,
+          undefined,
+          kerbed,
+          undefined,
+          doorway,
+        ),
+      ).toSorted();
+    expect(at()).toEqual([0, 1, 2, 3]);
+    expect(at(southDoor)).toEqual([1, 2, 3]);
+  });
+
+  describe('corner posts', () => {
+    const flat = groundOf(['000', '000', '000']);
+    // An L of paving round the open corner tile at 2,2.
+    const corner = [
+      { x: 1, z: 1 },
+      { x: 2, z: 1 },
+      { x: 1, z: 2 },
+    ];
+    const postsAt = (paved: readonly Tile[], ground = flat, doorway?: () => boolean) =>
+      railsAt(
+        { x: 1, z: 1 },
+        pavedOf(paved),
+        ground,
+        undefined,
+        undefined,
+        undefined,
+        kerbed,
+        undefined,
+        doorway,
+      )
+        .filter((rail) => rail.kind === 'kerb-post')
+        .map((rail) => rail.rotation);
+
+    it('fills the corner where open ground touches the paving only diagonally', () => {
+      expect(postsAt(corner)).toEqual([2]);
+    });
+
+    it('stands none where the diagonal is paved too', () => {
+      expect(postsAt([...corner, { x: 2, z: 2 }])).toEqual([]);
+    });
+
+    it('stands none where a door leaves one of the two kerbs out', () => {
+      expect(postsAt(corner, flat, () => true)).toEqual([]);
+    });
+
+    it('stands none where the corner ground stands higher', () => {
+      expect(postsAt(corner, groundOf(['000', '000', '001']))).toEqual([]);
+    });
   });
 
   it('kerbs neither flank of a flight', () => {

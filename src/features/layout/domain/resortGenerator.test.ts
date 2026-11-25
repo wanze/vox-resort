@@ -12,7 +12,7 @@ import {
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
-  KERB_ID,
+  KERB_IDS,
   RAILING_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
@@ -1057,7 +1057,7 @@ describe('the hill a generated plot gets', () => {
     const terrain = terrainFor(plan);
     const offDune = rails.filter(
       (rail) =>
-        rail.id !== KERB_ID &&
+        !KERB_IDS.has(rail.id) &&
         (terrain.surfaceOf(rail.tileX, rail.tileZ) !== 'sand' ||
           terrain.levelOf(rail.tileX, rail.tileZ) !== 3),
     );

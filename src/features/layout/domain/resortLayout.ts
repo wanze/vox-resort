@@ -21,6 +21,8 @@ import {
   PATH_ID,
   PIER_RAILING_ID,
   KERB_ID,
+  KERB_IDS,
+  KERB_POST_ID,
   RAILING_ID,
   RAMP_FOOT_ID,
   RAMP_FOOT_RAILING_LEFT_ID,
@@ -44,7 +46,8 @@ import { terrainFor } from './terrain';
 import { levelHeight, straddledTile, type LevelProvider } from './elevation';
 import { climbTilesFor, isDeckedClimb, type ClimbKind, type ClimbTile } from './climbs';
 import { CLIMBS, type PavedProvider } from './stairs';
-import { kerbsAt, railTilesFor, type RailKind, type RailTile } from './railings';
+import { doorwayLookup } from './doorways';
+import { kerbsAt, railTilesFor, type KerbGround, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
 import { rotateExtent, ROTATIONS, type Extent, type Rotation } from './rotation';
@@ -162,6 +165,34 @@ export function placeOnEdge(
     x: tileX * TILE_VOXELS + offset.x,
     z: tileZ * TILE_VOXELS + offset.z,
   };
+}
+
+// Corner r lies between edges r and r + 1, where the model's own corner voxel at its origin turns.
+function placeInCorner(
+  item: LayoutItem,
+  key: string,
+  tileX: number,
+  tileZ: number,
+  rotation: Rotation,
+  level = 0,
+): Placement {
+  const flat = place(item, key, tileX, tileZ, rotation, level);
+  const farX = rotation === 2 || rotation === 3 ? TILE_VOXELS - flat.width : 0;
+  const farZ = rotation === 1 || rotation === 2 ? TILE_VOXELS - flat.depth : 0;
+  return { ...flat, x: tileX * TILE_VOXELS + farX, z: tileZ * TILE_VOXELS + farZ };
+}
+
+// By model, not by kind, so a saved rail is checked against the spot the layout stood it on.
+export function placeRail(
+  item: LayoutItem,
+  key: string,
+  tileX: number,
+  tileZ: number,
+  rotation: Rotation,
+  level = 0,
+): Placement {
+  const placeAt = item.id === KERB_POST_ID ? placeInCorner : placeOnEdge;
+  return placeAt(item, key, tileX, tileZ, rotation, level);
 }
 
 // Only the ground claim turns: a model too big for its footprint is too big whichever way round.
@@ -782,6 +813,7 @@ export function railModelsIn(items: readonly LayoutItem[]): RailModels {
     // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
     pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
     kerb: byId.get(KERB_ID),
+    'kerb-post': byId.get(KERB_POST_ID),
     span: byId.get(BRIDGE_RAILING_ID),
     'ramp-left': byId.get(BRIDGE_RAMP_RAILING_LEFT_ID),
     'ramp-right': byId.get(BRIDGE_RAMP_RAILING_RIGHT_ID),
@@ -798,27 +830,37 @@ export function deckedOn(surfaceOf: (tileX: number, tileZ: number) => Ground): P
   return (tileX, tileZ) => surfaceOf(tileX, tileZ) === 'sand';
 }
 
-// A world saved before kerbs existed is kerbed on load. Read off the paving it was saved with, as a
-// saved world keeps no record of which climbs it chose ramps for.
-export function kerbedIfUnkerbed(
+// Kerbs are laid afresh on load, so a world saved before kerbs, door gaps or corner posts gets them.
+// Read off the paving it was saved with, as a saved world keeps no record of which climbs it chose
+// ramps for.
+export function rekerbed(
   rails: readonly Placement[],
   paths: readonly Placement[],
+  placements: readonly Placement[],
   items: readonly LayoutItem[],
   terrain: Pick<Terrain, 'levelOf' | 'surfaceOf'>,
 ): readonly Placement[] {
   const models = railModelsIn(items);
-  if (!models.kerb || rails.some((rail) => rail.id === KERB_ID)) return rails;
+  if (!models.kerb) return rails;
+  const byId = new Map(items.map((item) => [item.id, item]));
   const levelOf: LevelProvider = (tileX, tileZ) => terrain.levelOf(tileX, tileZ);
-  const isWater = (tileX: number, tileZ: number): boolean =>
-    terrain.surfaceOf(tileX, tileZ) === 'water';
-  const isPaved = pavedLookup(paths.map((path) => ({ x: path.tileX, z: path.tileZ })));
-  const kerbs = paths
-    .filter(
-      (path) =>
-        FLAT_PAVING_IDS.has(path.id) && terrain.surfaceOf(path.tileX, path.tileZ) === 'grass',
-    )
-    .flatMap((path) => kerbsAt({ x: path.tileX, z: path.tileZ }, isPaved, levelOf, isWater));
-  return [...rails, ...railPlacementsFor(models, kerbs, levelOf)];
+  const flat = paths.filter(
+    (path) => FLAT_PAVING_IDS.has(path.id) && terrain.surfaceOf(path.tileX, path.tileZ) === 'grass',
+  );
+  const ground: KerbGround = {
+    isPaved: pavedLookup(paths.map((path) => ({ x: path.tileX, z: path.tileZ }))),
+    isKerbedFlat: pavedLookup(flat.map((path) => ({ x: path.tileX, z: path.tileZ }))),
+    levelOf,
+    isWater: (tileX, tileZ) => terrain.surfaceOf(tileX, tileZ) === 'water',
+    isDoorway: doorwayLookup(placements, (id) => byId.get(id)),
+  };
+  const kerbs = flat.flatMap((path) => kerbsAt({ x: path.tileX, z: path.tileZ }, ground));
+  const fresh = railPlacementsFor(models, kerbs, levelOf);
+  const saved = rails.filter((rail) => KERB_IDS.has(rail.id));
+  // Kept as saved when nothing changed, so a reload lists its rails in the order it saved them.
+  const kept = new Set(saved.map((rail) => rail.key));
+  if (fresh.length === saved.length && fresh.every((rail) => kept.has(rail.key))) return rails;
+  return [...rails.filter((rail) => !KERB_IDS.has(rail.id)), ...fresh];
 }
 
 const STONE_CLIMBS: ReadonlyMap<string, ClimbKind> = new Map([
@@ -869,7 +911,7 @@ export function railPlacementsFor(
     if (!item) continue;
     const { x, z } = rail.tile;
     const level = levelOf(x, z);
-    placements.push(placeOnEdge(item, railKey(item, rail), x, z, rail.rotation, level));
+    placements.push(placeRail(item, railKey(item, rail), x, z, rail.rotation, level));
   }
   return placements;
 }
@@ -971,7 +1013,16 @@ export function layoutResort(
   // alone would say there was nothing to fall into.
   const rails = railPlacementsFor(
     railModelsIn(items),
-    railTilesFor(paved, levelOf, overWater, raised, wantsStairs, kerbedOn(surfaceOf), isDecked),
+    railTilesFor(
+      paved,
+      levelOf,
+      overWater,
+      raised,
+      wantsStairs,
+      kerbedOn(surfaceOf),
+      isDecked,
+      doorwayLookup(placements, (id) => byId.get(id)),
+    ),
     levelOf,
   );
 

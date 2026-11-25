@@ -9,6 +9,7 @@ import { buildModel, TILE_VOXELS, type VoxelModelSource } from './voxelgen.ts';
 const PAIRS: readonly (readonly [string, string])[] = [
   ['path', 'railing'],
   ['path', 'kerb'],
+  ['path', 'kerb-post'],
   ['boardwalk', 'railing'],
   ['boardwalk', 'boardwalk-railing'],
   ['jetty', 'railing'],

@@ -8,6 +8,7 @@ import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
+import { rekerbed } from '../../layout/domain/resortLayout';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { MAX_TERRAIN_LEVEL, terrainFor, type Terrain } from '../../layout/domain/terrain';
 import { claimingOn, prepareResort, type Plot } from './prepareResort';
@@ -48,6 +49,14 @@ function played() {
     tileX: path.tileX + 1,
     x: path.x + TILE_VOXELS,
   });
+  // Re-kerbed as the edit mode re-rails around what it digs and paves.
+  const { plot } = prepared;
+  const items = OBJECT_TYPES.map(layoutItemFor);
+  plot.rails.splice(
+    0,
+    Infinity,
+    ...rekerbed(plot.rails, plot.paths, plot.placements, items, terrain),
+  );
   return { prepared, terrain };
 }
 

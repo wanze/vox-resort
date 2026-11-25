@@ -11,7 +11,7 @@ import { referenceWorldOf } from './referenceResort';
 import { planOfWorld } from './savedWorld';
 
 // Append-only: a new model goes onto the reference resort, or onto this list on purpose.
-// Kerbs and wooden climbs and handrails are laid when a world loads, not stored in the fixture until it is
+// Kerbs, their posts, and wooden climbs and handrails are laid when a world loads, not stored in the fixture until it is
 // next refreshed.
 const NOT_IN_REFERENCE: readonly string[] = [
   'boardwalk-stairs',
@@ -19,6 +19,7 @@ const NOT_IN_REFERENCE: readonly string[] = [
   'boardwalk-ramp-head',
   'boardwalk-railing',
   'kerb',
+  'kerb-post',
   'boardwalk-stair-railing-left',
   'boardwalk-stair-railing-right',
   'boardwalk-ramp-foot-railing-left',

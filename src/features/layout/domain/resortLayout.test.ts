@@ -6,7 +6,7 @@ import {
   decorationsFor,
   derivedKey,
   isPathNetworkConnected,
-  kerbedIfUnkerbed,
+  rekerbed,
   woodOnTheDunesOf,
   layoutResort,
   occupiedTiles,
@@ -23,6 +23,7 @@ import {
   type ResortLayout,
 } from './resortLayout';
 import { tileKey } from './tileKey';
+import { doorwaysOf } from './doorways';
 import {
   BEACH_LAMP_ID,
   BENCH_ID,
@@ -38,6 +39,7 @@ import {
   HEDGE_ID,
   JETTY_ID,
   KERB_ID,
+  KERB_POST_ID,
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
@@ -309,6 +311,8 @@ describe('a terraced plot', () => {
   });
 });
 
+const keysOf = (placed: readonly Placement[]) => placed.map((rail) => rail.key).toSorted();
+
 describe('handrails', () => {
   const railItem: LayoutItem = {
     id: RAILING_ID,
@@ -405,15 +409,17 @@ describe('handrails', () => {
     expect(kerbs.some((kerb) => kerb.tileX === 0 && kerb.tileZ === 2)).toBe(false);
   });
 
-  it('kerbs a world saved before kerbs as a new one is kerbed, once', () => {
-    const { rails, paths } = layoutResort(kerbItems, bench);
+  it('kerbs a world on load as a new one is kerbed, whatever kerbs it was saved with', () => {
+    const { rails, paths, placements } = layoutResort(kerbItems, bench);
     const terrain = terrainFor(bench);
     const unkerbed = rails.filter((rail) => rail.id !== KERB_ID);
-    const loaded = kerbedIfUnkerbed(unkerbed, paths, kerbItems, terrain);
-    expect(loaded.map((rail) => rail.key).toSorted()).toEqual(
-      rails.map((rail) => rail.key).toSorted(),
+    expect(keysOf(rekerbed(unkerbed, paths, placements, kerbItems, terrain))).toEqual(
+      keysOf(rails),
     );
-    expect(kerbedIfUnkerbed(loaded, paths, kerbItems, terrain)).toBe(loaded);
+    const stale = rails.map((rail) =>
+      rail.id === KERB_ID ? { ...rail, key: `${rail.key}:stale` } : rail,
+    );
+    expect(keysOf(rekerbed(stale, paths, placements, kerbItems, terrain))).toEqual(keysOf(rails));
   });
 });
 
@@ -1229,6 +1235,31 @@ describe('turning a building to open its door onto paving', () => {
         isPathNetworkConnected(before.paths.map((tile) => ({ x: tile.tileX, z: tile.tileZ }))),
       );
     });
+
+    it('leaves the kerb open across every door step and keeps it shut elsewhere', () => {
+      const layout = layoutResort(withDoors, plan);
+      const terrain = terrainFor(plan);
+      const surfaceOf = (x: number, z: number) => terrain.surfaceOf(x, z);
+      const byId = new Map(withDoors.map((type) => [type.id, type]));
+      const doors = layout.placements.flatMap((placement) =>
+        doorwaysOf(placement, byId.get(placement.id)),
+      );
+      const kerbs = new Set(
+        layout.rails
+          .filter((rail) => rail.id === KERB_ID)
+          .map((rail) => `${rail.tileX},${rail.tileZ},${rail.rotation}`),
+      );
+      const onGrassPaving = doors.filter(
+        ({ tile }) =>
+          surfaceOf(tile.x, tile.z) === 'grass' &&
+          layout.paths.some((path) => path.tileX === tile.x && path.tileZ === tile.z),
+      );
+      expect(onGrassPaving.length).toBeGreaterThan(0);
+      for (const { tile, rotation } of doors) {
+        expect(kerbs.has(`${tile.x},${tile.z},${rotation}`)).toBe(false);
+      }
+      expect(kerbs.size).toBeGreaterThan(0);
+    });
   });
 });
 
@@ -1284,6 +1315,10 @@ describe('wooden climbs', () => {
     );
     expect(loaded.paths).toEqual(layout.paths);
     expect(loaded.rails).toEqual(layout.rails);
+  });
+
+  it('posts the corners where grass meets the paving only diagonally', () => {
+    expect(layout.rails.some((rail) => rail.id === KERB_POST_ID)).toBe(true);
   });
 
   it('leaves a world alone when the catalogue has no wooden climb', () => {

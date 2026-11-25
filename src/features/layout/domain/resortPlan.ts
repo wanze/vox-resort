@@ -116,6 +116,10 @@ export const PIER_RAILING_ID = 'pier-railing';
 
 export const KERB_ID = 'kerb';
 
+export const KERB_POST_ID = 'kerb-post';
+
+export const KERB_IDS: ReadonlySet<string> = new Set([KERB_ID, KERB_POST_ID]);
+
 export const STAIR_RAILING_LEFT_ID = 'stair-railing-left';
 export const STAIR_RAILING_RIGHT_ID = 'stair-railing-right';
 const BOARDWALK_STAIR_RAILING_LEFT_ID = 'boardwalk-stair-railing-left';
@@ -187,6 +191,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   BOARDWALK_RAILING_ID,
   PIER_RAILING_ID,
   KERB_ID,
+  KERB_POST_ID,
   ...CLIMB_RAILING_IDS,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,

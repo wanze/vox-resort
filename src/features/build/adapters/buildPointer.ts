@@ -27,7 +27,7 @@ import {
   type PavingRules,
   type Relaid,
 } from '../domain/paving';
-import { reRailAround, type HandrailRules } from '../domain/handrails';
+import { reRailAround, reRailDoorsOf, type HandrailRules } from '../domain/handrails';
 import { footprintTiles, type Footprint, type TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
@@ -132,7 +132,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     for (const { placement, lifted } of relaid) onPlace(placement, lifted);
   };
 
-  const settleAround = (tile: Tile, lifted: Placement | null): void => {
+  const settleAround = (tile: Tile, placed: Placement, lifted: Placement | null): void => {
     // Asked after the tile is standing: that is what turns the slab below a step into the flight up
     // it. A repave leaves the tile paved, which is all a flight asks of it.
     const climbs = lifted ? [] : relaidBy(tile, paving);
@@ -141,6 +141,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     relay(remosaicked({ tile, before: mosaicStyleOf(lifted, paving) }, climbs, paving));
     // Last, once paving and climbs are settled: a rail is a fact about the ground around a tile.
     reRailAround(tile, handrails, onRails);
+    reRailDoorsOf(placed, handrails, onRails);
   };
 
   const covers = (anchor: Tile, tile: Tile): boolean => {
@@ -188,7 +189,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       const { lifted } = plan;
       if (lifted) onRepave(plan.placement, lifted);
       else onPlace(plan.placement);
-      settleAround(tile, lifted);
+      settleAround(tile, plan.placement, lifted);
       item = nextItem();
     },
     onKey(event) {

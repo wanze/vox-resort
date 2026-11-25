@@ -1,4 +1,37 @@
+import { palmFrond, type PalmFrond } from '../parts/palm.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+
+const C = {
+  trunk: 0x8a6a3f,
+  trunkDark: 0x6f5330,
+  frondA: 0x2f7d45,
+  frondB: 0x49a05e,
+  frondTip: 0x62b56f,
+  coconut: 0x5a3f26,
+};
+
+// Low enough for the crown to read against the trunk; at 40 the fronds looked like a tuft on a pole.
+const TOP = 32;
+
+// Off the axes, so no frond lines up with a tile edge. Alternate fronds hang lower and darker, which
+// layers the crown instead of laying it flat.
+const FRONDS: readonly PalmFrond[] = [
+  ...Array.from({ length: 8 }, (_, index) => ({
+    turn: 0.4 + (index * Math.PI) / 4,
+    droop: index % 2 === 0 ? 7 : 10,
+    rib: C.frondA,
+    leaflet: index % 2 === 0 ? C.frondB : C.frondA,
+    tip: C.frondTip,
+  })),
+  ...[1.2, 3.3, 5.4].map((turn) => ({
+    turn,
+    reach: 3.5,
+    droop: 0,
+    rib: C.frondB,
+    leaflet: C.frondB,
+    tip: C.frondTip,
+  })),
+];
 
 export default defineModel({
   id: 'palm',
@@ -6,66 +39,31 @@ export default defineModel({
   category: 'grounds',
   sound: 'trees',
   scenery: 0.4,
+  // What it cost before its crown grew: the price follows the voxel count, and this was only a look.
+  cost: 10,
   tiles: { x: 1, z: 1 },
   onTerrain: true,
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b);
-    const box = b.box.bind(b);
-
-    const C = {
-      trunk: 0x8a6a3f,
-      trunkDark: 0x6f5330,
-      frondA: 0x2f7d45,
-      frondB: 0x49a05e,
-      frondTip: 0x62b56f,
-      coconut: 0x5a3f26,
-    };
-
-    const topY = 40;
+    // A lean that comes back over the root by the top, so the crown is centred on the tile it fills.
     let tx = 7;
     let tz = 7;
-    for (let y = 2; y <= topY; y++) {
-      tx = 7 + Math.round(Math.sin((y - 2) / 26) * 2);
-      tz = 7 + Math.round(Math.sin((y - 2) / 34) * 1);
-      box(tx, tx + 1, y, y, tz, tz + 1, (y - 2) % 3 === 0 ? C.trunkDark : C.trunk);
+    for (let y = 2; y <= TOP; y++) {
+      const rise = (y - 2) / (TOP - 2);
+      tx = 7 + Math.round(Math.sin(rise * Math.PI) * 2);
+      tz = 7 + Math.round(Math.sin(rise * Math.PI) * 1);
+      b.box(tx, tx + 1, y, y, tz, tz + 1, (y - 2) % 3 === 0 ? C.trunkDark : C.trunk);
     }
-    const cx = tx;
-    const cz = tz;
 
     for (const [dx, dz] of [
       [-1, 0],
       [2, 1],
       [0, 2],
-    ] as const)
-      set(cx + dx, topY - 1, cz + dz, C.coconut);
-
-    const cardinals: [number, number][] = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
-    const diagonals: [number, number][] = [
-      [1, 1],
       [1, -1],
-      [-1, 1],
-      [-1, -1],
-    ];
-    const frond = (dx: number, dz: number, len: number) => {
-      for (let i = 1; i <= len; i++) {
-        const fy = topY + 2 - Math.max(0, i - 2) - (i >= len - 1 ? 1 : 0);
-        const fx = cx + dx * i;
-        const fz = cz + dz * i;
-        set(fx, fy, fz, i >= len - 1 ? C.frondTip : C.frondA);
-        if (i <= 3) {
-          set(fx + (dz !== 0 ? 1 : 0), fy, fz + (dx !== 0 ? 1 : 0), C.frondB);
-          set(fx - (dz !== 0 ? 1 : 0), fy, fz - (dx !== 0 ? 1 : 0), C.frondB);
-        }
-      }
-    };
-    for (const [dx, dz] of cardinals) frond(dx, dz, 6);
-    for (const [dx, dz] of diagonals) frond(dx, dz, 4);
-    box(cx, cx + 1, topY + 2, topY + 3, cz, cz + 1, C.frondB);
-    set(cx, topY + 4, cz, C.frondTip);
+    ] as const)
+      b.set(tx + dx, TOP - 1, tz + dz, C.coconut);
+
+    for (const frond of FRONDS) palmFrond(b, [tx + 0.5, tz + 0.5], TOP, frond);
+    b.box(tx, tx + 1, TOP + 1, TOP + 2, tz, tz + 1, C.frondB);
+    b.set(tx, TOP + 3, tz, C.frondTip);
   },
 });

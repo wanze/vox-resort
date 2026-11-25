@@ -5,10 +5,11 @@ import { fitsWorld } from '../../land/domain/landRights';
 import { elevationFor } from '../../layout/domain/elevation';
 import {
   place,
-  placeOnEdge,
+  placeRail,
   type LayoutItem,
   type Placement,
 } from '../../layout/domain/resortLayout';
+import { KERB_POST_ID } from '../../layout/domain/resortPlan';
 import { rotateExtent } from '../../layout/domain/rotation';
 import { MAX_TERRAIN_LEVEL } from '../../layout/domain/terrain';
 import { planOfWorld, type SavedWorld } from '../../resort-prep/domain/savedWorld';
@@ -52,7 +53,7 @@ function footprintMisfit(entry: Placement, item: LayoutItem): string | null {
 }
 
 function geometryMisfit(entry: Placement, item: LayoutItem, rail: boolean): string | null {
-  const want = (rail ? placeOnEdge : place)(
+  const want = (rail ? placeRail : place)(
     item,
     entry.key,
     entry.tileX,
@@ -99,9 +100,11 @@ function claims(entry: Placement, world: SavedWorld, claimed: Uint8Array): boole
   return overlaps;
 }
 
-// The game puts up to four rails on a tile, one per edge, never two on one edge.
+// The game puts up to four rails on a tile, one per edge, never two on one edge. A kerb post's
+// rotation names a corner, so it is counted apart from the edges.
 function railEdgeMisfit(entry: Placement, seen: Seen): string | null {
-  const edge = `${entry.tileX},${entry.tileZ},${entry.rotation}`;
+  const corner = entry.id === KERB_POST_ID ? 'corner' : 'edge';
+  const edge = `${entry.tileX},${entry.tileZ},${entry.rotation},${corner}`;
   return firstSighting(seen.railEdges, edge) ? null : `${entry.key}: a second rail on one edge`;
 }
 

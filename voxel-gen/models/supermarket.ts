@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, pergola, planter, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { awning, doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
@@ -75,7 +75,14 @@ export default defineModel({
     // elevation and gives it to the roof.
     const OVERHANG = 1;
     const deck = eaves + 1;
-    flatRoof(b, { ...BODY, y: eaves, overhang: OVERHANG, parapet: 2, cover: slate });
+    flatRoof(b, {
+      ...BODY,
+      y: eaves,
+      overhang: OVERHANG,
+      parapet: 2,
+      cover: stone,
+      coping: terracotta,
+    });
 
     doorway(b, {
       face: 'z+',
@@ -136,8 +143,11 @@ export default defineModel({
     box(12, 21, deck + 3, deck + 3, 10, 17, metal.base);
     box(38, 43, deck, deck + 1, 22, 27, slate.shade);
     box(38, 43, deck + 2, deck + 2, 22, 27, metal.base);
-    pottedPlant(b, { x: 49, z: 27, y: deck, size: 3 });
-    for (const x of [22, 42]) box(x, x, eaves, eaves, BODY.z, FRONT, slate.shade);
+    pergola(b, { x: 47, z: 22, y: deck, w: 13, d: 10, height: 5 });
+    planter(b, { x: BODY.x + 1, z: FRONT - 1, y: deck, w: 17, d: 2 });
+    planter(b, { x: 38, z: FRONT - 1, y: deck, w: 21, d: 2 });
+    pottedPlant(b, { x: 4, z: 6, y: deck, size: 3 });
+    for (const x of [22, 42]) box(x, x, eaves, eaves, BODY.z, FRONT, stone.shade);
 
     // One fruit colour: three alternating is 16 quads a crate and reads as a stipple.
     const crate = (x: number, z: number, y: number, fruit: number): void => {

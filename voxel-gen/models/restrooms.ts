@@ -2,7 +2,7 @@
 // defeats the coplanar merge and costs more triangles than the whole building.
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { flowerBox } from '../parts/props.ts';
+import { flowerBox, planter } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
@@ -32,7 +32,14 @@ export default defineModel({
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 16 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1, wall: PALETTE.slate });
-    flatRoof(b, { ...BODY, y: eaves });
+    const deck = flatRoof(b, {
+      ...BODY,
+      y: eaves,
+      cover: PALETTE.stone,
+      coping: PALETTE.terracotta,
+    });
+    // Along the front parapet, where it is all the camera sees of the roof from the paving.
+    planter(b, { x: BODY.x + 1, z: FRONT - 1, y: deck - 1, w: BODY.w - 2, d: 2 });
 
     for (const along of [7, 21]) {
       doorway(b, { face: 'z+', at: FRONT, along, y: ground, w: 4, h: 8 });

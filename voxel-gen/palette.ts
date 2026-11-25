@@ -52,6 +52,8 @@ export const PALETTE = {
   // Dark enough to read as a hole in a wall, not as a mirror.
   glass: ramp(0x8fb8c4),
   metal: ramp(0x474d57),
+  // Weathered bronze for statues, light enough to read against paving where metal goes black.
+  verdigris: ramp(0x5e9c86),
   // Brighter than the sea, which grades its own colour in `seaMaterial.ts`.
   water: ramp(0x4fc6de),
   bloom: ramp(0xd2483c),

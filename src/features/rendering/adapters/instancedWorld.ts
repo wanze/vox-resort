@@ -65,6 +65,7 @@ import {
   regionOf,
   type ChunkCoordinate,
 } from '../domain/spatialChunks';
+import { castsSunShadow } from '../domain/sunShadows';
 import { createPoolWaterMaterial } from './poolWaterMaterial';
 import type { ModelGeometry } from './voxelMeshBuilder';
 
@@ -268,6 +269,7 @@ interface ModelPart {
   readonly material: Material;
   readonly triangles: number;
   readonly extent: number;
+  readonly height: number;
 }
 
 interface Bucket {
@@ -353,11 +355,17 @@ function instancedGeometryOf(
   return { instances, matrices };
 }
 
+// A pool's water lies flat in its own basin and would only shade itself.
+const castsShadow = (part: ModelPart): boolean =>
+  part.kind !== 'water' && castsSunShadow(part.height);
+
 function createMesh(bucket: Bucket, name: string, capacity: number, count: number): void {
   const { instances, matrices } = instancedGeometryOf(bucket.geometry, capacity);
   instances.instanceCount = count;
   const mesh = new Mesh(instances, bucket.part.material);
   mesh.name = name;
+  mesh.receiveShadow = true;
+  mesh.castShadow = castsShadow(bucket.part);
   // The instances carry the placement, and a per-frame matrix walk over
   // thousands of meshes was a real cost.
   mesh.matrixAutoUpdate = false;
@@ -480,8 +488,19 @@ const SURFACES = [
 
 const trianglesIn = (geometry: BufferGeometry): number => (geometry.getIndex()?.count ?? 0) / 3;
 
+function heightOf(model: ModelGeometry): number {
+  let height = 0;
+  for (const geometry of [model.lit, model.emissive, model.window, model.canopy]) {
+    if (!geometry) continue;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    height = Math.max(height, geometry.boundingBox!.max.y);
+  }
+  return height;
+}
+
 function modelPartsFor(model: ModelGeometry, materials: Materials): ModelPart[] {
   const extent = extentOf(model);
+  const height = heightOf(model);
   const coarse = model.coarse ?? null;
   const parts: ModelPart[] = [];
   for (const [kind, surface] of SURFACES) {
@@ -495,6 +514,7 @@ function modelPartsFor(model: ModelGeometry, materials: Materials): ModelPart[] 
       material: kind === 'lit' && model.window ? materials.building : materials[kind],
       triangles: trianglesIn(geometry),
       extent,
+      height,
     });
   }
   return parts;

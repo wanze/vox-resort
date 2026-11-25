@@ -1,7 +1,7 @@
 // Hollow on purpose: the mesher meshes the inside surfaces too, which costs more than a solid body.
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, pergola, planter, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { arcade } from '../parts/veranda.ts';
 import { shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
@@ -85,7 +85,7 @@ export default defineModel({
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
-    const { stone, stucco, slate, metal, teak, foliage, bloom } = PALETTE;
+    const { stone, stucco, slate, metal, teak, terracotta, foliage, bloom } = PALETTE;
 
     const ground = plinth(b, { x: 0, z: 0, w: PLOT, d: PLOT });
     if (ground !== GROUND) throw new Error('The plinth moved under the players');
@@ -116,7 +116,14 @@ export default defineModel({
     // Pale, because a dark floor turns the open front into a cave mouth.
     box(HALL.x, HALL.x1, ground - 1, ground - 1, HALL.z, HALL.z1, stone.shade);
 
-    flatRoof(b, { ...BODY, y: eaves, overhang: OVERHANG, parapet: 2, cover: slate });
+    flatRoof(b, {
+      ...BODY,
+      y: eaves,
+      overhang: OVERHANG,
+      parapet: 2,
+      cover: stone,
+      coping: terracotta,
+    });
     // The parapet stands directly over the band so it is not in its own shadow.
     const xLo = BODY.x - OVERHANG;
     const xHi = RIGHT + OVERHANG;
@@ -159,6 +166,13 @@ export default defineModel({
     ] as const) {
       box(x, x + 4, deck, deck + 1, z, z + 3, slate.shade);
       box(x, x + 4, deck + 2, deck + 2, z, z + 3, metal.base);
+    }
+    pergola(b, { x: 6, z: 34, y: deck, w: 13, d: 10, height: 5 });
+    for (const [x, w] of [
+      [BODY.x + 1, 18],
+      [42, 17],
+    ] as const) {
+      planter(b, { x, z: FRONT - 1, y: deck, w, d: 2 });
     }
 
     // 2x2 voxels is smaller than a real cabinet, so the room still fits the tables.

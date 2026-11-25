@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { flowerBox, oleander, parasol, picnicTable, pottedPlant } from './props.ts';
+import { flowerBox, oleander, parasol, pergola, picnicTable, pottedPlant } from './props.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -118,5 +118,26 @@ describe('picnicTable', () => {
     expect(at(b, 4, 1, 0)).toBe(PALETTE.teak.base);
     expect(at(b, 4, 1, 4)).toBe(PALETTE.teak.base);
     expect(at(b, 4, 0, 0)).toBeUndefined();
+  });
+});
+
+describe('pergola', () => {
+  it('stands four posts under spaced rafters with a vine along the back', () => {
+    const b = new VoxelBuilder();
+    const top = pergola(b, { x: 0, z: 0, y: 2, w: 7, d: 5, height: 4 });
+    expect(top).toBe(9);
+    expect(at(b, 6, 2, 4)).toBe(PALETTE.teak.base);
+    expect(at(b, 3, 2, 2)).toBeUndefined();
+    expect(at(b, 3, 6, 0)).toBe(PALETTE.teak.shade);
+    expect(at(b, 3, 7, 2)).toBe(PALETTE.teak.light);
+    expect(at(b, 4, 7, 2)).toBeUndefined();
+    expect(at(b, 2, 8, 1)).toBe(PALETTE.foliage.base);
+    expect(at(b, 2, 8, 4)).toBeUndefined();
+  });
+
+  it('refuses one too small to walk under', () => {
+    expect(() => pergola(new VoxelBuilder(), { x: 0, z: 0, y: 0, w: 2, d: 5, height: 4 })).toThrow(
+      /3 voxels/,
+    );
   });
 });

@@ -26,7 +26,7 @@ tiles; the generator goes up to 480 × 480 (`PLOT_TILES`).
    (`greedyMesh.ts`), emissive and water faces split out.
 6. **Instances**: `buildInstancedWorld` creates buckets per model, material and
    chunk, with spare capacity so placing is a matrix write.
-7. **Lighting**: lamps baked into a light volume, sky visibility, blob shadows.
+7. **Lighting**: lamps baked into a light volume, sky visibility, blob or mapped sun shadows.
 8. **Frame**: lit, unlit and water materials for the catalogue, plus terrain,
    sea, figures and moving fields (litter, balls, overlays, nameplates).
 
@@ -180,6 +180,20 @@ and shadows appear when it's done.
   affected block when a lamp changes.
 - **Sky visibility** in the volume's alpha acts as ambient occlusion.
 - **Blob shadows**: one quad per tall object, in one mesh.
+- **Sun shadows** (Settings → Graphics, `rendering/domain/sunShadows.ts`):
+  low is the blobs; high is a 4096² PCF-soft shadow map (`sunShadowRig.ts`)
+  drawn every frame, fitted to the ground the screen's corners reach and
+  snapped to whole texels. The blobs hide while it is on. Switching recompiles
+  every lit shader once.
+  - **Default**: high on a desktop with WebGPU; low on touch screens, the
+    WebGL2 fallback, or 4 cores or 4 GB and under. The player's pick is saved in
+    the HUD preferences and beats it. A bench is low unless `--shadows high`.
+  - **Casters**: pieces at least half a tile tall; pool water, people and sites
+    cast none.
+  - **Strength** 0.6 (`shadow.intensity`): at 1 only the ambient is left in a
+    shadow, which darkened the whole plot.
+  - Tried and dropped: a map redrawn only when the sun or view moved on (its
+    shadows lagged), and sky visibility dimming the sun too (too dark).
 - **Day/night**: `skyStateFor(time)` returns sun, ambient, sky, fog and lamp
   level.
 - **The sky** is `scene.backgroundNode`, three's own camera-centred sphere at
@@ -330,6 +344,7 @@ pnpm bench -- --people 5000        # guest slots (capped at 10 000)
 pnpm bench -- --follow third       # follow the first guest walking (or first)
 pnpm bench -- --no-vsync           # uncapped frame rate
 pnpm bench -- --webgl              # WebGL2 fallback
+pnpm bench -- --shadows high       # sun shadow map
 pnpm bench -- --shots ./shots      # screenshot per case
 ```
 
@@ -394,6 +409,19 @@ reference`, `--no-vsync`, same machine and resolution, two runs in each order:
 
 Both follow runs cost less than the street view.
 
+Sun shadows, `--plot reference`, `--no-vsync`, paused, same machine and
+resolution, one run each, measured while prototyping. Draw calls are the last
+frame's, shadow pass included; "all casters" put every piece in the map:
+
+| Case         | Shadows           | Draw calls | CPU median | GPU median |
+| ------------ | ----------------- | ---------- | ---------- | ---------- |
+| day-overview | low               | 373        | 1.60 ms    | 4.19 ms    |
+| day-overview | high              | 599        | 2.50 ms    | 6.88 ms    |
+| day-overview | high, all casters | 683        | 2.80 ms    | 6.95 ms    |
+| day-street   | low               | 418        | 1.80 ms    | 2.23 ms    |
+| day-street   | high              | 759        | 3.20 ms    | 3.05 ms    |
+| day-street   | high, all casters | 908        | 3.70 ms    | 2.95 ms    |
+
 Variants (`--styles mixed`) cost about +46% draw calls and nearly double
 startup; wall-to-wall mosaic about +27% draw calls and +0.2 ms CPU. Meshing
 variants on first placement is the lever if startup matters.
@@ -431,6 +459,6 @@ Nothing in `src/` needs to change. Styles of an existing model go in
 ## Not done
 
 Occlusion culling, `BatchedMesh`, dynamic resolution, chunked terrain, textures,
-shadow maps, objects on slopes, undo. Balloons and the bay don't follow hand
+shadow cascades, objects on slopes, undo. Balloons and the bay don't follow hand
 edits. Stars, a moon and clouds on the sky dome; a fog that takes the sun's
 halo; a gallery of photos taken.

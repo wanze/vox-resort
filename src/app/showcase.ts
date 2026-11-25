@@ -290,6 +290,12 @@ import {
   type OffSeasonLook,
 } from '../features/off-season/domain/offSeason';
 import { createAutumnTint, type AutumnTint } from '../features/off-season/adapters/autumnTint';
+import {
+  shadowQualityFor,
+  type DeviceFacts,
+  type ShadowQuality,
+} from '../features/rendering/domain/sunShadows';
+import { readDeviceFacts } from '../features/rendering/adapters/deviceFacts';
 import type { SkyState } from '../features/lighting/domain/dayNight';
 import { createResortClock, type ResortClock } from '../features/sim/domain/resortClock';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
@@ -556,6 +562,8 @@ export interface Showcase {
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
   setDetail(enabled: boolean): void;
+  // Null leaves it to the device; a bench keeps its own.
+  setShadows(chosen: ShadowQuality | null): void;
   turnCamera(quarters: number): void;
   lookAtTile(tile: { readonly tileX: number; readonly tileZ: number }): void;
   // Where the problem markers stand, in the order the HUD draws them; at most MAX_MARKERS.
@@ -2323,6 +2331,11 @@ function detailFrom(bench: BenchConfig | null): boolean {
   return bench?.detail ?? true;
 }
 
+// A bench is low unless asked, whatever the machine, so its numbers compare across machines.
+function shadowsFrom(bench: BenchConfig | null, device: DeviceFacts): ShadowQuality {
+  return bench ? (bench.shadows ?? 'low') : shadowQualityFor(null, device);
+}
+
 // Over the roof of the venue on the tile, or over the ground where it is litter. Resolved once per
 // advice refresh, not per frame.
 function markerAnchorOf(
@@ -2650,12 +2663,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   startBenchClock(clock, bench, onSpeedChange);
 
   let detail = detailFrom(bench);
+  const device = readDeviceFacts(handle.backend === 'webgpu');
+  let shadows = shadowsFrom(bench, device);
 
   const cameraView = (): CameraView => ({
     mode: handle.cameraMode,
     direction: handle.isoDirection,
     detail,
+    shadows,
   });
+
+  // Every frame, since a replaced resort brings blobs that know nothing of the setting.
+  const castShadows = (): void => {
+    handle.setShadowQuality(shadows);
+    current().shadows.group.visible = shadows === 'low';
+    handle.fitSunShadow();
+  };
 
   const setCameraMode = (mode: CameraMode): void => {
     if (bench || photo.active) return;
@@ -3451,6 +3474,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     moveCamera(elapsed);
     listen(timeMs);
     chooseDetail();
+    castShadows();
     const renderStarted = performance.now();
     handle.renderer.render(handle.scene, handle.camera);
     // WebGPU records and submits here; the GPU works afterwards.
@@ -3678,6 +3702,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     setDetail(enabled) {
       if (!bench) detail = enabled;
+      hud.publish({ camera: cameraView() });
+    },
+    setShadows(chosen) {
+      if (!bench) shadows = shadowQualityFor(chosen, device);
       hud.publish({ camera: cameraView() });
     },
     turnCamera(quarters) {

@@ -10,6 +10,7 @@ import type { Ledger } from '../../sim/domain/ledger';
 import type { SimSpeed } from '../../sim/domain/simClock';
 import type { StaffRole } from '../../sim/domain/staff';
 import type { Weather } from '../../sim/domain/weather';
+import type { ShadowQuality } from '../../rendering/domain/sunShadows';
 import type { Cue } from '../../sound/domain/cues';
 import type { HeardScene } from '../../sound/domain/hearing';
 import type { SoundPrefs } from '../../sound/domain/soundPrefs';
@@ -88,6 +89,7 @@ export interface NewsControls {
   setSingleKeys(on: boolean): void;
   setFastNights(on: boolean): void;
   setPause(pause: keyof PausePrefs, on: boolean): void;
+  setShadows(quality: ShadowQuality): void;
   setUpdate(phase: UpdatePhase | null): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;

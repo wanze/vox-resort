@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
-import { pottedPlant } from '../parts/props.ts';
+import { planter, pottedPlant } from '../parts/props.ts';
 import { defineModel, type ModelSpot, type VoxelBuilder } from '../voxelgen.ts';
 
 // The game hall already lights bloom.light and water.light; these are the nearest tones no
@@ -124,7 +124,7 @@ export default defineModel({
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
-    const { amber, foliage, glass, metal, slate, stone, stucco, teak } = PALETTE;
+    const { amber, foliage, glass, metal, slate, stone, stucco, teak, terracotta } = PALETTE;
 
     const top = plinth(b, { x: 0, z: 0, w: PLOT.x, d: APRON.z, height: GROUND, stone: slate });
     if (top !== GROUND) throw new Error('The podium and the seats must agree on its surface');
@@ -158,7 +158,12 @@ export default defineModel({
       box(x, x, EAVES, EAVES, ROOF_Z1 + 1, WALLS.z1, NEON_CYAN);
     }
 
-    box(WALLS.x, WALLS.x1, EAVES + 1, EAVES + 1, WALLS.z, ROOF_Z1, metal.shade);
+    box(WALLS.x, WALLS.x1, EAVES + 1, EAVES + 1, WALLS.z, ROOF_Z1, stone.shade);
+    for (const z of [WALLS.z, ROOF_Z1])
+      box(WALLS.x, WALLS.x1, EAVES + 2, EAVES + 2, z, z, terracotta.base);
+    for (const x of [WALLS.x, WALLS.x1])
+      box(x, x, EAVES + 2, EAVES + 2, WALLS.z, ROOF_Z1, terracotta.base);
+    planter(b, { x: WALLS.x + 1, z: ROOF_Z1 - 2, y: EAVES + 2, w: WALLS.x1 - WALLS.x - 1, d: 2 });
     box(WALLS.x + 2, WALLS.x1 - 2, EAVES - 1, EAVES, ROOF_Z1, ROOF_Z1, wall);
     box(WALLS.x + 2, WALLS.x1 - 2, EAVES - 2, EAVES - 2, ROOF_Z1, ROOF_Z1, NEON_PINK);
 

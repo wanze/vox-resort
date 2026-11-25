@@ -59,7 +59,7 @@ export interface HudStore {
 
 export const INITIAL_HUD: HudState = {
   stats: null,
-  camera: { mode: 'perspective', direction: 'southeast', detail: true },
+  camera: { mode: 'perspective', direction: 'southeast', detail: true, shadows: 'low' },
   selection: null,
   orders: [],
   signs: [],

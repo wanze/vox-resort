@@ -134,6 +134,7 @@ export function hipRoof(b: VoxelBuilder, o: HipRoofOptions): number {
 export interface FlatRoofOptions extends Omit<RoofOptions, 'tile'> {
   readonly parapet?: number;
   readonly cover?: Ramp;
+  readonly coping?: Ramp;
 }
 
 export function flatRoof(b: VoxelBuilder, o: FlatRoofOptions): number {
@@ -148,14 +149,12 @@ export function flatRoof(b: VoxelBuilder, o: FlatRoofOptions): number {
 
   b.box(xLo, xHi, o.y, o.y, zLo, zHi, cover.base);
   for (let layer = o.y + 1; layer <= o.y + parapet; layer++) {
-    for (let x = xLo; x <= xHi; x++) {
-      b.set(x, layer, zLo, cover.shade);
-      b.set(x, layer, zHi, cover.shade);
-    }
-    for (let z = zLo; z <= zHi; z++) {
-      b.set(xLo, layer, z, cover.shade);
-      b.set(xHi, layer, z, cover.shade);
-    }
+    // A tiled coping on the top course ties a flat roof to the pitched terracotta around it.
+    const color = layer === o.y + parapet && o.coping ? o.coping.base : cover.shade;
+    b.box(xLo, xHi, layer, layer, zLo, zLo, color);
+    b.box(xLo, xHi, layer, layer, zHi, zHi, color);
+    b.box(xLo, xLo, layer, layer, zLo, zHi, color);
+    b.box(xHi, xHi, layer, layer, zLo, zHi, color);
   }
   return o.y + parapet + 1;
 }

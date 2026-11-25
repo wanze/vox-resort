@@ -25,11 +25,11 @@ export default defineModel({
     b.box(5, 10, feet + 9, feet + 10, 7, 8, marble);
     b.box(7, 8, feet + 11, feet + 13, 7, 8, marble);
     b.box(10, 10, feet + 4, feet + 8, 7, 8, marble);
-    b.box(4, 4, feet + 7, feet + 10, 7, 8, marble);
+    b.box(4, 4, feet + 7, feet + 14, 7, 8, marble);
 
-    // On the shoulder the camera faces, and the one warm thing on the figure, so
-    // the jar reads at any distance.
-    b.box(4, 6, feet + 11, feet + 13, 7, 8, terracotta.base);
-    b.box(5, 5, feet + 14, feet + 14, 7, 8, terracotta.shade);
+    // Held up on the raised arm, above the head: level with it, the jar read as a red head
+    // from the camera. It is the one warm thing on the figure, so it reads at any distance.
+    b.box(3, 5, feet + 15, feet + 17, 7, 8, terracotta.base);
+    b.box(4, 4, feet + 18, feet + 18, 7, 8, terracotta.shade);
   },
 });

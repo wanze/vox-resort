@@ -5,6 +5,7 @@ import { cameraFramingFor } from '../../layout/domain/worldBounds';
 import type { TierId } from '../../fireworks/domain/show';
 import { MAX_STEP } from '../../crowd/domain/crowd';
 import type { SimSpeed } from '../../sim/domain/simClock';
+import { isShadowQuality, type ShadowQuality } from '../../rendering/domain/sunShadows';
 
 // Both are perspective only: docs/rendering.md was measured through that lens, and
 // an orthographic camera culls and fogs differently. `street` exists because
@@ -59,6 +60,8 @@ export interface BenchConfig {
   readonly speed?: BenchSpeed;
   // Follows the first guest walking, so the frame at a guest's eye or shoulder is measured.
   readonly follow?: BenchFollow;
+  // Low unless asked, whatever the machine, so the numbers recorded before shadows still compare.
+  readonly shadows?: ShadowQuality;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -126,6 +129,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     ...(params.get('plot') === 'reference' ? { plot: 'reference' as const } : {}),
     ...speedOf(params.get('speed')),
     ...followOf(params.get('follow')),
+    ...shadowsOf(params.get('shadows')),
   };
 }
 
@@ -153,6 +157,9 @@ const speedOf = (raw: string | null): { readonly speed?: BenchSpeed } =>
 
 const followOf = (raw: string | null): { readonly follow?: BenchFollow } =>
   raw !== null && BENCH_FOLLOWS.has(raw) ? { follow: raw as BenchFollow } : {};
+
+const shadowsOf = (raw: string | null): { readonly shadows?: ShadowQuality } =>
+  isShadowQuality(raw) ? { shadows: raw } : {};
 
 // A 60 Hz player's frame. MAX_STEP would hand a running sim six times that and measure a frame
 // rate nobody plays at; paused runs keep it, so every paused number recorded still compares.

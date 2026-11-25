@@ -114,6 +114,12 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&weather=hail')?.weather).toBeNull();
   });
 
+  it('draws the sun shadow map only when asked', () => {
+    expect(parseBenchConfig('?bench=1')?.shadows).toBeUndefined();
+    expect(parseBenchConfig('?bench=1&shadows=high')?.shadows).toBe('high');
+    expect(parseBenchConfig('?bench=1&shadows=ultra')?.shadows).toBeUndefined();
+  });
+
   it('can turn the level of detail off, to price what it saves', () => {
     expect(parseBenchConfig('?bench=1')?.detail).toBe(true);
     expect(parseBenchConfig('?bench=1&lod=1')?.detail).toBe(true);

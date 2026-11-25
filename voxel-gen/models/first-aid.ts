@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { pottedPlant } from '../parts/props.ts';
+import { pergola, planter, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
@@ -34,7 +34,11 @@ export default defineModel({
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 32 });
     if (ground !== GROUND) throw new Error('The forecourt and its bench must agree on its surface');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
-    flatRoof(b, { ...BODY, y: eaves });
+    const deck =
+      flatRoof(b, { ...BODY, y: eaves, cover: PALETTE.stone, coping: PALETTE.terracotta }) - 1;
+    // A shaded roof terrace for the staff, at the back so the front still shows the cross.
+    pergola(b, { x: BODY.x + 2, z: BODY.z + 1, y: deck, w: BODY.w - 4, d: 8, height: 5 });
+    planter(b, { x: BODY.x + 1, z: FRONT - 1, y: deck, w: BODY.w - 2, d: 2 });
 
     doorway(b, { face: 'z+', at: FRONT, along: 6, y: ground });
     for (const along of [8, 16]) {

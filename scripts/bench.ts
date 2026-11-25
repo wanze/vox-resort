@@ -28,7 +28,16 @@ const SUITE: readonly BenchCase[] = [
   { name: 'night-street', view: 'street', time: 0.02, note: 'after dark, camera at eye level' },
 ];
 
-const PASSED = ['weather', 'styles', 'fireworks', 'plot', 'speed', 'people', 'follow'] as const;
+const PASSED = [
+  'weather',
+  'styles',
+  'fireworks',
+  'plot',
+  'speed',
+  'people',
+  'follow',
+  'shadows',
+] as const;
 
 interface BenchStats {
   readonly frames: number;

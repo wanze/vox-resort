@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { gableRoof, hipRoof, leanTo, thatchRoof } from './roof.ts';
+import { flatRoof, gableRoof, hipRoof, leanTo, thatchRoof } from './roof.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -163,6 +163,25 @@ describe('thatchRoof', () => {
     expect(() =>
       thatchRoof(new VoxelBuilder(), { x: 0, z: 0, w: 0, d: 8, y: 0, overhang: 0 }),
     ).toThrow(/footprint to cover/);
+  });
+});
+
+describe('flatRoof', () => {
+  it('rings the deck with a parapet and returns the layer above it', () => {
+    const b = new VoxelBuilder();
+    const top = flatRoof(b, { x: 0, z: 0, w: 6, d: 6, y: 10, parapet: 2 });
+    expect(top).toBe(13);
+    expect(at(b, 2, 10, 2)).toBe(PALETTE.slate.base);
+    expect(at(b, -1, 12, 3)).toBe(PALETTE.slate.shade);
+    expect(at(b, 2, 11, 2)).toBeUndefined();
+  });
+
+  it('tiles only the top course when given a coping', () => {
+    const b = new VoxelBuilder();
+    flatRoof(b, { x: 0, z: 0, w: 6, d: 6, y: 10, parapet: 2, coping: PALETTE.terracotta });
+    expect(at(b, 3, 11, -1)).toBe(PALETTE.slate.shade);
+    expect(at(b, 3, 12, -1)).toBe(PALETTE.terracotta.base);
+    expect(at(b, 6, 12, 6)).toBe(PALETTE.terracotta.base);
   });
 });
 

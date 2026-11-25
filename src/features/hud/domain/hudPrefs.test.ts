@@ -16,6 +16,7 @@ describe('parsePrefs', () => {
       signs: false,
       singleKeys: false,
       fastNights: false,
+      shadows: 'low' as const,
       pauseWeek: false,
       pauseOffers: false,
     };
@@ -65,5 +66,11 @@ describe('parsePrefs', () => {
       pauseWeek: true,
       pauseOffers: false,
     });
+  });
+
+  it('leaves the shadows to the device until a quality is picked', () => {
+    expect(parsePrefs({}).shadows).toBeNull();
+    expect(parsePrefs({ shadows: 'high' }).shadows).toBe('high');
+    expect(parsePrefs({ shadows: 'ultra' }).shadows).toBeNull();
   });
 });

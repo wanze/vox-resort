@@ -57,7 +57,6 @@ const LEGACY = new Set([
   'oak',
   'blossom',
   'willow',
-  'statue',
   'sun-lounger',
   'tikitorch',
   'icecream',

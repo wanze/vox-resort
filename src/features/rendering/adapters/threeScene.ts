@@ -10,6 +10,7 @@ import {
   MeshStandardNodeMaterial,
   MOUSE,
   OrthographicCamera,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -54,6 +55,8 @@ import type { WaterMaterial } from './waterSurface';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { duneFace, turfEdge } from './landTones';
+import { createSunShadowRig } from './sunShadowRig';
+import { groundReach, type ShadowQuality } from '../domain/sunShadows';
 
 const GROUND_COLOR = 0x5d7a45;
 
@@ -83,6 +86,8 @@ const ISO_MAX_ZOOM = 60;
 // Added to the hour's ambient rather than lit by a light of its own: a PointLight would change
 // every material's light set and cost every frame while it sat at zero.
 const FLASH_AMBIENT = 0.56;
+
+const PERSPECTIVE_REACH = 3;
 
 // Grows with the plot: at near 0.1 an integer depth buffer let the ground win over
 // the paving at the far side. Still needed with reversedDepthBuffer, because WebGL2
@@ -142,6 +147,9 @@ export interface SceneHandle {
   // Must be called before OrbitControls sees the pointerdown, which reads it once per touch.
   takeFinger(taken: boolean): void;
   applySky(state: SkyState): void;
+  setShadowQuality(quality: ShadowQuality): void;
+  // Before the render, so the map follows the view.
+  fitSunShadow(): void;
   // Raises and whitens the ambient light, a uniform, until set back to 0: no shader rebuild.
   setFlash(strength: number): void;
   reframe(
@@ -220,6 +228,7 @@ function layGround(
   );
   const material = landMaterial(GROUND_COLOR, lightVolume, shade);
   const mesh = new Mesh(geometry, material);
+  mesh.receiveShadow = true;
   mesh.rotation.x = -Math.PI / 2;
   // A hair below y = 0: a path slab's underside sits exactly on it.
   mesh.position.set(framing.target.x, -0.05, framing.target.z);
@@ -310,6 +319,12 @@ function createTerrainPalette(
   };
 }
 
+// Costs nothing while the sun casts none: the shadow lookup is built only for a casting light.
+function receiving(mesh: Mesh): Mesh {
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 function layWater(
   group: Group,
   disposables: Disposable[],
@@ -318,7 +333,7 @@ function layWater(
   for (const [surface, water] of bodies) {
     if (!surface) continue;
     const geometry = toSurfaceGeometry(surface);
-    group.add(new Mesh(geometry, water.material));
+    group.add(receiving(new Mesh(geometry, water.material)));
     disposables.push(geometry);
   }
 }
@@ -332,7 +347,7 @@ function layFlat(
   for (const [surface, color] of surfaces) {
     if (!surface) continue;
     const geometry = toSurfaceGeometry(surface);
-    group.add(new Mesh(geometry, palette.flat.get(color)!));
+    group.add(receiving(new Mesh(geometry, palette.flat.get(color)!)));
     disposables.push(geometry);
   }
 }
@@ -385,6 +400,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   });
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
   renderer.setSize(width, height, false);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
   await renderer.init();
 
   const scene = new Scene();
@@ -483,6 +500,31 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   };
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
+  const sunShadow = createSunShadowRig(scene, sun);
+  const cornerNear = new Vector3();
+  const cornerFar = new Vector3();
+  // A perspective view's top corners run out towards the horizon; past a few camera distances
+  // the map would spend its texels where the fog is.
+  const viewReach = (): number => {
+    const camera = cameraFor(mode);
+    // The controls moved it this frame; the renderer would only refresh its matrix afterwards.
+    camera.updateMatrixWorld();
+    const cap =
+      mode === 'isometric'
+        ? Number.POSITIVE_INFINITY
+        : PERSPECTIVE_REACH * perspectiveCamera.position.distanceTo(controls.target);
+    const corners = [-1, 1].flatMap((x) =>
+      [-1, 1].map((y) => {
+        cornerNear.set(x, y, -1).unproject(camera);
+        cornerFar.set(x, y, 1).unproject(camera);
+        // Reversed depth swaps the planes' NDC, so the ray is aimed along the camera's look.
+        const ray = cornerFar.clone().sub(cornerNear);
+        if (ray.dot(camera.getWorldDirection(new Vector3())) < 0) ray.negate();
+        return { origin: cornerNear.clone(), direction: ray };
+      }),
+    );
+    return groundReach(controls.target, corners, cap);
+  };
 
   let ground = layGround(scene, framing, extent, lightVolume, shade);
   let terrain = options.terrain;
@@ -663,9 +705,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     applySky(state) {
       sun.color.setHex(state.sunColor);
       sun.intensity = state.sunIntensity;
-      // A direction only, from the position to the light's target, which stays at the origin:
-      // offsetting the position alone tilted the light away from the sun the sky draws.
-      sun.position.set(state.sunDirection.x, state.sunDirection.y, state.sunDirection.z);
+      sunShadow.setSunDirection(state.sunDirection);
       ambientSky = { color: state.ambientColor, intensity: state.ambientIntensity };
       lightAmbient();
       sky.setHex(state.skyColor);
@@ -674,6 +714,13 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // perspective view does not bring yesterday's sky with it.
       fog.color.setHex(state.skyColor);
       palette.setSky(state.skyColor);
+    },
+    setShadowQuality(quality) {
+      sunShadow.setQuality(quality);
+    },
+    fitSunShadow() {
+      const { x, y, z } = controls.target;
+      sunShadow.fit({ target: { x, y, z }, reach: viewReach() });
     },
     setFlash(strength) {
       flash = Math.min(1, Math.max(0, strength));

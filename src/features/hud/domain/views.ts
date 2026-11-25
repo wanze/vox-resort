@@ -8,6 +8,7 @@ import type { Review } from '../../sim/domain/reviews';
 import type { Hiring, Roster } from '../../sim/domain/staff';
 import type { ThoughtTally } from '../../sim/domain/thoughts';
 import type { Weather } from '../../sim/domain/weather';
+import type { ShadowQuality } from '../../rendering/domain/sunShadows';
 import type { StaffTally } from './staffPins';
 
 export interface ShowcaseStats {
@@ -84,6 +85,7 @@ export interface CameraView {
   readonly mode: CameraMode;
   readonly direction: CompassDirection;
   readonly detail: boolean;
+  readonly shadows: ShadowQuality;
 }
 
 export interface BuildNote {

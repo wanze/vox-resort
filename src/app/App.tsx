@@ -258,6 +258,10 @@ function useAdviceNews(
   useEffect(() => {
     if (sceneUp) showcase.current?.setFastNights(fastNights);
   }, [showcase, sceneUp, fastNights]);
+  const shadows = news.prefs.shadows;
+  useEffect(() => {
+    if (sceneUp) showcase.current?.setShadows(shadows);
+  }, [showcase, sceneUp, shadows]);
   const singleKeys = news.prefs.singleKeys;
   useEffect(() => {
     if (sceneUp) showcase.current?.setSingleKeys(singleKeys);

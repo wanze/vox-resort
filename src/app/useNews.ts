@@ -10,6 +10,7 @@ import {
 import { loadPrefs, savePrefs } from '../features/hud/adapters/prefsStore';
 import type { HudPrefs } from '../features/hud/domain/hudPrefs';
 import type { PausePrefs } from '../features/hud/domain/stops';
+import type { ShadowQuality } from '../features/rendering/domain/sunShadows';
 import {
   expireToasts,
   logBooking,
@@ -75,6 +76,10 @@ function usePrefs() {
     ),
     setFastNights: useCallback(
       (on: boolean) => change((was) => ({ ...was, fastNights: on })),
+      [change],
+    ),
+    setShadows: useCallback(
+      (quality: ShadowQuality) => change((was) => ({ ...was, shadows: quality })),
       [change],
     ),
     setPause: useCallback(
@@ -160,6 +165,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setSingleKeys,
     setFastNights,
     setPause,
+    setShadows,
   } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
@@ -212,6 +218,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setStaffPins,
     setFastNights,
     setPause,
+    setShadows,
     setSigns,
     setSingleKeys,
     setUpdate: useCallback(

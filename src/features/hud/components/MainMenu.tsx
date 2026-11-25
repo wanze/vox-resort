@@ -26,6 +26,7 @@ import type { OverlayControls } from '../../overlays/components/overlayControls'
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { PausePrefs } from '../domain/stops';
+import type { ShadowQuality } from '../../rendering/domain/sunShadows';
 import { LOOKS } from '../domain/looks';
 import { LOOK_NAMES, LOOK_NOTES } from './lookWords';
 
@@ -44,6 +45,12 @@ export interface ViewToggles {
 export interface ShortcutToggle {
   readonly singleKeys: boolean;
   readonly onSingleKeysChange: (on: boolean) => void;
+}
+
+export interface GraphicsToggles {
+  // As drawn: the device's default until the player picks one.
+  readonly shadows: ShadowQuality;
+  readonly onShadowsChange: (quality: ShadowQuality) => void;
 }
 
 export interface PauseToggles {
@@ -66,6 +73,7 @@ export interface MainMenuProps {
   readonly look: LookControls;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
+  readonly graphics: GraphicsToggles;
   readonly pauses: PauseToggles;
   readonly highlights: HighlightControls;
   readonly overlay: OverlayControls;
@@ -347,13 +355,22 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         onSelect={run(() => windows.show('programme', true))}
       />
     )),
-  settings: ({ sound, look, shortcuts, pauses }) => (
+  settings: ({ sound, look, graphics, shortcuts, pauses }) => (
     <>
       <MenuGroup label="Sound">
         <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
       </MenuGroup>
       <MenuGroup label="Look">
         <LookOptions {...look} />
+      </MenuGroup>
+      <MenuGroup label="Graphics">
+        <MenuOption
+          label="Sun shadows"
+          note="buildings and trees cast their own shape; costs some frame rate"
+          checked={graphics.shadows === 'high'}
+          many
+          onSelect={() => graphics.onShadowsChange(graphics.shadows === 'high' ? 'low' : 'high')}
+        />
       </MenuGroup>
       <MenuGroup label="Keyboard">
         <MenuOption

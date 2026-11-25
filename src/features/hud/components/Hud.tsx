@@ -579,6 +579,10 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           singleKeys: props.news.prefs.singleKeys,
           onSingleKeysChange: props.news.setSingleKeys,
         }}
+        graphics={{
+          shadows: props.camera.view.shadows,
+          onShadowsChange: props.news.setShadows,
+        }}
         pauses={{ prefs: props.news.prefs, onChange: props.news.setPause }}
         sound={props.sound}
         look={props.look}

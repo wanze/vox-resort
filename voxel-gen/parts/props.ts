@@ -193,3 +193,32 @@ export function picnicTable(b: VoxelBuilder, o: GardenPropOptions): void {
     b.box(o.x, o.x + 8, o.y + 1, o.y + 1, side, side, teak.base);
   }
 }
+
+export interface PergolaOptions {
+  readonly x: number;
+  readonly z: number;
+  readonly y: number;
+  readonly w: number;
+  readonly d: number;
+  readonly height: number;
+}
+
+// Rafters three apart rather than every voxel: open enough to read as shade, not as a lid,
+// and each one is its own few quads. The vine runs along the back so the slats show in front.
+export function pergola(b: VoxelBuilder, o: PergolaOptions): number {
+  if (o.w < 3 || o.d < 3) throw new Error('A pergola is at least 3 voxels a side');
+  if (o.height < 2) throw new Error('A pergola stands at least 2 voxels high');
+  const { bloom, foliage, teak } = PALETTE;
+  const x1 = o.x + o.w - 1;
+  const z1 = o.z + o.d - 1;
+  const beam = o.y + o.height;
+
+  for (const x of [o.x, x1]) {
+    for (const z of [o.z, z1]) b.box(x, x, o.y, beam - 1, z, z, teak.base);
+  }
+  for (const z of [o.z, z1]) b.box(o.x, x1, beam, beam, z, z, teak.shade);
+  for (let x = o.x; x <= x1; x += 3) b.box(x, x, beam + 1, beam + 1, o.z, z1, teak.light);
+  b.box(o.x, x1, beam + 2, beam + 2, o.z, o.z + 1, foliage.base);
+  for (let x = o.x + 1; x < x1; x += 4) b.set(x, beam + 2, o.z + 2, bloom.light);
+  return beam + 3;
+}

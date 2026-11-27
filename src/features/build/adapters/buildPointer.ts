@@ -27,6 +27,7 @@ import {
   type PavingRules,
   type Relaid,
 } from '../domain/paving';
+import { rejoinedAround, runPieceAt, type RunRules } from '../domain/runRelay';
 import { reRailAround, reRailDoorsOf, type HandrailRules } from '../domain/handrails';
 import { footprintTiles, type Footprint, type TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
@@ -48,6 +49,7 @@ export interface BuildPointerOptions {
   // Apart from the paving's own ground rules: land not owned is refused whatever stands on it.
   readonly owns: GroundRule;
   readonly fits: FitRule;
+  readonly runs: RunRules;
   readonly onPlace: (placement: Placement, lifted?: Placement) => void;
   // A mosaic laid over paving that stands: charged as a new tile, with the old one refunded.
   readonly onRepave: (placement: Placement, lifted: Placement) => void;
@@ -95,8 +97,8 @@ function turnAsked(event: KeyboardEvent, singleKeys: boolean): number {
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { ghost, occupancy, ground, paving, handrails, owns, fits, onPlace, onRepave, onRails } =
-    options;
+  const { ghost, occupancy, ground, paving, handrails, owns, fits, runs } = options;
+  const { onPlace, onRepave, onRails } = options;
   const onFallback = options.onFallback ?? ((): void => {});
   const onPending = options.onPending ?? ((): void => {});
 
@@ -114,7 +116,8 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   };
 
   const planOn = (picked: LayoutItem, tile: Tile) => {
-    const laid = pavingAt(picked, tile, rotation, paving);
+    const run = runPieceAt(picked, tile, rotation, runs);
+    const laid = pavingAt(run.item, tile, run.rotation, paving);
     const lifted = liftedBy(picked, tile, laid);
     const plan = planAt(
       laid.item,
@@ -142,6 +145,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     // Last, once paving and climbs are settled: a rail is a fact about the ground around a tile.
     reRailAround(tile, handrails, onRails);
     reRailDoorsOf(placed, handrails, onRails);
+    relay(rejoinedAround(tile, runs));
   };
 
   const covers = (anchor: Tile, tile: Tile): boolean => {
@@ -165,7 +169,11 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     ground,
     paints: () => item !== null && isPaintable(item),
     placing: {
-      confirms: () => item !== null && !paintsOnTouch(item, objectTypeById(item.id).model.turnless),
+      confirms: () => {
+        if (item === null) return false;
+        const { turnless, run } = objectTypeById(item.id).model;
+        return !paintsOnTouch(item, turnless || run !== null);
+      },
       onPending: (tile) => onPending(tile !== null),
       covers,
     },

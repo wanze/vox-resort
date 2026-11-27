@@ -85,15 +85,26 @@ function fieldOf(style: MosaicStyle): (x: number, z: number) => Color {
   return (x, z) => grid[z * TILE_VOXELS + x]!;
 }
 
+// The first piece of a kit is the style's own model and the only one the palette offers.
+export function kitPieceOf(
+  style: { readonly id: string; readonly label: string },
+  piece: { readonly name: string; readonly suffix: string },
+  index: number,
+) {
+  return {
+    id: index === 0 ? style.id : `${style.id}-${piece.name}`,
+    label: index === 0 ? style.label : `${style.label} (${piece.suffix})`,
+    category: 'grounds',
+    tiles: { x: 1, z: 1 },
+    ...(index === 0 ? {} : { groundDecides: true }),
+  } as const;
+}
+
 export function mosaicSources(style: MosaicStyle): VoxelModelSource[] {
   const field = fieldOf(style);
   return MOSAIC_PIECES.map((piece, index) =>
     defineModel({
-      id: index === 0 ? style.id : `${style.id}-${piece.name}`,
-      label: index === 0 ? style.label : `${style.label} (${piece.suffix})`,
-      category: 'grounds',
-      tiles: { x: 1, z: 1 },
-      ...(index === 0 ? {} : { groundDecides: true }),
+      ...kitPieceOf(style, piece, index),
       cost: MOSAIC_COST,
       scenery: MOSAIC_SCENERY,
       mosaic: { style: style.id, borders: piece.borders },

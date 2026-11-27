@@ -1,10 +1,10 @@
+import { RUN_IDS } from '../../../../voxel-gen/runs/index.ts';
 import {
   BOARDWALK_RAILING_ID,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,
   CLIMB_RAILING_IDS,
-  HEDGE_ID,
   KERB_IDS,
   LAMP_ID,
   PAVING_IDS,
@@ -14,7 +14,7 @@ import {
 
 export type PlacementList = 'paths' | 'rails' | 'props' | 'placements';
 
-export const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
+export const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, ...RUN_IDS]);
 
 // Rails claim no ground: filed with the lamps they would be indexed, shadowed and
 // baked as though they stood on the tile they only lean against.

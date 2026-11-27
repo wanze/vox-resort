@@ -437,6 +437,11 @@ export interface ModelMosaic {
   readonly borders: readonly MosaicSide[];
 }
 
+export interface ModelRun {
+  readonly style: string;
+  readonly joins: readonly MosaicSide[];
+}
+
 export interface ModelFleet {
   // Sea model ids: craft never stand on a tile.
   readonly craft: string;
@@ -483,6 +488,9 @@ export interface VoxelModelSource {
   readonly stars?: number;
   // Tiles a guest holding litter will look for this; 0 is not a bin.
   readonly binReach?: number;
+  // The sides a run piece joins when laid unturned, north being z = 0: the app picks a piece and
+  // its turn by which neighbours stand in the same style, as it does a mosaic's.
+  readonly run?: ModelRun;
   // The sides a mosaic piece borders when laid unturned, north being z = 0: the app picks a piece
   // and its turn by which of its neighbours are another style.
   readonly mosaic?: ModelMosaic;
@@ -540,6 +548,7 @@ export interface VoxelModel {
   readonly sound: SoundKind | null;
   readonly cost: number | null;
   readonly binReach: number;
+  readonly run: ModelRun | null;
   readonly mosaic: ModelMosaic | null;
   readonly width: number;
   readonly height: number;
@@ -761,6 +770,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     category: source.category,
     tiles: source.tiles,
     ...defaultsOf(source),
+    run: source.run ?? null,
     width: maxX - minX + 1,
     height: maxY - minY + 1,
     depth: maxZ - minZ + 1,

@@ -1,4 +1,5 @@
 import { MOSAIC_IDS } from '../../../../voxel-gen/mosaics/index.ts';
+import { RUN_IDS } from '../../../../voxel-gen/runs/index.ts';
 import type { LandGrid } from '../../land/domain/landRights';
 import type { ShoreSpec } from './shoreline';
 import type { ElevationSpec } from './elevation';
@@ -185,7 +186,8 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   // Laid only by the player: the generator and the authored plan never stand one.
   ...MOSAIC_IDS,
   LAMP_ID,
-  HEDGE_ID,
+  // The pieces and styles of a run are laid by its neighbours, never by a plot.
+  ...RUN_IDS,
   BENCH_ID,
   RAILING_ID,
   BOARDWALK_RAILING_ID,

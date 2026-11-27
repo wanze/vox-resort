@@ -8,6 +8,7 @@ import {
   type ModelFacts,
   type ModelHire,
   type ModelMosaic,
+  type ModelRun,
   type ModelVenue,
   type SignKind,
   type SoundKind,
@@ -182,6 +183,12 @@ const MOSAICS: ReadonlyMap<string, ModelMosaic | null> = new Map(
 );
 
 export const mosaicOf = (id: string): ModelMosaic | null => MOSAICS.get(id) ?? null;
+
+const RUNS: ReadonlyMap<string, ModelRun | null> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.run]),
+);
+
+export const runOf = (id: string): ModelRun | null => RUNS.get(id) ?? null;
 
 const SOUNDS: ReadonlyMap<string, SoundKind | null> = new Map(
   OBJECT_TYPES.map((type) => [type.id, type.model.sound]),

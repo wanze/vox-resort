@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RUN_IDS } from '../../../../voxel-gen/runs/index.ts';
 import json from '../../../../fixtures/reference-resort.json';
 import { familyOf, objectTypeById, ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { shoreFor } from '../../layout/domain/shoreline';
@@ -26,6 +27,8 @@ const NOT_IN_REFERENCE: readonly string[] = [
   'boardwalk-ramp-foot-railing-right',
   'boardwalk-ramp-head-railing-left',
   'boardwalk-ramp-head-railing-right',
+  // Exported before runs joined, so its hedges are all straight lengths.
+  ...RUN_IDS.filter((id) => id !== 'hedge'),
 ];
 
 const world = referenceWorldOf(json);

@@ -581,7 +581,7 @@ export interface Decorations {
   readonly lamps: readonly Tile[];
   readonly beachLamps: readonly Tile[];
   readonly benches: readonly TurnedTile[];
-  readonly hedges: readonly Tile[];
+  readonly hedges: readonly TurnedTile[];
 }
 
 // A turn of 1 swings +z round to +x, so the sequence runs +z, +x, -z, -x: the order seat facings use.
@@ -650,6 +650,7 @@ export function decorationsFor(
     taken,
     occupied,
     skip: inPark,
+    paved,
     pathNeighbours,
   });
   return { lamps, beachLamps, benches, hedges };
@@ -723,14 +724,21 @@ function spacedBenches(parts: {
   return benches;
 }
 
+// Unturned a hedge lies along x, which is the way a path beside it to the north or south runs.
+function alongPathBeside(paved: ReadonlySet<string>, tile: Tile): Rotation {
+  const [, dz] = soleNeighbour(paved, tile.x, tile.z) ?? [0, 1];
+  return dz === 0 ? 1 : 0;
+}
+
 function hedgeRuns(parts: {
   readonly ring: readonly Tile[];
   readonly taken: ReadonlySet<string>;
   readonly occupied: ReadonlyMap<string, string>;
   readonly skip: (tile: Tile) => boolean;
+  readonly paved: ReadonlySet<string>;
   readonly pathNeighbours: (x: number, z: number) => number;
-}): Tile[] {
-  const { ring, taken, occupied, skip, pathNeighbours } = parts;
+}): TurnedTile[] {
+  const { ring, taken, occupied, skip, paved, pathNeighbours } = parts;
   const nextToBuilding = (x: number, z: number): boolean =>
     [-1, 0, 1].some((dx) => [-1, 0, 1].some((dz) => occupied.has(tileKey(x + dx, z + dz))));
   const candidates = ring.filter(
@@ -741,9 +749,11 @@ function hedgeRuns(parts: {
       !nextToBuilding(tile.x, tile.z),
   );
   const candidateKeys = new Set(candidates.map((tile) => tileKey(tile.x, tile.z)));
-  return candidates.filter((tile) =>
-    NEIGHBOURS.some(([dx, dz]) => candidateKeys.has(tileKey(tile.x + dx, tile.z + dz))),
-  );
+  return candidates
+    .filter((tile) =>
+      NEIGHBOURS.some(([dx, dz]) => candidateKeys.has(tileKey(tile.x + dx, tile.z + dz))),
+    )
+    .map((tile) => ({ tile, rotation: alongPathBeside(paved, tile) }));
 }
 
 function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan): void {
@@ -1043,10 +1053,10 @@ function propsFor(
   const turned: { id: string; tile: Tile; rotation: Rotation }[] = [
     ...lamps.map((tile) => ({ id: LAMP_ID, tile, rotation: 0 as Rotation })),
     ...beachLamps.map((tile) => ({ id: beachLamp, tile, rotation: 0 as Rotation })),
-    ...hedges.map((tile) => ({
+    ...hedges.map(({ tile, rotation }) => ({
       id: styleOf(HEDGE_ID, tile.x, tile.z),
       tile,
-      rotation: 0 as Rotation,
+      rotation,
     })),
     ...benches.map(({ tile, rotation }) => ({
       id: styleOf(BENCH_ID, tile.x, tile.z),

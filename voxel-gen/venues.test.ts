@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MOSAIC_IDS } from './mosaics/index.ts';
+import { RUN_IDS } from './runs/index.ts';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { PROP_SOURCES } from './props/index.ts';
@@ -36,7 +37,6 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'entrance',
   'flowerbed',
   'fountain',
-  'hedge',
   'jetty',
   'kerb',
   'kerb-post',
@@ -99,6 +99,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'fountain-b',
   'fountain-c',
   ...MOSAIC_IDS,
+  ...RUN_IDS,
 ]);
 
 describe('the venues the catalogue declares', () => {

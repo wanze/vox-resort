@@ -340,5 +340,17 @@ join `PAVING_IDS` and `DERIVED_IDS` from `MOSAIC_IDS`, so nothing in `src/`
 changes for a new style. `pnpm preview --mosaics` stamps `mosaics/sample.ts` in
 every style; `meshBudget.test.ts` holds each piece to 128 triangles.
 
+`runs/` holds what joins its neighbours into one length: the hedge and the stone
+wall. A style is one file in `runs/styles/`, a `RunStyle` with a centred span and a
+`paint` that fills one rectangle of its footprint, plus an entry in `RUN_STYLES`.
+`runSources` generates its six pieces (`straight`, `single`, `end`, `corner`,
+`tee`, `cross`) from the sides each joins; the app picks a piece and its turn by
+which neighbours stand in the same style, and re-lays them when one is built or
+bulldozed. The straight length keeps the style's id and is the one the palette
+offers; the rest hide behind `groundDecides`, and `RUN_IDS` files them all as
+props and derived ids, so nothing in `src/` changes for a new style. A pattern
+painted along the wall must read the same from either end of a tile, or a turned
+piece will not meet its neighbour's.
+
 `model-prompts.md` holds the original prompts and dimension table the models were
 written from.

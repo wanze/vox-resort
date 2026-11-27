@@ -4,6 +4,7 @@ import { demolishAt } from '../domain/demolish';
 import type { PickGround } from '../domain/groundPick';
 import { reRailAround, reRailDoorsOf, type HandrailRules } from '../domain/handrails';
 import { mosaicStyleOf, remosaicked, unlaidBy, type PavingRules } from '../domain/paving';
+import { rejoinedAround, type RunRules } from '../domain/runRelay';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
@@ -19,6 +20,7 @@ export interface DemolishPointerOptions {
   readonly ground: PickGround;
   readonly paving: PavingRules;
   readonly handrails: HandrailRules;
+  readonly runs: RunRules;
   readonly placementOf: (key: string) => Placement | undefined;
   readonly onDemolish: (placement: Placement) => void;
   readonly onPlace: (placement: Placement, lifted?: Placement) => void;
@@ -32,8 +34,8 @@ export interface DemolishPointer {
 }
 
 export function createDemolishPointer(options: DemolishPointerOptions): DemolishPointer {
-  const { ghost, occupancy, paving, handrails, placementOf, onDemolish, onPlace, onRails } =
-    options;
+  const { ghost, occupancy, paving, handrails, runs, placementOf, onDemolish, onPlace } = options;
+  const { onRails } = options;
 
   // No armed check: the stroke only hovers or works a tile while armed.
   const standingOn = (tile: Tile | null): Placement | undefined => {
@@ -70,6 +72,7 @@ export function createDemolishPointer(options: DemolishPointerOptions): Demolish
       onDemolish(standing);
       if (paved) settleAround(tile, paved);
       reRailDoorsOf(standing, handrails, onRails);
+      for (const relaid of rejoinedAround(tile, runs)) onPlace(relaid.placement, relaid.lifted);
     },
     onCancel: options.onCancel,
   });

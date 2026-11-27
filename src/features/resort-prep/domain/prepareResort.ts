@@ -19,6 +19,8 @@ import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
 import { MOSAIC_STYLES } from '../../../../voxel-gen/mosaics/index.ts';
 import type { ModelHire } from '../../../../voxel-gen/voxelgen.ts';
 import { layMosaic } from '../../layout/domain/mosaic';
+import { layRuns } from '../../layout/domain/runs';
+import { runKitOf } from '../../catalog/domain/runs';
 import { ONE_OFF, RESORT_WIDE, styleMix } from '../../catalog/domain/styleMix';
 import {
   emptyResortPlan,
@@ -217,9 +219,10 @@ function layOut(
 ): Plot {
   const catalogue = OBJECT_TYPES.map(layoutItemFor);
   const laid = layoutResort(catalogue, plan, styleOf);
+  const joined = { ...laid, props: layRuns(laid.props, runKitOf(catalogue)) };
   const layout = mosaic
-    ? { ...laid, paths: layMosaic(laid.paths, mosaic(laid), mosaicKitOf(catalogue)) }
-    : laid;
+    ? { ...joined, paths: layMosaic(joined.paths, mosaic(joined), mosaicKitOf(catalogue)) }
+    : joined;
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, repeat, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   return {

@@ -1,9 +1,12 @@
 import { mosaicKitOf } from '../../catalog/domain/mosaics';
+import { runKitOf } from '../../catalog/domain/runs';
+import type { RunRules } from '../domain/runRelay';
 import {
   familyOf,
   isGateway,
   OBJECT_TYPES,
   objectTypeById,
+  runOf,
   objectTypeTop,
 } from '../../catalog/domain/objectTypes';
 import { buildCostOf, costToStand, DIG_COST, refundOf } from '../../catalog/domain/prices';
@@ -251,6 +254,15 @@ export function createEditMode(parts: {
     const key = occupancy.keyAt(tile);
     return key === undefined ? undefined : placementOf(key);
   };
+  const runs: RunRules = {
+    kit: runKitOf(catalogue),
+    runAt(tile) {
+      const there = standingAt(tile);
+      return there && runOf(there.id) !== null ? there : undefined;
+    },
+    isPaved: (tileX, tileZ) => pavedWith(tileX, tileZ) !== null,
+    levelOf: ground.levelOf,
+  };
   const handrails: HandrailRules = {
     pavedWith,
     levelOf: ground.levelOf,
@@ -486,6 +498,7 @@ export function createEditMode(parts: {
     handrails,
     owns: (tile) => owns(tile.x, tile.z),
     fits: fitsEdge,
+    runs,
     onPlace: stand,
     onRepave(placement, lifted) {
       const due = buildCostOf(placement.id);
@@ -583,6 +596,7 @@ export function createEditMode(parts: {
     ground,
     paving,
     handrails,
+    runs,
     placementOf,
     onDemolish(placement) {
       // Asked before lift, which cancels the site.

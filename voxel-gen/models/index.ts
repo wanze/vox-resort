@@ -36,7 +36,6 @@ import fountain from './fountain.ts';
 import misting_pavilion from './misting-pavilion.ts';
 import game_hall from './game-hall.ts';
 import gym_pavilion from './gym-pavilion.ts';
-import hedge from './hedge.ts';
 import hotel from './hotel.ts';
 import house from './house.ts';
 import icecream from './icecream.ts';
@@ -93,6 +92,7 @@ import fire_pit from './fire-pit.ts';
 import waterpark from './waterpark.ts';
 import willow from './willow.ts';
 import { MOSAIC_MODELS } from '../mosaics/index.ts';
+import { RUN_MODELS } from '../runs/index.ts';
 
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,
@@ -128,7 +128,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   bridge_railing,
   bridge_ramp_railing_left,
   bridge_ramp_railing_right,
-  hedge,
+  ...RUN_MODELS,
   street_lamp,
   litter_bin,
   sign_post,

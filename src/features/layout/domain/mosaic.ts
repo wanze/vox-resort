@@ -38,14 +38,19 @@ export function mosaicFit(
   return null;
 }
 
+export function sidesWhere(
+  tile: Tile,
+  holds: (tileX: number, tileZ: number) => boolean,
+): Set<MosaicSide> {
+  return new Set(CLIMBS.filter(({ dx, dz }) => holds(tile.x + dx, tile.z + dz)).map(sideOf));
+}
+
 export function borderedSides(
   tile: Tile,
   style: string,
   styleAt: (tileX: number, tileZ: number) => string | null,
 ): Set<MosaicSide> {
-  return new Set(
-    CLIMBS.filter(({ dx, dz }) => styleAt(tile.x + dx, tile.z + dz) !== style).map(sideOf),
-  );
+  return sidesWhere(tile, (x, z) => styleAt(x, z) !== style);
 }
 
 export interface MosaicKit {

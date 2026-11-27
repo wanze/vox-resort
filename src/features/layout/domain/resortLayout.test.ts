@@ -631,7 +631,7 @@ describe('decorationsFor', () => {
     const { lamps, hedges } = decorationsFor(items, tinyPlan);
     const paved = new Set(pathTilesFor(items, tinyPlan).map((tile) => `${tile.x},${tile.z}`));
     const occupied = new Set(occupiedTiles(items, tinyPlan).keys());
-    for (const tile of [...lamps, ...hedges]) {
+    for (const tile of [...lamps, ...hedges.map((hedge) => hedge.tile)]) {
       expect(paved.has(`${tile.x},${tile.z}`)).toBe(false);
       expect(occupied.has(`${tile.x},${tile.z}`)).toBe(false);
     }
@@ -793,6 +793,16 @@ describe('the resort plan', () => {
     for (const bench of benches) {
       expect(bench.tilesX).toBe(1);
       expect(bench.tilesZ).toBe(1);
+    }
+  });
+
+  it('lays every hedge along the path beside it', () => {
+    const { hedges } = decorationsFor(items, RESORT_PLAN);
+    const paved = new Set(pathTilesFor(items, RESORT_PLAN).map((tile) => `${tile.x},${tile.z}`));
+    expect(hedges.some((hedge) => hedge.rotation === 1)).toBe(true);
+    for (const { tile, rotation } of hedges) {
+      const alongZ = paved.has(`${tile.x - 1},${tile.z}`) || paved.has(`${tile.x + 1},${tile.z}`);
+      expect(rotation).toBe(alongZ ? 1 : 0);
     }
   });
 
@@ -1021,7 +1031,7 @@ describe('a plot with a shore', () => {
   it('plants no bench or hedge on the sand, and only the beach lamp', () => {
     const shore = shoreFor(coastal())!;
     const { lamps, beachLamps, benches, hedges } = decorationsFor(items, coastal());
-    for (const tile of [...lamps, ...hedges, ...benches.map((bench) => bench.tile)]) {
+    for (const tile of [...lamps, ...[...hedges, ...benches].map((turned) => turned.tile)]) {
       expect(terrainAt(shore, tile.x, tile.z)).toBe('land');
     }
     for (const tile of beachLamps) expect(terrainAt(shore, tile.x, tile.z)).toBe('beach');

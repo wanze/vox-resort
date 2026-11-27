@@ -64,8 +64,10 @@ describe('turnlessOf', () => {
     expect(turnlessOf(tile((b) => b.box(0, 3, 0, 0, 0, 1, 0x00ff00)))).toBe(false);
   });
 
-  it('finds the hedge alike, so a finger paints a row of it', () => {
-    expect(facts.types.find((type) => type.model.id === 'hedge')?.model.turnless).toBe(true);
+  it('finds the hedge has a length, so the run kit turns it rather than a finger', () => {
+    const hedge = facts.types.find((type) => type.model.id === 'hedge')?.model;
+    expect(hedge?.turnless).toBe(false);
+    expect(hedge?.run).toEqual({ style: 'hedge', joins: ['e', 'w'] });
   });
 
   it('finds the bench has a front', () => {

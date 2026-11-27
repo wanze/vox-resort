@@ -21,6 +21,37 @@ export interface Sitters {
   readonly sitting: ArrayLike<number>;
 }
 
+// Close enough to be stood together: two spots at a rail or round a table, not the next
+// party's along.
+export const MINGLE_RADIUS = 12;
+
+// Off the way the place faces. Short of a right angle, so a pair side by side face each other
+// almost square and one stood behind is half turned to rather than turned round.
+export const MINGLE_TURN_LIMIT = 0.45 * Math.PI;
+
+export interface Minglers {
+  readonly count: number;
+  readonly x: ArrayLike<number>;
+  readonly y: ArrayLike<number>;
+  readonly z: ArrayLike<number>;
+  readonly heading: ArrayLike<number>;
+  // The party's index plus one, so 0 is somebody who stands with nobody.
+  readonly party: ArrayLike<number>;
+}
+
+export interface Mingling {
+  // Radians to turn off the heading, towards the nearest of the party.
+  readonly turn: Float32Array;
+  readonly talks: Uint8Array;
+}
+
+interface Placed {
+  readonly count: number;
+  readonly x: ArrayLike<number>;
+  readonly y: ArrayLike<number>;
+  readonly z: ArrayLike<number>;
+}
+
 // Reused frame after frame: the field asks every frame and must not allocate.
 export interface TalkGrid {
   readonly head: Int32Array;
@@ -43,7 +74,7 @@ export const talkGridFor = (capacity: number): TalkGrid => ({
 const bucketOf = (cellX: number, cellZ: number): number =>
   (Math.imul(cellX, 73_856_093) ^ Math.imul(cellZ, 19_349_663)) & (TABLE_SIZE - 1);
 
-const cellOf = (at: number): number => Math.floor(at / TALK_RADIUS);
+const cellOf = (at: number, radius: number): number => Math.floor(at / radius);
 
 function sideTowards(sitters: Sitters, person: number, other: number): number {
   const dx = sitters.x[other]! - sitters.x[person]!;
@@ -58,54 +89,95 @@ function sideTowards(sitters: Sitters, person: number, other: number): number {
   return across > 0 ? TALK.plusX : TALK.minusX;
 }
 
-const squaredDistance = (sitters: Sitters, a: number, b: number): number =>
-  (sitters.x[b]! - sitters.x[a]!) ** 2 + (sitters.z[b]! - sitters.z[a]!) ** 2;
+const squaredDistance = (people: Placed, a: number, b: number): number =>
+  (people.x[b]! - people.x[a]!) ** 2 + (people.z[b]! - people.z[a]!) ** 2;
 
-const atSameLevel = (sitters: Sitters, a: number, b: number): boolean =>
-  Math.abs(sitters.y[b]! - sitters.y[a]!) <= TALK_RISE;
+const atSameLevel = (people: Placed, a: number, b: number): boolean =>
+  Math.abs(people.y[b]! - people.y[a]!) <= TALK_RISE;
 
 // Ties go to the lower index, so two equal neighbours never flicker between frames.
 const beats = (distance: number, other: number, nearest: Nearest): boolean =>
   distance < nearest.distance ||
   (distance === nearest.distance && (nearest.best < 0 || other < nearest.best));
 
-function searchBucket(sitters: Sitters, grid: TalkGrid, person: number, bucket: number): void {
+interface Search {
+  readonly people: Placed;
+  // 0 joins nobody; anybody else is matched only with the same number.
+  readonly group: ArrayLike<number>;
+  readonly grid: TalkGrid;
+  readonly radius: number;
+}
+
+function searchBucket(search: Search, person: number, bucket: number): void {
+  const { people, group, grid } = search;
   const { nearest } = grid;
   for (let other = grid.head[bucket]!; other >= 0; other = grid.next[other]!) {
-    if (other === person || !atSameLevel(sitters, person, other)) continue;
-    const distance = squaredDistance(sitters, person, other);
+    if (other === person || group[other] !== group[person]) continue;
+    if (!atSameLevel(people, person, other)) continue;
+    const distance = squaredDistance(people, person, other);
     if (!beats(distance, other, nearest)) continue;
     nearest.best = other;
     nearest.distance = distance;
   }
 }
 
-function nearestSitter(sitters: Sitters, grid: TalkGrid, person: number): number {
-  const cellX = cellOf(sitters.x[person]!);
-  const cellZ = cellOf(sitters.z[person]!);
+function nearestInGroup(search: Search, person: number): number {
+  const { people, grid, radius } = search;
+  const cellX = cellOf(people.x[person]!, radius);
+  const cellZ = cellOf(people.z[person]!, radius);
   grid.nearest.best = -1;
-  grid.nearest.distance = TALK_RADIUS * TALK_RADIUS;
+  grid.nearest.distance = radius * radius;
   for (let dz = -1; dz <= 1; dz++) {
-    for (let dx = -1; dx <= 1; dx++)
-      searchBucket(sitters, grid, person, bucketOf(cellX + dx, cellZ + dz));
+    for (let dx = -1; dx <= 1; dx++) searchBucket(search, person, bucketOf(cellX + dx, cellZ + dz));
   }
   return grid.nearest.best;
 }
 
-export function talkSides(sitters: Sitters, grid: TalkGrid, out: Uint8Array): void {
+function gather(search: Search): void {
+  const { people, group, grid, radius } = search;
   grid.head.fill(-1);
-  for (let person = 0; person < sitters.count; person++) {
-    if (sitters.sitting[person] !== 1) continue;
-    const bucket = bucketOf(cellOf(sitters.x[person]!), cellOf(sitters.z[person]!));
+  for (let person = 0; person < people.count; person++) {
+    if (group[person] === 0) continue;
+    const bucket = bucketOf(cellOf(people.x[person]!, radius), cellOf(people.z[person]!, radius));
     grid.next[person] = grid.head[bucket]!;
     grid.head[bucket] = person;
   }
+}
+
+export function talkSides(sitters: Sitters, grid: TalkGrid, out: Uint8Array): void {
+  const search = { people: sitters, group: sitters.sitting, grid, radius: TALK_RADIUS };
+  gather(search);
   for (let person = 0; person < sitters.count; person++) {
     if (sitters.sitting[person] !== 1) {
       out[person] = TALK.none;
       continue;
     }
-    const other = nearestSitter(sitters, grid, person);
+    const other = nearestInGroup(search, person);
     out[person] = other < 0 ? TALK.none : sideTowards(sitters, person, other);
   }
 }
+
+const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+function turnTowards(minglers: Minglers, person: number, other: number): number {
+  const bearing = Math.atan2(
+    minglers.x[other]! - minglers.x[person]!,
+    minglers.z[other]! - minglers.z[person]!,
+  );
+  const off = wrap(bearing - minglers.heading[person]!);
+  return Math.min(Math.max(off, -MINGLE_TURN_LIMIT), MINGLE_TURN_LIMIT);
+}
+
+export function mingleTurns(minglers: Minglers, grid: TalkGrid, out: Mingling): void {
+  const search = { people: minglers, group: minglers.party, grid, radius: MINGLE_RADIUS };
+  gather(search);
+  for (let person = 0; person < minglers.count; person++) {
+    const other = minglers.party[person] === 0 ? -1 : nearestInGroup(search, person);
+    out.talks[person] = other < 0 ? 0 : 1;
+    out.turn[person] = other < 0 ? 0 : turnTowards(minglers, person, other);
+  }
+}
+
+// Offsets stay within the turn limit, so no wrap: the short way round is the straight way.
+export const easeTurn = (now: number, target: number, step: number): number =>
+  now + Math.min(Math.max(target - now, -step), step);

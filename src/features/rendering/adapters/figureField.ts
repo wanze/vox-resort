@@ -55,6 +55,10 @@ const GESTURE_CHANCE = 0.5;
 const GESTURE_LIFT = 0.6;
 const WAG = 0.25;
 const WAG_RATE = 1.5;
+// Stood with their party, a slot holds a gesture by this chance; standing never sips.
+const STANDING_GESTURE_CHANCE = 0.35;
+// From hanging, not from the lap: the same height at the chest as a sitter's gesture.
+const STANDING_GESTURE_LIFT = SIT_ARMS + GESTURE_LIFT;
 
 // Spells of ~8 real seconds looking at the neighbour, then ~8 looking ahead, eased between.
 const LOOK_RATE = 0.037;
@@ -269,6 +273,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const progress = pose.z.fract();
   const is = (k: number) => code.sub(k).abs().step(0.5).oneMinus();
   const walking = is(RESTING.none);
+  const standing = is(RESTING.standing);
   const sitting = is(RESTING.sitting);
   const riding = is(DRAWN_POSE.ride);
   const seated = sitting.add(riding);
@@ -302,13 +307,15 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const sipBump = sin(sipAt.mul(PI));
   const sip = sitting.mul(sipping).mul(sipBump);
 
-  const talk = progress.mul(4).add(0.5).floor().mul(sitting);
+  const talk = progress.mul(4).add(0.5).floor().mul(sitting.add(standing));
   const talksTo = (k: number) => talk.sub(k).abs().step(0.5).oneMinus();
   const chatting = talk.step(0.5);
   const sipRoll = hash(sipSeed);
-  const gesturing = chatting
-    .mul(sipRoll.step(SIP_CHANCE))
-    .mul(sipRoll.step(SIP_CHANCE + GESTURE_CHANCE).oneMinus());
+  const gestureFrom = sitting.mul(SIP_CHANCE);
+  const gestureTo = gestureFrom
+    .add(sitting.mul(GESTURE_CHANCE))
+    .add(standing.mul(STANDING_GESTURE_CHANCE));
+  const gesturing = chatting.mul(sipRoll.step(gestureFrom)).mul(sipRoll.step(gestureTo).oneMinus());
   const gesture = gesturing.mul(sipBump);
   const look = smoothstep(
     -LOOK_EASE,
@@ -377,7 +384,16 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(photographing.mul(PHOTO_ARMS))
     .add(seated.add(sittingFlat).mul(SIT_ARMS))
     .add(sip.mul(side.max(0)).mul(SIP_LIFT))
-    .add(gesture.mul(side.negate().max(0)).mul(sin(cycle(WAG_RATE)).mul(WAG).add(GESTURE_LIFT)))
+    .add(
+      gesture
+        .mul(side.negate().max(0))
+        .mul(
+          sin(cycle(WAG_RATE))
+            .mul(WAG)
+            .add(sitting.mul(GESTURE_LIFT))
+            .add(standing.mul(STANDING_GESTURE_LIFT)),
+        ),
+    )
     .add(
       reading
         .mul(READ_ARMS)

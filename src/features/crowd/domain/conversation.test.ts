@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { TALK, TALK_RADIUS, talkGridFor, talkSides, type Sitters } from './conversation';
+import {
+  easeTurn,
+  MINGLE_RADIUS,
+  MINGLE_TURN_LIMIT,
+  mingleTurns,
+  TALK,
+  TALK_RADIUS,
+  talkGridFor,
+  talkSides,
+  type Sitters,
+} from './conversation';
 
 interface Sitter {
   readonly x: number;
@@ -114,5 +124,102 @@ describe('talkSides', () => {
     talkSides(pairOnABench([1, 1]), grid, out);
     talkSides(pairOnABench([1, 0]), grid, out);
     expect([...out]).toEqual([TALK.none, TALK.none]);
+  });
+});
+
+interface Mingler {
+  readonly x: number;
+  readonly z: number;
+  readonly party: number;
+  readonly y?: number;
+  readonly heading?: number;
+}
+
+function mingle(people: readonly Mingler[]): { turn: number[]; talks: number[] } {
+  const out = {
+    turn: new Float32Array(people.length).fill(99),
+    talks: new Uint8Array(people.length).fill(99),
+  };
+  mingleTurns(
+    {
+      count: people.length,
+      x: people.map((p) => p.x),
+      y: people.map((p) => p.y ?? 0),
+      z: people.map((p) => p.z),
+      heading: people.map((p) => p.heading ?? 0),
+      party: people.map((p) => p.party),
+    },
+    talkGridFor(people.length),
+    out,
+  );
+  return { turn: [...out.turn], talks: [...out.talks] };
+}
+
+describe('mingleTurns', () => {
+  it('turns two of a party stood side by side towards each other, short of square', () => {
+    const { turn, talks } = mingle([
+      { x: 10, z: 10, party: 1 },
+      { x: 14, z: 10, party: 1 },
+    ]);
+    expect(talks).toEqual([1, 1]);
+    expect(turn[0]).toBeCloseTo(MINGLE_TURN_LIMIT, 5);
+    expect(turn[1]).toBeCloseTo(-MINGLE_TURN_LIMIT, 5);
+  });
+
+  it('turns the whole way to somebody a little off ahead', () => {
+    const { turn } = mingle([
+      { x: 10, z: 10, party: 2 },
+      { x: 11, z: 14, party: 2, heading: Math.PI },
+    ]);
+    expect(turn[0]).toBeCloseTo(Math.atan2(1, 4), 5);
+  });
+
+  it('leaves alone strangers, the party a storey up and anybody out of reach', () => {
+    expect(
+      mingle([
+        { x: 10, z: 10, party: 1 },
+        { x: 14, z: 10, party: 2 },
+      ]).talks,
+    ).toEqual([0, 0]);
+    expect(
+      mingle([
+        { x: 10, z: 10, party: 1 },
+        { x: 14, z: 10, party: 1, y: 6 },
+      ]).talks,
+    ).toEqual([0, 0]);
+    expect(
+      mingle([
+        { x: 10, z: 10, party: 1 },
+        { x: 10 + MINGLE_RADIUS + 1, z: 10, party: 1 },
+      ]).talks,
+    ).toEqual([0, 0]);
+  });
+
+  it('never pairs those who stand with nobody, even with each other', () => {
+    const { turn, talks } = mingle([
+      { x: 10, z: 10, party: 0 },
+      { x: 14, z: 10, party: 0 },
+    ]);
+    expect(talks).toEqual([0, 0]);
+    expect(turn).toEqual([0, 0]);
+  });
+
+  it('turns to the nearest of a party of three', () => {
+    const { turn } = mingle([
+      { x: 10, z: 10, party: 3 },
+      { x: 10, z: 13, party: 3 },
+      { x: 17, z: 11, party: 3, heading: -Math.PI / 2 },
+    ]);
+    expect(turn[0]).toBeCloseTo(0, 5);
+    expect(turn[2]).toBeCloseTo(-Math.atan2(1, 7), 5);
+  });
+});
+
+describe('easeTurn', () => {
+  it('moves at most a step towards the target, and stops on it', () => {
+    expect(easeTurn(0, 1, 0.25)).toBeCloseTo(0.25);
+    expect(easeTurn(0, -1, 0.25)).toBeCloseTo(-0.25);
+    expect(easeTurn(0.9, 1, 0.25)).toBeCloseTo(1);
+    expect(easeTurn(0.5, 0.5, 0)).toBe(0.5);
   });
 });

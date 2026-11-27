@@ -20,6 +20,8 @@ const drawnOf = (count: number): DrawnAs => ({
   heading: new Float32Array(count),
   pose: new Float32Array(count),
   chair: new Uint8Array(count),
+  party: new Int32Array(count).fill(-1),
+  mingles: new Uint8Array(count),
 });
 
 const crowdOf = (count: number) => ({

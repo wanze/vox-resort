@@ -647,6 +647,46 @@ describe('buildCrowdField', () => {
     field.dispose();
   });
 
+  it('turns two of a party stood about towards each other bit by bit, and lets them talk', () => {
+    const crowd = crowdOf(3);
+    const drawnAs: DrawnAs = createCast(3, []);
+    for (const [person, x] of [40.5, 44.5, 48.5].entries()) {
+      drawnAs.shown[person] = SHOWN.placed;
+      drawnAs.x[person] = x;
+      drawnAs.y[person] = 7;
+      drawnAs.z[person] = 3.5;
+      drawnAs.pose[person] = RESTING.standing;
+      drawnAs.mingles[person] = 1;
+    }
+    drawnAs.party.set([5, 5, 6]);
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const drawn = () =>
+      meshes(field.group).flatMap((mesh) =>
+        Array.from({ length: mesh.count }, (_, slot) => ({
+          x: positionOf(mesh, slot).x,
+          sin: mesh.geometry.getAttribute('pose').getX(slot),
+          pose: mesh.geometry.getAttribute('pose').getZ(slot),
+        })),
+      );
+    const at = (x: number) => drawn().find((each) => each.x === x)!;
+    expect(at(40.5).sin).toBe(0);
+    expect(at(40.5).pose).toBeCloseTo(poseWith(RESTING.standing, TALK.ahead / 4), 5);
+    expect(at(48.5).pose).toBe(RESTING.standing);
+    field.advance(1 / 60, 1);
+    expect(at(40.5).sin).toBeGreaterThan(0);
+    expect(at(44.5).sin).toBeLessThan(0);
+    expect(at(48.5).sin).toBe(0);
+    for (let frame = 0; frame < 600; frame++) field.advance(1 / 60, 10);
+    const turned = at(40.5).sin;
+    field.advance(1 / 60, 10);
+    expect(at(40.5).sin).toBe(turned);
+    drawnAs.pose[1] = DRAWN_POSE.cheer;
+    field.advance(1 / 60, 1);
+    expect(at(44.5).sin).toBeCloseTo(0, 5);
+    expect(at(40.5).sin).toBeLessThan(turned);
+    field.dispose();
+  });
+
   it('draws a wheelchair user rolling along as riding, and at rest as sitting', () => {
     const crowd = crowdOf(2);
     const drawnAs: DrawnAs = createCast(2, []);

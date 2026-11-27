@@ -33,6 +33,10 @@ export interface DrawnAs {
   readonly pose: Float32Array;
   // 1 for somebody drawn in a wheelchair, whatever the pose says.
   readonly chair: Uint8Array;
+  // Per person, as recast last saw them: -1 for no party.
+  readonly party: Int32Array;
+  // 1 for somebody on a place where they may turn to their party: nothing else steers them there.
+  readonly mingles: Uint8Array;
 }
 
 // The resting beach guests, rebuilt by recast: only they are visited for a swim each frame.
@@ -108,9 +112,9 @@ export interface Cast extends DrawnAs {
   // One for each venue with a game, in venue order.
   readonly courts: readonly CourtGame[];
   readonly golf: readonly GolfPlay[];
-  // Per person, as recast last saw them: -1 for no party.
-  readonly party: Int32Array;
   readonly child: Uint8Array;
+  // Per place, what hold copies into `mingles`.
+  readonly minglePlaces: Uint8Array;
   // Triples: a parent's place, then the start and count of its venue's visitor places.
   readonly minding: Int32Array;
   // The clock last performed, for how far a parent turns in a frame.
@@ -181,8 +185,9 @@ const gathers = (place: Place): boolean => place.act === 'tag' || place.act === 
 
 const dances = (place: Place): boolean => !isMoving(place) && place.pose === RESTING.sitting;
 
-// Somebody standing still with no game to play watches the show from where they are.
-const cheers = (place: Place): boolean =>
+// Somebody standing still with no game to play: watches a show from where they are, and
+// otherwise turns to their party.
+const standsAbout = (place: Place): boolean =>
   !isMoving(place) &&
   (place.act ?? 'still') === 'still' &&
   place.pose === RESTING.standing &&
@@ -201,7 +206,7 @@ function audienceOf(
   const animator = animators.count > 0 ? animators.start : -1;
   const gathering = animator >= 0 ? own.filter((index) => gathers(flat[index]!)) : [];
   const dancing = floor ? own.filter((index) => dances(flat[index]!)) : [];
-  const cheering = floor && animator >= 0 ? own.filter((index) => cheers(flat[index]!)) : [];
+  const cheering = floor && animator >= 0 ? own.filter((index) => standsAbout(flat[index]!)) : [];
   if (gathering.length + dancing.length + cheering.length === 0) return [];
   return [
     {
@@ -278,6 +283,14 @@ export function createCast(
         : [visitors.start + at, visitors.start, visitors.count],
     );
   });
+  // A court's watchers follow the ball and a minding parent their child.
+  const steered = new Set([
+    ...courts.flatMap((court) => [...court.watchers]),
+    ...minding.filter((_, at) => at % 3 === 0),
+  ]);
+  const minglePlaces = Uint8Array.from(flat, (place, index) =>
+    Number(standsAbout(place) && !steered.has(index)),
+  );
   return {
     shown: new Uint8Array(capacity),
     x: new Float32Array(capacity),
@@ -286,6 +299,8 @@ export function createCast(
     heading: new Float32Array(capacity),
     pose: new Float32Array(capacity),
     chair: new Uint8Array(capacity),
+    mingles: new Uint8Array(capacity),
+    minglePlaces,
     placeOf: new Int32Array(capacity).fill(-1),
     lastVenue: new Int32Array(capacity).fill(NOWHERE),
     lastWaiting: new Uint8Array(capacity),
@@ -357,6 +372,7 @@ function release(cast: Cast, person: number): void {
   cast.placeOf[person] = -1;
   cast.shown[person] = SHOWN.asCrowd;
   cast.work[person] = WORK.none;
+  cast.mingles[person] = 0;
 }
 
 function hold(cast: Cast, person: number, index: number): void {
@@ -364,6 +380,7 @@ function hold(cast: Cast, person: number, index: number): void {
   cast.heldBy[index] = person;
   cast.placeOf[person] = index;
   cast.shown[person] = SHOWN.placed;
+  cast.mingles[person] = cast.minglePlaces[index]!;
   cast.heading[person] = place.heading;
   cast.pose[person] = place.pose;
   cast.x[person] = place.x;
@@ -506,8 +523,9 @@ function noteBather(cast: Cast, casting: Casting, bathing: Bathing, person: numb
   bathers.until[person] = until;
 }
 
+// At home too, where a party stands out on the balcony together.
 function noteFamily(cast: Cast, casting: Casting, person: number, venue: number): void {
-  const there = venue >= 0;
+  const there = venue >= 0 || venue <= AT_HOME;
   cast.party[person] = there ? (casting.partyOf?.(person) ?? -1) : -1;
   cast.child[person] = Number(there && casting.isChild?.(person) === true);
   cast.chair[person] = Number(casting.inChair?.(person) === true);

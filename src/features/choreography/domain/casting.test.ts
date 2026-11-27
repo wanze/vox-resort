@@ -67,6 +67,24 @@ function world(count: number) {
 const freeSeats = (): Int32Array => new Int32Array(5).fill(-1);
 
 describe('recast', () => {
+  it('lets somebody stood about turn to their party, but not on a seat nor once they leave', () => {
+    const { venue, casting } = world(2);
+    const cast = createCast(2, ALL);
+    venue.set([0, 2]);
+    recast(cast, casting, freeSeats());
+    expect([cast.mingles[0], cast.mingles[1]]).toEqual([1, 0]);
+    venue[0] = NONE;
+    recast(cast, casting, freeSeats());
+    expect(cast.mingles[0]).toBe(0);
+  });
+
+  it('leaves a minding parent’s place to the child they watch', () => {
+    const kidsClub = places({
+      visitors: [{ ...place('visitor', 1), forChild: true }, place('visitor', 2)],
+    });
+    expect([...createCast(1, [kidsClub]).minglePlaces]).toEqual([1, 0]);
+  });
+
   it('places visitors in the order the art declares, where the place is', () => {
     const { venue, casting } = world(3);
     const cast = createCast(3, ALL);
@@ -184,6 +202,15 @@ describe('recast, for a party home before bed or after waking', () => {
     recast(cast, casting, freeSeats());
     expect(cast.x[0]).toBe(41);
     expect(cast.pose[0]).toBe(RESTING.standing);
+  });
+
+  it('knows the party of whoever is home, to turn to on the balcony', () => {
+    const { home, casting } = atHome(1, true);
+    const cast = createCast(1, ALL, null, HOMES);
+    home[0] = 0;
+    recast(cast, { ...casting, partyOf: () => 7 }, freeSeats());
+    expect(cast.party[0]).toBe(7);
+    expect(cast.mingles[0]).toBe(1);
   });
 
   it('keeps whoever the lodging has no place for indoors, out of sight', () => {

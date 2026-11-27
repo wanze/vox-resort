@@ -17,7 +17,7 @@ import {
   POSE_SIN,
   POSE_STRIDE,
 } from '../../rendering/adapters/figureField';
-import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
+import { DRAWN_POSE, poseWith, STANDING } from '../../rendering/domain/poses';
 import { pixelsPerVoxel, standsOut, type DetailView } from '../../rendering/domain/levelOfDetail';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { standTurned } from '../../rendering/adapters/movingField';
@@ -26,6 +26,7 @@ import { WHEELCHAIR_SHARE } from '../../guests/domain/parties';
 import { MAX_STEP, reseatCrowd, RESTING, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
 import {
   easeTurn,
+  facesParty,
   mingleTurns,
   TALK,
   talkGridFor,
@@ -179,6 +180,7 @@ interface Talk {
   readonly heading: Float32Array;
   readonly sitting: Uint8Array;
   readonly side: Uint8Array;
+  readonly waiting: Uint8Array;
   readonly party: Int32Array;
   readonly turn: Float32Array;
   readonly talks: Uint8Array;
@@ -195,6 +197,7 @@ const talkFor = (capacity: number): Talk => ({
   heading: new Float32Array(capacity),
   sitting: new Uint8Array(capacity),
   side: new Uint8Array(capacity),
+  waiting: new Uint8Array(capacity),
   party: new Int32Array(capacity),
   turn: new Float32Array(capacity),
   talks: new Uint8Array(capacity),
@@ -202,52 +205,66 @@ const talkFor = (capacity: number): Talk => ({
 });
 
 // Placed by the cast, so never in a queue's lane; a show's audience cheers rather than stands.
-const partyOf = (drawnAs: DrawnAs | null, person: number, pose: number): number =>
+// The cast's pose, not the drawn one: a wheelchair user stood about is drawn sitting, and turns
+// their chair to the party.
+const partyOf = (drawnAs: DrawnAs | null, person: number, resting: number): number =>
   drawnAs?.shown[person] === SHOWN.placed &&
   drawnAs.mingles[person] === 1 &&
-  pose === RESTING.standing
+  resting === RESTING.standing
     ? drawnAs.party[person]! + 1
     : 0;
 
 // Whoever stops standing about faces their place again at once: they walk off or start cheering.
-function easeMinglers(talk: Talk, step: number): void {
+function easeMinglers(talk: Talk, step: number, clock: number): void {
   for (let person = 0; person < talk.count; person++) {
-    const target = talk.turn[person]!;
-    talk.turned[person] =
-      talk.party[person] === 0 ? 0 : easeTurn(talk.turned[person]!, target, step);
+    const party = talk.party[person]!;
+    const target = party > 0 && facesParty(clock, party) ? talk.turn[person]! : 0;
+    talk.turned[person] = party === 0 ? 0 : easeTurn(talk.turned[person]!, target, step);
   }
 }
 
+interface Moment {
+  // How far the crowd's clock moved this frame, and where it stands.
+  readonly step: number;
+  readonly clock: number;
+}
+
 // Over everybody drawn, the hidden first-person body too: the people beside it still turn to it.
-function findTalkers(talk: Talk, crowd: Crowd, drawnAs: DrawnAs | null, step: number): void {
+function findTalkers(talk: Talk, crowd: Crowd, drawnAs: DrawnAs | null, moment: Moment): void {
   for (let person = 0; person < crowd.count; person++) {
     talk.sitting[person] = 0;
     talk.party[person] = 0;
+    talk.waiting[person] = 0;
     if (!isDrawn(crowd, drawnAs, person, null)) continue;
     const placed = placedIn(drawnAs, person);
     const from = placed ?? crowd;
-    const pose = drawnPose(restingOf(crowd, placed, person), drawnAs?.chair[person] === 1);
+    const resting = restingOf(crowd, placed, person);
+    const pose = drawnPose(resting, drawnAs?.chair[person] === 1);
     talk.x[person] = from.x[person]!;
     talk.y[person] = from.y[person]!;
     talk.z[person] = from.z[person]!;
     talk.heading[person] = from.heading[person]!;
     talk.sitting[person] = pose === RESTING.sitting ? 1 : 0;
-    talk.party[person] = partyOf(drawnAs, person, pose);
+    talk.party[person] = partyOf(drawnAs, person, resting);
+    talk.waiting[person] = drawnAs?.lastWaiting[person] ?? 0;
   }
   talk.count = crowd.count;
   talkSides(talk, talk.grid, talk.side);
   mingleTurns(talk, talk.grid, talk);
-  easeMinglers(talk, step * MINGLE_TURN_RATE);
+  easeMinglers(talk, moment.step * MINGLE_TURN_RATE, moment.clock);
 }
 
-// Sitting and standing have no progress of their own, so it carries which way to talk; stood
-// with the party, they are already turned to them.
+// Sitting and standing have no progress of their own, so it carries which way to talk, and
+// standing whether they wait in line. With the party, they are turned to them: a sitter in a
+// wheelchair talks ahead.
 function packedPose(drawn: number, talk: Talk, person: number): number {
-  if (drawn === RESTING.sitting) return poseWith(drawn, talk.side[person]! / 4);
-  if (drawn === RESTING.standing && talk.talks[person] === 1) {
-    return poseWith(drawn, TALK.ahead / 4);
+  const talks = talk.talks[person] === 1;
+  if (drawn === RESTING.sitting) {
+    return poseWith(drawn, (talks ? TALK.ahead : talk.side[person]!) / 4);
   }
-  return drawn;
+  if (drawn !== RESTING.standing) return drawn;
+  if (talks) return poseWith(drawn, STANDING.talking / 4);
+  return talk.waiting[person] === 1 ? poseWith(drawn, STANDING.waiting / 4) : drawn;
 }
 
 // Column-major, and the figure faces +z, so the yaw matches crowd.ts's atan2(dx, dz).
@@ -337,7 +354,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   const writeAll = (step = 0): void => {
     drawnCount = 0;
     if (talk.side.length < crowd.capacity) talk = talkFor(crowd.capacity);
-    findTalkers(talk, crowd, drawnAs, step);
+    findTalkers(talk, crowd, drawnAs, { step, clock });
     chairs?.begin();
     for (const part of parts) {
       drawnCount += writeInstances(part, crowd, view, drawnAs, chairs, hidden, talk);

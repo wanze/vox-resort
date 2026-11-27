@@ -21,9 +21,9 @@ import { meshVoxelModel } from '../../model-compare/domain/voxelMesh';
 import { ARM_WEIGHT, figureGeometry } from '../../rendering/adapters/figureField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { orthographicLens } from '../../rendering/domain/levelOfDetail';
-import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { TALK } from '../domain/conversation';
-import { createCrowd, putOnPlot, RESTING, takeOffPlot, type Crowd } from '../domain/crowd';
+import { DRAWN_POSE, poseWith, STANDING } from '../../rendering/domain/poses';
+import { facesParty, MINGLE_SPELL, TALK } from '../domain/conversation';
+import { createCrowd, holdAt, putOnPlot, RESTING, takeOffPlot, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
 
@@ -166,6 +166,13 @@ function positionOf(mesh: InstancedMesh, slot: number): Vector3 {
   const matrix = new Matrix4();
   mesh.getMatrixAt(slot, matrix);
   return new Vector3().setFromMatrixPosition(matrix);
+}
+
+// A party whose first spells face each other, so a test is not at the mercy of the dice.
+function facingParty(): number {
+  for (let party = 1; ; party++) {
+    if ([0, 1, 2].every((spell) => facesParty(spell * MINGLE_SPELL, party))) return party;
+  }
 }
 
 describe('buildCrowdField', () => {
@@ -648,6 +655,7 @@ describe('buildCrowdField', () => {
   });
 
   it('turns two of a party stood about towards each other bit by bit, and lets them talk', () => {
+    const party = facingParty();
     const crowd = crowdOf(3);
     const drawnAs: DrawnAs = createCast(3, []);
     for (const [person, x] of [40.5, 44.5, 48.5].entries()) {
@@ -658,7 +666,7 @@ describe('buildCrowdField', () => {
       drawnAs.pose[person] = RESTING.standing;
       drawnAs.mingles[person] = 1;
     }
-    drawnAs.party.set([5, 5, 6]);
+    drawnAs.party.set([party - 1, party - 1, party]);
     const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
     const drawn = () =>
       meshes(field.group).flatMap((mesh) =>
@@ -670,7 +678,7 @@ describe('buildCrowdField', () => {
       );
     const at = (x: number) => drawn().find((each) => each.x === x)!;
     expect(at(40.5).sin).toBe(0);
-    expect(at(40.5).pose).toBeCloseTo(poseWith(RESTING.standing, TALK.ahead / 4), 5);
+    expect(at(40.5).pose).toBeCloseTo(poseWith(RESTING.standing, STANDING.talking / 4), 5);
     expect(at(48.5).pose).toBe(RESTING.standing);
     field.advance(1 / 60, 1);
     expect(at(40.5).sin).toBeGreaterThan(0);
@@ -684,6 +692,56 @@ describe('buildCrowdField', () => {
     field.advance(1 / 60, 1);
     expect(at(44.5).sin).toBeCloseTo(0, 5);
     expect(at(40.5).sin).toBeLessThan(turned);
+    field.dispose();
+  });
+
+  it('turns a wheelchair user stood about to the party, chair and all, talking ahead', () => {
+    const party = facingParty();
+    const crowd = crowdOf(2);
+    const drawnAs: DrawnAs = createCast(2, []);
+    for (const [person, x] of [40.5, 44.5].entries()) {
+      drawnAs.shown[person] = SHOWN.placed;
+      drawnAs.x[person] = x;
+      drawnAs.pose[person] = RESTING.standing;
+      drawnAs.mingles[person] = 1;
+      drawnAs.party[person] = party - 1;
+    }
+    drawnAs.chair[0] = 1;
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs, chair: MODELS[0]! });
+    field.advance(1 / 60, 10);
+    const user = meshes(field.group)
+      .filter((mesh) => mesh.name.startsWith('crowd-'))
+      .flatMap((mesh) =>
+        Array.from({ length: mesh.count }, (_, slot) => ({
+          x: positionOf(mesh, slot).x,
+          sin: mesh.geometry.getAttribute('pose').getX(slot),
+          pose: mesh.geometry.getAttribute('pose').getZ(slot),
+        })),
+      )
+      .find((each) => each.x === 40.5)!;
+    expect(user.sin).toBeGreaterThan(0);
+    expect(user.pose).toBeCloseTo(poseWith(RESTING.sitting, TALK.ahead / 4), 5);
+    field.dispose();
+  });
+
+  it('tells the shader who stands waiting in line, but not who sits waiting', () => {
+    const crowd = crowdOf(2);
+    const drawnAs: DrawnAs = createCast(2, []);
+    drawnAs.lastWaiting.set([1, 1]);
+    holdAt(crowd, 0, 40.5, 0, 3.5, 0);
+    drawnAs.shown[1] = SHOWN.placed;
+    drawnAs.x[1] = 80.5;
+    drawnAs.pose[1] = RESTING.sitting;
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const drawn = meshes(field.group).flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, slot) => ({
+        x: positionOf(mesh, slot).x,
+        pose: mesh.geometry.getAttribute('pose').getZ(slot),
+      })),
+    );
+    const poseAt = (x: number) => drawn.find((each) => each.x === x)!.pose;
+    expect(poseAt(40.5)).toBeCloseTo(poseWith(RESTING.standing, STANDING.waiting / 4), 5);
+    expect(poseAt(80.5)).toBe(RESTING.sitting);
     field.dispose();
   });
 

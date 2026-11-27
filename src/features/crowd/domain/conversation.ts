@@ -1,3 +1,5 @@
+import { unitAt } from '../../random/domain/hash';
+
 // Which way a sitter would talk: to a neighbour on their own +x or -x side (the figure faces
 // +z), or one across a table in front of them. The figure shader reads these codes.
 export const TALK = { none: 0, plusX: 1, ahead: 2, minusX: 3 } as const;
@@ -28,6 +30,11 @@ export const MINGLE_RADIUS = 12;
 // Off the way the place faces. Short of a right angle, so a pair side by side face each other
 // almost square and one stood behind is half turned to rather than turned round.
 export const MINGLE_TURN_LIMIT = 0.45 * Math.PI;
+
+// In the crowd's clock, about 11x real time: spells of ~11 real seconds, in each of which a
+// party faces each other by this chance and otherwise looks out the way their places face.
+export const MINGLE_SPELL = 120;
+export const MINGLE_FACING_SHARE = 0.7;
 
 export interface Minglers {
   readonly count: number;
@@ -181,3 +188,10 @@ export function mingleTurns(minglers: Minglers, grid: TalkGrid, out: Mingling): 
 // Offsets stay within the turn limit, so no wrap: the short way round is the straight way.
 export const easeTurn = (now: number, target: number, step: number): number =>
   now + Math.min(Math.max(target - now, -step), step);
+
+// Per party, so a pair turns to each other together and looks away together; offset per party
+// so the whole resort does not turn at once.
+export function facesParty(clock: number, party: number): boolean {
+  const spells = clock / MINGLE_SPELL + unitAt(party, 0);
+  return unitAt(party, Math.floor(spells) + 1) < MINGLE_FACING_SHARE;
+}

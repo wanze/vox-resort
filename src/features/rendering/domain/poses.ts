@@ -18,3 +18,7 @@ export const DRAWN_POSE = {
 // Short of 1, so the shader's floor still reads the code the progress was added to.
 export const poseWith = (code: number, progress: number): number =>
   code + Math.min(Math.max(progress, 0), 0.999);
+
+// What RESTING.standing's progress carries, in quarters as TALK does for sitting: standing with
+// the party, already turned to them, or waiting in line with time to kill.
+export const STANDING = { still: 0, waiting: 1, talking: 2 } as const;

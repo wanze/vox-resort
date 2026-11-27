@@ -20,7 +20,7 @@ import {
 import { TALK } from '../../crowd/domain/conversation';
 import { RESTING } from '../../crowd/domain/crowd';
 import { sealFigure } from '../domain/figureLimbs';
-import { DRAWN_POSE } from '../domain/poses';
+import { DRAWN_POSE, STANDING } from '../domain/poses';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { litMaterial } from './instancedWorld';
 import type { ModelGeometry } from './voxelMeshBuilder';
@@ -59,6 +59,26 @@ const WAG_RATE = 1.5;
 const STANDING_GESTURE_CHANCE = 0.35;
 // From hanging, not from the lap: the same height at the chest as a sitter's gesture.
 const STANDING_GESTURE_LIFT = SIT_ARMS + GESTURE_LIFT;
+
+// Waiting in line, a slot of ~19 real seconds holds by chance a look at the phone, a look round
+// or shifting foot to foot, over a share of it; whatever is left of the chances holds nothing.
+const QUEUE_SLOT = 200;
+const QUEUE_SHARE = 0.6;
+// Of the share, for the phone arm to come up and go down again.
+const QUEUE_EASE = 0.1;
+const QUEUE_PHONE_SHARE = 0.35;
+const QUEUE_LOOK_SHARE = 0.3;
+const QUEUE_SHIFT_SHARE = 0.2;
+// Off the sip's and the lounge's seeds, so a queue's fidgets follow neither.
+const QUEUE_SEED = 2_000_003;
+// From hanging: the hand comes up in front of the chest, where a phone is read.
+const QUEUE_PHONE_LIFT = 1.3;
+// Radians the head turns each way looking round, short of HEAD_TURN: a glance, not a stare.
+const QUEUE_LOOK_TURN = 0.7;
+// Voxels of sideways lean per voxel of height, so the feet stay put and the head sways most;
+// and how many times weight goes from one foot to the other and back over the share.
+const QUEUE_LEAN = 0.03;
+const QUEUE_SHIFTS = 2;
 
 // Spells of ~8 real seconds looking at the neighbour, then ~8 looking ahead, eased between.
 const LOOK_RATE = 0.037;
@@ -307,9 +327,11 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const sipBump = sin(sipAt.mul(PI));
   const sip = sitting.mul(sipping).mul(sipBump);
 
-  const talk = progress.mul(4).add(0.5).floor().mul(sitting.add(standing));
-  const talksTo = (k: number) => talk.sub(k).abs().step(0.5).oneMinus();
-  const chatting = talk.step(0.5);
+  const quarter = progress.mul(4).add(0.5).floor();
+  const quarterIs = (k: number) => quarter.sub(k).abs().step(0.5).oneMinus();
+  const talksTo = (k: number) => sitting.mul(quarterIs(k));
+  const chatting = sitting.mul(quarter.step(0.5)).add(standing.mul(quarterIs(STANDING.talking)));
+  const waiting = standing.mul(quarterIs(STANDING.waiting));
   const sipRoll = hash(sipSeed);
   const gestureFrom = sitting.mul(SIP_CHANCE);
   const gestureTo = gestureFrom
@@ -322,7 +344,30 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     LOOK_EASE,
     sin(clock.mul(LOOK_RATE).add(phase.mul(LOOK_SPREAD))),
   );
-  const headAngle = talksTo(TALK.plusX).sub(talksTo(TALK.minusX)).mul(look).mul(HEAD_TURN);
+
+  const queueClock = clock.div(QUEUE_SLOT).add(phase.div(2 * Math.PI));
+  const queueSeed = queueClock.floor().add(phase.mul(SIP_SEEDS).floor()).mul(2).add(QUEUE_SEED);
+  const queueRoll = hash(queueSeed);
+  const queueStart = hash(queueSeed.add(1)).mul(1 - QUEUE_SHARE);
+  const queueAt = queueClock.fract().sub(queueStart).div(QUEUE_SHARE).saturate();
+  const queueHold = smoothstep(0, QUEUE_EASE, queueAt).mul(
+    smoothstep(0, QUEUE_EASE, queueAt.oneMinus()),
+  );
+  const fidget = (from: number, to: number) =>
+    waiting.mul(queueRoll.step(from)).mul(queueRoll.step(to).oneMinus());
+  const LOOK_FROM = QUEUE_PHONE_SHARE;
+  const SHIFT_FROM = LOOK_FROM + QUEUE_LOOK_SHARE;
+  const onPhone = fidget(0, LOOK_FROM).mul(queueHold);
+  const lookRound = fidget(LOOK_FROM, SHIFT_FROM).mul(sin(queueAt.mul(2 * Math.PI)));
+  const shift = fidget(SHIFT_FROM, SHIFT_FROM + QUEUE_SHIFT_SHARE).mul(
+    sin(queueAt.mul(2 * Math.PI * QUEUE_SHIFTS)),
+  );
+
+  const headAngle = talksTo(TALK.plusX)
+    .sub(talksTo(TALK.minusX))
+    .mul(look)
+    .mul(HEAD_TURN)
+    .add(lookRound.mul(QUEUE_LOOK_TURN));
 
   const loungeClock = clock.div(LOUNGE_SLOT).add(phase.div(2 * Math.PI));
   const loungeRoll = hash(
@@ -400,7 +445,8 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
         .add(phoning.mul(side.max(0)).mul(PHONE_ARMS))
         .mul(loungeEase),
     )
-    .add(prone.mul(PRONE_ARMS));
+    .add(prone.mul(PRONE_ARMS))
+    .add(onPhone.mul(side.max(0)).mul(QUEUE_PHONE_LIFT));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.
   const fromShoulder = axis.sub(SHOULDER_ABOVE_HIP);
@@ -415,6 +461,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const headSin = sin(headAngle);
   const headAcross = weight.mul(headCos).add(thick.mul(headSin)).mul(head);
   const headAlong = thick.mul(headCos).sub(weight.mul(headSin)).mul(head);
+  const across = headAcross.add(shift.mul(QUEUE_LEAN).mul(axis.add(hip)));
 
   const limbAlong = legAlong.add(tuckAlong).add(armAlong).add(headAlong);
   const limbUp = tuckUp.add(armUp);
@@ -467,9 +514,9 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   // The figure's own +x lies at (cos, -sin) of its heading, and facing holds (sin, cos).
   material.positionNode = positionLocal.add(
     vec3(
-      along.mul(facing.x).add(headAcross.mul(facing.y)),
+      along.mul(facing.x).add(across.mul(facing.y)),
       up,
-      along.mul(facing.y).sub(headAcross.mul(facing.x)),
+      along.mul(facing.y).sub(across.mul(facing.x)),
     ),
   );
   return {

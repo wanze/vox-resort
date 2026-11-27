@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   easeTurn,
+  facesParty,
+  MINGLE_FACING_SHARE,
+  MINGLE_SPELL,
   MINGLE_RADIUS,
   MINGLE_TURN_LIMIT,
   mingleTurns,
@@ -221,5 +224,33 @@ describe('easeTurn', () => {
     expect(easeTurn(0, -1, 0.25)).toBeCloseTo(-0.25);
     expect(easeTurn(0.9, 1, 0.25)).toBeCloseTo(1);
     expect(easeTurn(0.5, 0.5, 0)).toBe(0.5);
+  });
+});
+
+describe('facesParty', () => {
+  it('changes its mind only between spells, and faces the party about the share of spells', () => {
+    const spells = 2000;
+    const samples = 10;
+    let facing = 0;
+    let flips = 0;
+    let was = facesParty(0, 4);
+    for (let at = 0; at < spells * samples; at++) {
+      const now = facesParty((at * MINGLE_SPELL) / samples, 4);
+      if (now !== was) flips++;
+      if (now) facing++;
+      was = now;
+    }
+    expect(flips).toBeLessThanOrEqual(spells);
+    expect(facing / (spells * samples)).toBeGreaterThan(MINGLE_FACING_SHARE - 0.05);
+    expect(facing / (spells * samples)).toBeLessThan(MINGLE_FACING_SHARE + 0.05);
+  });
+
+  it('gives every member of a party the same answer, and other parties their own', () => {
+    const answers = Array.from({ length: 50 }, (_, spell) => facesParty(spell * MINGLE_SPELL, 9));
+    expect(answers).toEqual(
+      Array.from({ length: 50 }, (_, spell) => facesParty(spell * MINGLE_SPELL, 9)),
+    );
+    const other = Array.from({ length: 50 }, (_, spell) => facesParty(spell * MINGLE_SPELL, 10));
+    expect(other).not.toEqual(answers);
   });
 });

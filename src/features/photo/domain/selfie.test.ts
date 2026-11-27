@@ -22,6 +22,7 @@ const drawnOf = (count: number): DrawnAs => ({
   chair: new Uint8Array(count),
   party: new Int32Array(count).fill(-1),
   mingles: new Uint8Array(count),
+  lastWaiting: new Uint8Array(count),
 });
 
 const crowdOf = (count: number) => ({

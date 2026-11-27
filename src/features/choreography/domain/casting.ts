@@ -37,6 +37,8 @@ export interface DrawnAs {
   readonly party: Int32Array;
   // 1 for somebody on a place where they may turn to their party: nothing else steers them there.
   readonly mingles: Uint8Array;
+  // What the person was waiting for at the last recast, placed or left to the lane.
+  readonly lastWaiting: Uint8Array;
 }
 
 // The resting beach guests, rebuilt by recast: only they are visited for a swim each frame.
@@ -87,7 +89,6 @@ export interface Cast extends DrawnAs {
   readonly placeOf: Int32Array;
   // What the person was doing at the last recast, so a change gives their place up.
   readonly lastVenue: Int32Array;
-  readonly lastWaiting: Uint8Array;
   readonly places: readonly Place[];
   readonly heldBy: Int32Array;
   readonly venues: readonly VenueRanges[];

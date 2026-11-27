@@ -9,7 +9,7 @@ import {
   type BufferGeometry,
   type MeshStandardNodeMaterial,
 } from 'three/webgpu';
-import { attribute, cos, hash, PI, positionLocal, sin, uniform, vec3 } from 'three/tsl';
+import { attribute, cos, hash, PI, positionLocal, sin, smoothstep, uniform, vec3 } from 'three/tsl';
 import {
   ADULT_VOXELS,
   CHEST_HALF_WIDTH,
@@ -17,6 +17,7 @@ import {
   hipHeight,
   shoulderHeight,
 } from '../../../../voxel-gen/people/figure.ts';
+import { TALK } from '../../crowd/domain/conversation';
 import { RESTING } from '../../crowd/domain/crowd';
 import { sealFigure } from '../domain/figureLimbs';
 import { DRAWN_POSE } from '../domain/poses';
@@ -47,6 +48,25 @@ const SIP_SHARE = 0.25;
 const SIP_SEEDS = 10_000;
 // On top of SIT_ARMS, brings a 3-voxel arm's hand level with the mouth.
 const SIP_LIFT = 1.1;
+
+// A slot that holds no sip holds a gesture by this chance, for a sitter with somebody to talk to.
+const GESTURE_CHANCE = 0.5;
+// The other hand, up to the chest and wagged a little about there.
+const GESTURE_LIFT = 0.6;
+const WAG = 0.25;
+const WAG_RATE = 1.5;
+
+// Spells of ~8 real seconds looking at the neighbour, then ~8 looking ahead, eased between.
+const LOOK_RATE = 0.037;
+const LOOK_EASE = 0.3;
+// Spreads the look away from the walk phase, so looking and sipping do not keep step.
+const LOOK_SPREAD = 3;
+// Short of a right angle: a voxel head turned fully sideways reads as a head seen from behind.
+const HEAD_TURN = 0.9;
+
+// Head vertices carry their x as weight, never 0 as the head is two half-voxels across;
+// anything under this is the chest's top, which meets the head at the shoulder.
+const HEAD_WEIGHT = 0.25;
 
 // Half a leg's depth: the backs of legs held out flat rest on the ground, not in it.
 const FLAT_LEG_HALF = 0.5;
@@ -117,6 +137,21 @@ function grown(from: BufferGeometry['attributes'][string], order: readonly numbe
   return values;
 }
 
+// Per triangle, as the mesher gives every quad its own vertices: the chest's top shares the
+// shoulder line with the head's sides but none of their vertices.
+function headVertices(geometry: BufferGeometry, shoulder: number): Uint8Array {
+  const positions = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  const head = new Uint8Array(positions.count);
+  if (!index) return head;
+  for (let first = 0; first + 2 < index.count; first += 3) {
+    const corners = [index.getX(first), index.getX(first + 1), index.getX(first + 2)];
+    const y = corners.reduce((sum, vertex) => sum + positions.getY(vertex), 0) / 3;
+    if (y > shoulder) for (const vertex of corners) head[vertex] = 1;
+  }
+  return head;
+}
+
 function sealed(geometry: BufferGeometry, hip: number, height: number): Uint8Array {
   const positions = geometry.getAttribute('position');
   const index = geometry.getIndex();
@@ -159,6 +194,7 @@ export function figureGeometry(model: ModelGeometry, capacity: number): BufferGe
 
   const hip = hipHeight(height);
   const onArm = sealed(geometry, hip, height);
+  const onHead = headVertices(geometry, shoulderHeight(height));
   const positions = geometry.getAttribute('position');
   const figure = new Float32Array(positions.count * 4);
   for (let vertex = 0; vertex < positions.count; vertex++) {
@@ -167,7 +203,11 @@ export function figureGeometry(model: ModelGeometry, capacity: number): BufferGe
     // it from the shoulder by the axis.
     const reach = onArm[vertex] ? ARM_WEIGHT : hip > 0 ? Math.max(0, (hip - y) / hip) : 0;
     // A limb swings against its twin on the other side, which after the centring is the sign of x.
-    figure[vertex * 4] = Math.sign(positions.getX(vertex)) * reach;
+    // The head turns about its middle, and past the instance matrix only this keeps its x.
+    figure[vertex * 4] =
+      onHead[vertex] && !onArm[vertex]
+        ? positions.getX(vertex)
+        : Math.sign(positions.getX(vertex)) * reach;
     // Baked per vertex: past the instance matrix the figure's own axes are gone, and a
     // per-model uniform cannot live on a material every model shares.
     figure[vertex * 4 + 1] = y - hip;
@@ -234,7 +274,8 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const onArm = weight.abs().step((1 + ARM_WEIGHT) / 2);
   const offArm = onArm.oneMinus();
   const side = weight.sign().mul(onArm);
-  const legW = weight.mul(offArm);
+  // Only below the hip: above it the weight is the head's x.
+  const legW = weight.mul(offArm).mul(axis.step(0).oneMinus());
   // How far below the hip, for bending a leg; a hand hangs below it too, but is not bent.
   const leg = axis.negate().max(0).mul(offArm);
 
@@ -243,7 +284,23 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const sipping = hash(sipSeed).step(SIP_CHANCE).oneMinus();
   const sipStart = hash(sipSeed.add(1)).mul(1 - SIP_SHARE);
   const sipAt = sipClock.fract().sub(sipStart).div(SIP_SHARE).saturate();
-  const sip = sitting.mul(sipping).mul(sin(sipAt.mul(PI)));
+  const sipBump = sin(sipAt.mul(PI));
+  const sip = sitting.mul(sipping).mul(sipBump);
+
+  const talk = progress.mul(4).add(0.5).floor().mul(sitting);
+  const talksTo = (k: number) => talk.sub(k).abs().step(0.5).oneMinus();
+  const chatting = talk.step(0.5);
+  const sipRoll = hash(sipSeed);
+  const gesturing = chatting
+    .mul(sipRoll.step(SIP_CHANCE))
+    .mul(sipRoll.step(SIP_CHANCE + GESTURE_CHANCE).oneMinus());
+  const gesture = gesturing.mul(sipBump);
+  const look = smoothstep(
+    -LOOK_EASE,
+    LOOK_EASE,
+    sin(clock.mul(LOOK_RATE).add(phase.mul(LOOK_SPREAD))),
+  );
+  const headAngle = talksTo(TALK.plusX).sub(talksTo(TALK.minusX)).mul(look).mul(HEAD_TURN);
 
   const gait = walking.mul(sin(cycle(CADENCE))).add(jogging.mul(sin(cycle(JOG_CADENCE))));
   const hopLift = sin(cycle(HOP_RATE)).max(0);
@@ -289,7 +346,8 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(selfie.mul(side.max(0)).mul(SELFIE_REACH))
     .add(photographing.mul(PHOTO_ARMS))
     .add(seated.add(sittingFlat).mul(SIT_ARMS))
-    .add(sip.mul(side.max(0)).mul(SIP_LIFT));
+    .add(sip.mul(side.max(0)).mul(SIP_LIFT))
+    .add(gesture.mul(side.negate().max(0)).mul(sin(cycle(WAG_RATE)).mul(WAG).add(GESTURE_LIFT)));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.
   const fromShoulder = axis.sub(SHOULDER_ABOVE_HIP);
@@ -298,7 +356,14 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const armAlong = thick.mul(armCos).sub(fromShoulder.mul(armSin)).mul(onArm);
   const armUp = thick.mul(armSin).add(fromShoulder.mul(armCos)).mul(onArm);
 
-  const limbAlong = legAlong.add(tuckAlong).add(armAlong);
+  // A true turn about the head's middle, as the arm turns about the shoulder.
+  const head = offArm.mul(axis.step(0)).mul(weight.abs().step(HEAD_WEIGHT));
+  const headCos = cos(headAngle).sub(1);
+  const headSin = sin(headAngle);
+  const headAcross = weight.mul(headCos).add(thick.mul(headSin)).mul(head);
+  const headAlong = thick.mul(headCos).sub(weight.mul(headSin)).mul(head);
+
+  const limbAlong = legAlong.add(tuckAlong).add(armAlong).add(headAlong);
   const limbUp = tuckUp.add(armUp);
   const bodyThick = thick.add(limbAlong);
   const bodyAxis = axis.add(limbUp);
@@ -342,7 +407,14 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(flatUp.mul(sittingFlat))
     .add(lieUp.mul(lying))
     .add(swimUp.mul(swimming));
-  material.positionNode = positionLocal.add(vec3(along.mul(facing.x), up, along.mul(facing.y)));
+  // The figure's own +x lies at (cos, -sin) of its heading, and facing holds (sin, cos).
+  material.positionNode = positionLocal.add(
+    vec3(
+      along.mul(facing.x).add(headAcross.mul(facing.y)),
+      up,
+      along.mul(facing.y).sub(headAcross.mul(facing.x)),
+    ),
+  );
   return {
     material,
     setClock(seconds) {

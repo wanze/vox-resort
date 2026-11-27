@@ -17,12 +17,14 @@ import {
   POSE_SIN,
   POSE_STRIDE,
 } from '../../rendering/adapters/figureField';
+import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
 import { pixelsPerVoxel, standsOut, type DetailView } from '../../rendering/domain/levelOfDetail';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { standTurned } from '../../rendering/adapters/movingField';
 import { CHAIR_SEAT_VOXELS } from '../../../../voxel-gen/props/wheelchair.ts';
 import { WHEELCHAIR_SHARE } from '../../guests/domain/parties';
 import { MAX_STEP, reseatCrowd, RESTING, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
+import { talkGridFor, talkSides, type TalkGrid } from '../domain/conversation';
 import type { WalkNetwork } from '../domain/walkNetwork';
 import { buildChairField, type ChairField } from './chairField';
 
@@ -151,6 +153,52 @@ function seatInChair(
   return hip;
 }
 
+// A wheelchair user rolling along rides, so their hands stay on the wheels rather than sipping.
+function drawnPose(resting: number, seated: boolean): number {
+  if (!seated) return resting;
+  return resting === RESTING.none ? DRAWN_POSE.ride : RESTING.sitting;
+}
+
+interface Talk {
+  count: number;
+  readonly grid: TalkGrid;
+  readonly x: Float32Array;
+  readonly y: Float32Array;
+  readonly z: Float32Array;
+  readonly heading: Float32Array;
+  readonly sitting: Uint8Array;
+  readonly side: Uint8Array;
+}
+
+const talkFor = (capacity: number): Talk => ({
+  count: 0,
+  grid: talkGridFor(capacity),
+  x: new Float32Array(capacity),
+  y: new Float32Array(capacity),
+  z: new Float32Array(capacity),
+  heading: new Float32Array(capacity),
+  sitting: new Uint8Array(capacity),
+  side: new Uint8Array(capacity),
+});
+
+// Over everybody drawn, the hidden first-person body too: the people beside it still turn to it.
+function findTalkers(talk: Talk, crowd: Crowd, drawnAs: DrawnAs | null): void {
+  for (let person = 0; person < crowd.count; person++) {
+    talk.sitting[person] = 0;
+    if (!isDrawn(crowd, drawnAs, person, null)) continue;
+    const placed = placedIn(drawnAs, person);
+    const from = placed ?? crowd;
+    const pose = drawnPose(restingOf(crowd, placed, person), drawnAs?.chair[person] === 1);
+    talk.x[person] = from.x[person]!;
+    talk.y[person] = from.y[person]!;
+    talk.z[person] = from.z[person]!;
+    talk.heading[person] = from.heading[person]!;
+    talk.sitting[person] = pose === RESTING.sitting ? 1 : 0;
+  }
+  talk.count = crowd.count;
+  talkSides(talk, talk.grid, talk.side);
+}
+
 // Column-major, and the figure faces +z, so the yaw matches crowd.ts's atan2(dx, dz).
 function writeInstances(
   part: PersonMesh,
@@ -159,6 +207,7 @@ function writeInstances(
   drawnAs: DrawnAs | null,
   chairs: ChairField | null,
   hidden: number | null,
+  talk: Talk,
 ): number {
   const matrices = part.mesh.instanceMatrix.array;
   const pose = part.pose.array;
@@ -185,7 +234,10 @@ function writeInstances(
     const packed = slot * POSE_STRIDE;
     pose[packed + POSE_SIN] = yawSin;
     pose[packed + POSE_COS] = yawCos;
-    pose[packed + POSE_RESTING] = seated ? RESTING.sitting : resting;
+    const drawn = drawnPose(resting, seated);
+    // The sitting pose has no progress of its own, so it carries which way to talk.
+    pose[packed + POSE_RESTING] =
+      drawn === RESTING.sitting ? poseWith(drawn, talk.side[person]! / 4) : drawn;
     // The person's own, placed or not, so the walk cycle does not jump when they are let go.
     pose[packed + POSE_PHASE] = crowd.phase[person]!;
     slot++;
@@ -232,11 +284,14 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   let view: DetailView | null = null;
   let drawnCount = 0;
   let hidden: number | null = null;
+  let talk = talkFor(crowd.capacity);
   const writeAll = (): void => {
     drawnCount = 0;
+    if (talk.side.length < crowd.capacity) talk = talkFor(crowd.capacity);
+    findTalkers(talk, crowd, drawnAs);
     chairs?.begin();
     for (const part of parts) {
-      drawnCount += writeInstances(part, crowd, view, drawnAs, chairs, hidden);
+      drawnCount += writeInstances(part, crowd, view, drawnAs, chairs, hidden, talk);
     }
     chairs?.end();
   };

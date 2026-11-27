@@ -22,6 +22,7 @@ import { ARM_WEIGHT, figureGeometry } from '../../rendering/adapters/figureField
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { orthographicLens } from '../../rendering/domain/levelOfDetail';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
+import { TALK } from '../domain/conversation';
 import { createCrowd, putOnPlot, RESTING, takeOffPlot, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
@@ -96,7 +97,7 @@ interface Corner {
   readonly x: number;
   readonly y: number;
   readonly weight: number;
-  readonly part: 'leg' | 'arm' | 'body' | 'seam';
+  readonly part: 'leg' | 'arm' | 'body' | 'head' | 'seam';
 }
 
 // Every corner of every triangle of a posed figure, with the part its triangle's centroid is on;
@@ -116,7 +117,7 @@ function cornersOf(source: VoxelModelSource): { corners: Corner[][] } {
     const vertices = [0, 1, 2].map((corner) => index.getX(first + corner));
     const x = vertices.reduce((sum, vertex) => sum + positions.getX(vertex), 0) / 3;
     const y = vertices.reduce((sum, vertex) => sum + positions.getY(vertex), 0) / 3;
-    let part: Corner['part'] = y < hip ? 'leg' : 'body';
+    let part: Corner['part'] = y < hip ? 'leg' : y > shoulder ? 'head' : 'body';
     if (Math.abs(Math.abs(x) - CHEST_HALF_WIDTH) < 1e-4) part = 'seam';
     else if (Math.abs(x) > CHEST_HALF_WIDTH && y >= hand && y <= shoulder) part = 'arm';
     corners.push(
@@ -336,6 +337,7 @@ describe('buildCrowdField', () => {
       const hip = hipHeight(height);
       for (let vertex = 0; vertex < swing.count; vertex++) {
         const y = positions.getY(vertex);
+        if (y >= hip) continue;
         const expected = Math.sign(positions.getX(vertex)) * Math.max(0, (hip - y) / hip);
         expect(swing.getX(vertex)).toBeCloseTo(expected, 5);
       }
@@ -360,13 +362,27 @@ describe('buildCrowdField', () => {
     }
   });
 
-  it('gives the chest and the head no weight', () => {
+  it('gives the chest no weight', () => {
     for (const source of EVERY_PERSON) {
       const body = cornersOf(source)
         .corners.flat()
         .filter((corner) => corner.part === 'body');
       expect(body.length, source.id).toBeGreaterThan(0);
       for (const corner of body) expect(corner.weight, source.id).toBeCloseTo(0, 5);
+    }
+  });
+
+  it('weights the head by its x, which the shader tells from the chest by never being 0', () => {
+    for (const source of EVERY_PERSON) {
+      const head = cornersOf(source)
+        .corners.flat()
+        .filter((corner) => corner.part === 'head');
+      expect(head.length, source.id).toBeGreaterThan(0);
+      for (const corner of head) {
+        expect(corner.weight, source.id).toBeCloseTo(corner.x, 5);
+        expect(Math.abs(corner.weight), source.id).toBeGreaterThan(0.25);
+        expect(Math.abs(corner.weight), source.id).toBeLessThan((1 + ARM_WEIGHT) / 2);
+      }
     }
   });
 
@@ -604,6 +620,47 @@ describe('buildCrowdField', () => {
     expect(pose.getX(0)).toBeCloseTo(1, 5);
     expect(pose.getZ(0)).toBe(RESTING.sitting);
     expect(pose.getW(0)).toBeCloseTo(crowd.phase[0]!, 5);
+    field.dispose();
+  });
+
+  it('tells two people sat side by side which way to talk, in the sitting pose', () => {
+    const crowd = crowdOf(3);
+    const drawnAs: DrawnAs = createCast(3, []);
+    for (const [person, x] of [40.5, 44.5, 80.5].entries()) {
+      drawnAs.shown[person] = SHOWN.placed;
+      drawnAs.x[person] = x;
+      drawnAs.y[person] = 7;
+      drawnAs.z[person] = 3.5;
+      drawnAs.pose[person] = RESTING.sitting;
+    }
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const drawn = meshes(field.group).flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, slot) => ({
+        x: positionOf(mesh, slot).x,
+        pose: mesh.geometry.getAttribute('pose').getZ(slot),
+      })),
+    );
+    const poseAt = (x: number): number => drawn.find((each) => each.x === x)!.pose;
+    expect(poseAt(40.5)).toBeCloseTo(poseWith(RESTING.sitting, TALK.plusX / 4), 5);
+    expect(poseAt(44.5)).toBeCloseTo(poseWith(RESTING.sitting, TALK.minusX / 4), 5);
+    expect(poseAt(80.5)).toBe(RESTING.sitting);
+    field.dispose();
+  });
+
+  it('draws a wheelchair user rolling along as riding, and at rest as sitting', () => {
+    const crowd = crowdOf(2);
+    const drawnAs: DrawnAs = createCast(2, []);
+    drawnAs.chair.set([1, 1]);
+    drawnAs.shown[1] = SHOWN.placed;
+    drawnAs.x[1] = 80.5;
+    drawnAs.pose[1] = RESTING.standing;
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const poses = meshes(field.group).flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, slot) =>
+        mesh.geometry.getAttribute('pose').getZ(slot),
+      ),
+    );
+    expect(poses.toSorted((a, b) => a - b)).toEqual([RESTING.sitting, DRAWN_POSE.ride]);
     field.dispose();
   });
 

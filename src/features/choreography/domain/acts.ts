@@ -198,7 +198,7 @@ function speedOn(pose: LoopPose): number {
 
 function drawnOn(pose: LoopPose): number {
   if (pose === 'climb') return DRAWN_POSE.jog;
-  if (pose === 'slide') return RESTING.sitting;
+  if (pose === 'slide') return DRAWN_POSE.ride;
   if (pose === 'swim') return DRAWN_POSE.swim;
   // Arms straight up, short of the progress where the reach would lift the body.
   if (pose === 'hang') return poseWith(DRAWN_POSE.reach, 1);

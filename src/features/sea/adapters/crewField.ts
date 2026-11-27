@@ -10,8 +10,8 @@ import {
   type InstancedBufferAttribute,
   type Material,
 } from 'three/webgpu';
-import { RESTING } from '../../crowd/domain/crowd';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import {
   figureGeometry,
   figureMaterial,
@@ -97,7 +97,7 @@ function buildCrewMesh(
   const geometry = figureGeometry(model, members.length);
   const pose = geometry.getAttribute('pose') as InstancedBufferAttribute;
   for (let slot = 0; slot < members.length; slot++) {
-    pose.array[slot * POSE_STRIDE + POSE_RESTING] = RESTING.sitting;
+    pose.array[slot * POSE_STRIDE + POSE_RESTING] = DRAWN_POSE.ride;
   }
 
   const mesh = new InstancedMesh(geometry, material, members.length);

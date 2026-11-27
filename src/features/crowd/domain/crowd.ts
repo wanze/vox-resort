@@ -91,7 +91,7 @@ const GATE_CLEAR = TILE_VOXELS / 2 + 2;
 export const RESTING = { none: 0, standing: 1, sitting: 2, lying: 3 } as const;
 
 export const sitsDown = (pose: number): boolean =>
-  pose === RESTING.sitting || pose === DRAWN_POSE.sitFlat;
+  pose === RESTING.sitting || pose === DRAWN_POSE.sitFlat || pose === DRAWN_POSE.ride;
 
 export interface Crowd extends Walkers {
   readonly network: WalkNetwork;

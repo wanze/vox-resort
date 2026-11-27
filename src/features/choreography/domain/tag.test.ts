@@ -131,7 +131,7 @@ describe('the kids club', () => {
     for (let time = 0; time < loop.arrive[loop.stops.length]!; time += STEP) {
       perform(cast, time);
       highest = Math.max(highest, cast.y[person]!);
-      if (cast.pose[person] === RESTING.sitting) slid++;
+      if (cast.pose[person] === DRAWN_POSE.ride) slid++;
     }
     expect(highest).toBeGreaterThanOrEqual(CLUB.y + 11);
     expect(slid).toBeGreaterThan(0);

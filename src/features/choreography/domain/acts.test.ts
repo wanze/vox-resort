@@ -192,7 +192,7 @@ describe('acts on a loop', () => {
       if (last && last.pose === now.pose) {
         const speed = Math.hypot(now.x - last.x, now.y - last.y, now.z - last.z) / STEP;
         if (now.pose === DRAWN_POSE.jog) speeds.climb.push(speed);
-        if (now.pose === RESTING.sitting) speeds.slide.push(speed);
+        if (now.pose === DRAWN_POSE.ride) speeds.slide.push(speed);
       }
       last = now;
     });

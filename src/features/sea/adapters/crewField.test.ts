@@ -7,8 +7,9 @@ import {
   type InstancedMesh,
 } from 'three/webgpu';
 import { ADULT_VOXELS, CHILD_VOXELS } from '../../../../voxel-gen/people/figure.ts';
-import { RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
+import { WALK_SPEED } from '../../crowd/domain/crowd';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { createFlotilla, type Flotilla } from '../domain/flotilla';
 import { createPassengers, poseAboard, type Berth, type Passengers } from '../domain/passengers';
 import type { SailingGround } from '../domain/swimArea';
@@ -142,13 +143,13 @@ describe('buildCrewField', () => {
     }
   });
 
-  it('marks everybody aboard as sitting, once and for good', () => {
+  it('marks everybody aboard as riding, once and for good', () => {
     const flotilla = bay(8);
     const field = fieldFor(flotilla, crewOf(flotilla));
     for (const mesh of meshes(field.group)) {
       const pose = mesh.geometry.getAttribute('pose');
       for (let slot = 0; slot < pose.count; slot++) {
-        expect(pose.getZ(slot)).toBe(RESTING.sitting);
+        expect(pose.getZ(slot)).toBe(DRAWN_POSE.ride);
       }
     }
   });

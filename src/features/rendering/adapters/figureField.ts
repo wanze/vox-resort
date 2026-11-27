@@ -9,7 +9,7 @@ import {
   type BufferGeometry,
   type MeshStandardNodeMaterial,
 } from 'three/webgpu';
-import { attribute, cos, PI, positionLocal, sin, uniform, vec3 } from 'three/tsl';
+import { attribute, cos, hash, PI, positionLocal, sin, uniform, vec3 } from 'three/tsl';
 import {
   ADULT_VOXELS,
   CHEST_HALF_WIDTH,
@@ -37,6 +37,16 @@ const SIT_REACH = 0.9;
 
 // Forward onto the lap: hanging straight, a hand below the hip would sink into the seat.
 const SIT_ARMS = 1;
+
+// In the crowd's clock, which runs about 11x real time at normal speed: a slot of ~5.6 real
+// seconds holds a sip by chance, at a random moment, so a guest sips every ~20 s on average.
+const SIP_SLOT = 60;
+const SIP_CHANCE = 0.25;
+const SIP_SHARE = 0.25;
+// Spreads the phase over enough integers that no two guests roll the same slots.
+const SIP_SEEDS = 10_000;
+// On top of SIT_ARMS, brings a 3-voxel arm's hand level with the mouth.
+const SIP_LIFT = 1.1;
 
 // Half a leg's depth: the backs of legs held out flat rest on the ground, not in it.
 const FLAT_LEG_HALF = 0.5;
@@ -205,6 +215,8 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const is = (k: number) => code.sub(k).abs().step(0.5).oneMinus();
   const walking = is(RESTING.none);
   const sitting = is(RESTING.sitting);
+  const riding = is(DRAWN_POSE.ride);
+  const seated = sitting.add(riding);
   const lying = is(RESTING.lying);
   const swimming = is(DRAWN_POSE.swim);
   const wading = is(DRAWN_POSE.wade);
@@ -225,6 +237,13 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const legW = weight.mul(offArm);
   // How far below the hip, for bending a leg; a hand hangs below it too, but is not bent.
   const leg = axis.negate().max(0).mul(offArm);
+
+  const sipClock = clock.div(SIP_SLOT).add(phase.div(2 * Math.PI));
+  const sipSeed = sipClock.floor().add(phase.mul(SIP_SEEDS).floor()).mul(2);
+  const sipping = hash(sipSeed).step(SIP_CHANCE).oneMinus();
+  const sipStart = hash(sipSeed.add(1)).mul(1 - SIP_SHARE);
+  const sipAt = sipClock.fract().sub(sipStart).div(SIP_SHARE).saturate();
+  const sip = sitting.mul(sipping).mul(sin(sipAt.mul(PI)));
 
   const gait = walking.mul(sin(cycle(CADENCE))).add(jogging.mul(sin(cycle(JOG_CADENCE))));
   const hopLift = sin(cycle(HOP_RATE)).max(0);
@@ -269,7 +288,8 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(reaching.mul(progress).mul(PI))
     .add(selfie.mul(side.max(0)).mul(SELFIE_REACH))
     .add(photographing.mul(PHOTO_ARMS))
-    .add(sitting.add(sittingFlat).mul(SIT_ARMS));
+    .add(seated.add(sittingFlat).mul(SIT_ARMS))
+    .add(sip.mul(side.max(0)).mul(SIP_LIFT));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.
   const fromShoulder = axis.sub(SHOULDER_ABOVE_HIP);
@@ -312,13 +332,13 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const swimUp = bodyThick.add(SWIM_DEPTH).add(bodyAxis).add(hip).negate();
 
   const along = limbAlong
-    .add(sitAlong.mul(sitting))
+    .add(sitAlong.mul(seated))
     .add(flatAlong.mul(sittingFlat))
     .add(lieAlong.mul(lying))
     .add(swimAlong.mul(swimming));
   const up = limbUp
     .add(lift)
-    .add(sitUp.mul(sitting))
+    .add(sitUp.mul(seated))
     .add(flatUp.mul(sittingFlat))
     .add(lieUp.mul(lying))
     .add(swimUp.mul(swimming));

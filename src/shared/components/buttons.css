@@ -13,11 +13,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: 1px solid var(--edge);
-  border-radius: var(--radius-panel);
+  border: 1px solid var(--control-edge);
+  border-radius: var(--radius-control);
   corner-shape: var(--corner-shape);
-  background-image: var(--slab-raised);
-  box-shadow: var(--bevel), var(--shadow-ledge);
+  background-image: var(--control-face);
+  box-shadow: var(--control-shadow);
   color: var(--text);
   font: 600 var(--size-small) / 1 var(--font-ui);
   transition:
@@ -38,7 +38,7 @@
 .ui-button-large:not(.ui-button-large--primary):hover {
   filter: brightness(1.05);
   color: var(--terracotta-deep);
-  transform: translateY(-1px);
+  transform: var(--control-hover-lift);
 }
 
 .ui-chip:active,
@@ -50,7 +50,7 @@
 .ui-button-secondary:active:not(:disabled),
 .ui-button-large:active {
   transform: translateY(1px);
-  box-shadow: var(--bevel-in);
+  box-shadow: var(--control-pressed);
 }
 
 .ui-chip[aria-expanded='true'],
@@ -60,11 +60,27 @@
 .ui-form-choice[aria-pressed='true'],
 .ui-button-large[aria-pressed='true'],
 .ui-button-large:not(.ui-button-large--primary)[aria-expanded='true'] {
-  background-image: var(--sunken);
-  box-shadow: var(--bevel-in);
-  border-color: var(--edge-strong);
+  background-image: var(--control-on-face);
+  box-shadow: var(--control-on-shadow);
+  border-color: var(--control-on-edge);
   color: var(--terracotta-deep);
   transform: none;
+}
+
+/* A tab reads as a place to be rather than a thing to press, so it lies flat on the strip
+   where a button stands on its print shadow. */
+.ui-tab {
+  border-color: var(--tab-edge);
+  background-image: var(--tab-face);
+  box-shadow: var(--tab-shadow);
+}
+
+.ui-tab[aria-selected='true'],
+.ui-tab[aria-pressed='true'] {
+  border-color: var(--tab-on-edge);
+  background-image: var(--tab-on-face);
+  box-shadow: var(--tab-on-shadow);
+  color: var(--tab-on-text);
 }
 
 .ui-chip {
@@ -158,6 +174,7 @@
 .ui-button-large--primary {
   border-color: var(--terracotta-deep);
   background-image: var(--slab-accent);
+  box-shadow: var(--control-accent-shadow);
   color: var(--text-on-accent);
   text-shadow: var(--shadow-accent-text);
 }
@@ -197,13 +214,13 @@
   min-width: 0;
   height: var(--control-h);
   padding: 0 calc(var(--space-3) * 2 + 10px) 0 var(--space-3);
-  border: 1px solid var(--edge);
-  border-radius: var(--radius-panel);
+  border: 1px solid var(--control-edge);
+  border-radius: var(--radius-control);
   corner-shape: var(--corner-shape);
   background:
     var(--select-caret) right var(--space-3) center / 10px 6px no-repeat,
-    var(--slab-raised);
-  box-shadow: var(--bevel), var(--shadow-ledge);
+    var(--control-face);
+  box-shadow: var(--control-shadow);
   color: var(--text);
   font: 600 var(--size-small) / 1 var(--font-ui);
   cursor: var(--cursor-hand);

@@ -3,9 +3,6 @@ import { Buttons, Figures, Forms, Menus, TabSets } from './StyleguideKit';
 import { Colours, Icons, Spacing, Surfaces, Typography } from './StyleguideFoundations';
 import { Panels } from './StyleguidePanels';
 import { TopBarSample } from './StyleguideBar';
-import { LOOKS } from '../features/hud/domain/looks';
-import { LOOK_NAMES } from '../features/hud/components/lookWords';
-import { useLook } from './useLook';
 
 const SECTIONS: readonly (readonly [string, string, () => ReactNode])[] = [
   ['type', 'Typography', Typography],
@@ -31,26 +28,6 @@ const GROUNDS = {
 
 type Ground = keyof typeof GROUNDS;
 
-// The game reads the same stored look, so a look picked here is the one the game opens in.
-function LookPicker() {
-  const { look, setLook } = useLook();
-  return (
-    <div className="ui-form-choices" role="group" aria-label="Look">
-      {LOOKS.map((each) => (
-        <button
-          key={each}
-          type="button"
-          className="ui-form-choice"
-          aria-pressed={look === each}
-          onClick={() => setLook(each)}
-        >
-          {LOOK_NAMES[each]}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Toolbar(props: {
   readonly ground: Ground;
   readonly onGround: (ground: Ground) => void;
@@ -59,7 +36,6 @@ function Toolbar(props: {
 }) {
   return (
     <div className="ui-panel styleguide-toolbar">
-      <LookPicker />
       <div className="ui-form-choices" role="group" aria-label="Ground">
         {(Object.keys(GROUNDS) as Ground[]).map((ground) => (
           <button
@@ -92,8 +68,6 @@ function Toolbar(props: {
 export function Styleguide() {
   const [ground, setGround] = useState<Ground>('backdrop');
   const [width, setWidth] = useState(380);
-  // Remounted on a new look, so the token tables read the values the look has just set.
-  const { look } = useLook();
   const style = {
     '--styleguide-ground': GROUNDS[ground],
     '--styleguide-window-w': `${width}px`,
@@ -111,7 +85,7 @@ export function Styleguide() {
         </ul>
         <Toolbar ground={ground} onGround={setGround} width={width} onWidth={setWidth} />
       </nav>
-      <main key={look} className="styleguide-main">
+      <main className="styleguide-main">
         {SECTIONS.map(([id, title, Section]) => (
           <section key={id} id={id} className="ui-panel styleguide-section">
             <h2 className="ui-window-title">{title}</h2>

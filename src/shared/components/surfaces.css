@@ -30,7 +30,7 @@
   border: 1px solid var(--edge);
   background: var(--slab);
   color: var(--text);
-  box-shadow: var(--shadow-slab), var(--bevel);
+  box-shadow: var(--shadow-slab), var(--panel-bevel);
 }
 
 /* A printed sheet laid on the panel: a voucher, a flyer, a notice. */

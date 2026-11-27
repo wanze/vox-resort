@@ -208,25 +208,20 @@
   --sun-high: #ffd45a;
   --sun-shade: rgb(150 60 20 / 35%);
 
-  /* Brown specks at a fine scale and soft patches at a coarse one: flat colour reads as
-     plastic, the two together as cut sandstone. The filter region is the tile, else stitching
-     joins a margin the tile never shows; the patches tile wider than most panels are tall. */
+  /* Brown specks at a fine scale: flat colour reads as plastic, specked as paper. The filter
+     region is the tile, else stitching joins a margin the tile never shows. */
   --grain: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.26 0 0 0 0 0.16 0 0 0 1.5 -0.66'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
-  --mottle: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640'%3E%3Cfilter id='m' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.33 0 0 0 0 0.2 0.7 0 0 0 -0.28'/%3E%3C/filter%3E%3Crect width='640' height='640' filter='url(%23m)'/%3E%3C/svg%3E");
-  /* What follows down to the radii is the look, Block here; looks.css holds the others. A solid
-     face keeps words on one ground and leaves the grain to a rim round it, so a slab is spent as
-     a whole background, sizes and all. */
-  --slab:
-    linear-gradient(var(--plank-face) 0 0) center / calc(100% - 6px) calc(100% - 6px) no-repeat,
-    var(--grain), var(--plank-rim);
-  --slab-raised: linear-gradient(var(--stone-50) 0 0);
+  /* A holiday sent home: every panel a postcard on grained paper, and every button a gummed
+     label printed with a hard offset shadow. */
+  --slab: var(--grain), linear-gradient(var(--print-paper) 0 0);
+  --slab-raised: linear-gradient(var(--till-paper) 0 0);
   /* Dark enough for --text-on-accent at 4.5:1. */
   --alert: #ad3d2a;
   --slab-accent: linear-gradient(var(--terracotta) 0 0);
-  --sunken: linear-gradient(var(--key-sunk) 0 0);
+  --sunken: linear-gradient(var(--stone-200) 0 0);
   /* Flat on purpose: the one ground a sticky heading can share with the tiles
      scrolling under it. */
-  --tray: #e3d5bc;
+  --tray: #f4ebdc;
   --tile-ground: radial-gradient(circle at 50% 38%, #fbf5ea 0%, #ebdfc9 60%, #dccbad 100%);
   --plate: linear-gradient(180deg, rgb(251 246 236 / 0%), rgb(251 246 236 / 92%) 48%);
   --plate-accent: linear-gradient(180deg, rgb(143 63 30 / 0%), rgb(143 63 30 / 92%) 55%);
@@ -241,19 +236,36 @@
   --wash-key: rgb(255 255 255 / 40%);
   --wash-hover: rgb(255 255 255 / 45%);
   --wash-selected: rgb(255 255 255 / 55%);
-  /* Whole-pixel light and shade with no blur, and hard steps under a block in place of a soft
-     drop, so the HUD reads as built from blocks like the resort. */
-  --bevel: inset 2px 2px 0 rgb(255 255 255 / 70%), inset -2px -2px 0 rgb(110 82 50 / 25%);
-  --bevel-in: inset 2px 2px 0 rgb(90 64 38 / 28%), inset -1px -1px 0 rgb(255 255 255 / 60%);
-  --shadow-slab: 0 3px 0 rgb(70 50 28 / 55%), 0 6px 0 rgb(48 32 16 / 18%);
-  --shadow-lift: 0 2px 0 rgb(48 32 16 / 40%);
-  --shadow-step: 0 2px 0 rgb(48 32 16 / 35%);
+  /* One lit line rather than a bevel, and a hard print offset under what is raised. */
+  --bevel: inset 0 1px 0 rgb(255 255 255 / 60%);
+  --bevel-in: inset 0 1px 0 rgb(90 64 38 / 16%);
+  --shadow-slab: 0 1px 1px rgb(48 32 16 / 30%), 0 8px 18px rgb(48 32 16 / 28%);
+  --shadow-lift: 2px 2px 0 var(--stone-700);
+  --shadow-step: 2px 2px 0 var(--stone-700);
   --shadow-ledge: 0 1px 0 rgb(90 64 38 / 25%);
-  --emboss: 1px 1px 0 rgb(255 255 255 / 55%);
+  --emboss: none;
   --shadow-accent-text: 0 1px 0 rgb(0 0 0 / 25%);
   --glow-accent: 0 0 0 1px var(--terracotta), 0 0 12px rgb(191 90 51 / 45%);
-  --plank-face: #f2e8d6;
-  --plank-rim: var(--stone-200);
+  /* A label lifts toward the light on hover and is pressed flat onto its print shadow. */
+  --control-face: var(--slab-raised);
+  --control-edge: var(--stone-700);
+  --control-shadow: 2px 2px 0 var(--stone-700);
+  --control-hover-lift: translate(-1px, -1px);
+  --control-pressed: 0 0 0 var(--stone-700);
+  --control-accent-shadow: 2px 2px 0 var(--stone-800);
+  --control-on-face: var(--sunken);
+  --control-on-edge: var(--stone-700);
+  --control-on-shadow: inset 1px 1px 0 rgb(90 64 38 / 25%);
+  /* Tabs lie flat on the strip; only the one you are on is printed, in the roofs' terracotta. */
+  --tab-face: var(--control-face);
+  --tab-edge: var(--stone-600);
+  --tab-shadow: none;
+  --tab-on-face: linear-gradient(var(--terracotta) 0 0);
+  --tab-on-edge: var(--terracotta-deep);
+  --tab-on-shadow: 2px 2px 0 var(--terracotta-deep);
+  --tab-on-text: var(--text-on-accent);
+  --tab-rule: 1px dashed var(--edge);
+  --panel-bevel: inset 0 1px 0 rgb(255 255 255 / 50%);
   --plank-side: var(--stone-600);
   --plank-outline: var(--stone-800);
   /* One shade line and one lit line, cut between the top bar's sections. */
@@ -341,8 +353,7 @@
   --section-gap: 24px;
   --dropdown-inset: var(--space-1) var(--space-2);
 
-  /* Corners cut square as a voxel's are; a browser without corner-shape rounds them a little. */
-  --corner-shape: notch;
+  --corner-shape: round;
   --radius-panel: 3px;
   --radius-chip: 2px;
   /* A sheet's and the bar's edges that meet the screen stay square. */
@@ -352,6 +363,7 @@
   /* The menus' pixel caret, in the dim text brown. */
   --select-caret: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%23564837' d='M0 0h10v2H8v2H6v2H4V4H2V2H0z'/%3E%3C/svg%3E");
   --radius-sm: 2px;
+  --radius-control: 2px;
 
   --control-h: 32px;
   --bar-h: 48px;

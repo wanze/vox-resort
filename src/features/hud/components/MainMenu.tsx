@@ -21,14 +21,12 @@ import { HighlightOptions } from '../../highlights/components/HighlightPicker';
 import { OverlayOptions } from '../../overlays/components/OverlayPicker';
 import { OVERLAY_NAMES } from '../../overlays/components/overlayNames';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
-import type { ClockControls, LookControls, SoundControls, WindowControls } from './hudControls';
+import type { ClockControls, SoundControls, WindowControls } from './hudControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { PausePrefs } from '../domain/stops';
 import type { ShadowQuality } from '../../rendering/domain/sunShadows';
-import { LOOKS } from '../domain/looks';
-import { LOOK_NAMES, LOOK_NOTES } from './lookWords';
 
 const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '');
 export const SAVE_SHORTCUT = keyLabel('save', MAC);
@@ -70,7 +68,6 @@ export interface MainMenuProps {
   // From today, one a day.
   readonly forecast: readonly DayForecast[];
   readonly sound: SoundControls;
-  readonly look: LookControls;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
   readonly graphics: GraphicsToggles;
@@ -166,18 +163,6 @@ function WeatherRow({ clock, onOpen }: Pick<PageProps, 'clock' | 'onOpen'>) {
       />
     </div>
   );
-}
-
-function LookOptions({ look, setLook }: LookControls) {
-  return LOOKS.map((each) => (
-    <MenuOption
-      key={each}
-      label={LOOK_NAMES[each]}
-      note={LOOK_NOTES[each]}
-      checked={look === each}
-      onSelect={() => setLook(each)}
-    />
-  ));
 }
 
 // Shown by the stylesheet only where the bar has given up its own gates switch.
@@ -355,13 +340,10 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         onSelect={run(() => windows.show('programme', true))}
       />
     )),
-  settings: ({ sound, look, graphics, shortcuts, pauses }) => (
+  settings: ({ sound, graphics, shortcuts, pauses }) => (
     <>
       <MenuGroup label="Sound">
         <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
-      </MenuGroup>
-      <MenuGroup label="Look">
-        <LookOptions {...look} />
       </MenuGroup>
       <MenuGroup label="Graphics">
         <MenuOption

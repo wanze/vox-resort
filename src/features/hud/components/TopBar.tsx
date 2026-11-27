@@ -15,13 +15,7 @@ import { ViewControl } from './ViewControl';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { Ledger } from '../../sim/domain/ledger';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
-import type {
-  ClockControls,
-  LookControls,
-  ResortControls,
-  SoundControls,
-  WindowControls,
-} from './hudControls';
+import type { ClockControls, ResortControls, SoundControls, WindowControls } from './hudControls';
 import type { StatusView } from '../domain/views';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
@@ -53,7 +47,6 @@ export interface TopBarProps {
   // A touch layout: no field takes focus by itself there.
   readonly compact: boolean;
   readonly sound: SoundControls;
-  readonly look: LookControls;
   readonly forecast: readonly DayForecast[];
   readonly onPhoto: () => void;
   readonly debug: boolean;
@@ -167,7 +160,6 @@ export function TopBar(props: TopBarProps) {
             clock={clock}
             forecast={props.forecast}
             sound={props.sound}
-            look={props.look}
             view={props.view}
             shortcuts={props.shortcuts}
             graphics={props.graphics}

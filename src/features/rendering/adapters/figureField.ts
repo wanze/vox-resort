@@ -64,6 +64,21 @@ const LOOK_SPREAD = 3;
 // Short of a right angle: a voxel head turned fully sideways reads as a head seen from behind.
 const HEAD_TURN = 0.9;
 
+// Spells of ~28 real seconds on a lounger or towel, each read, on the phone, face down or
+// dozing by chance; the arms ease up and down over the first and last of a spell.
+const LOUNGE_SLOT = 300;
+const LOUNGE_EASE = 0.06;
+const READ_SHARE = 0.3;
+const PHONE_SHARE = 0.25;
+const PRONE_SHARE = 0.2;
+// Off the sip's seeds, so a guest's spells do not follow their sips.
+const LOUNGE_SEED = 1_000_003;
+// Lying on the back the figure's forward is the sky: a book held over the face, a phone in one hand.
+const READ_ARMS = 2;
+const PHONE_ARMS = 2.2;
+// Face down, arms stretched past the head along the mattress.
+const PRONE_ARMS = 0.9 * Math.PI;
+
 // Head vertices carry their x as weight, never 0 as the head is two half-voxels across;
 // anything under this is the chest's top, which meets the head at the shoulder.
 const HEAD_WEIGHT = 0.25;
@@ -302,6 +317,21 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   );
   const headAngle = talksTo(TALK.plusX).sub(talksTo(TALK.minusX)).mul(look).mul(HEAD_TURN);
 
+  const loungeClock = clock.div(LOUNGE_SLOT).add(phase.div(2 * Math.PI));
+  const loungeRoll = hash(
+    loungeClock.floor().add(phase.mul(SIP_SEEDS).floor()).mul(2).add(LOUNGE_SEED),
+  );
+  const rolled = (from: number, to: number) =>
+    lying.mul(loungeRoll.step(from)).mul(loungeRoll.step(to).oneMinus());
+  const reading = rolled(0, READ_SHARE);
+  const phoning = rolled(READ_SHARE, READ_SHARE + PHONE_SHARE);
+  const prone = rolled(READ_SHARE + PHONE_SHARE, READ_SHARE + PHONE_SHARE + PRONE_SHARE);
+  const supine = lying.sub(prone);
+  const loungeAt = loungeClock.fract();
+  const loungeEase = smoothstep(0, LOUNGE_EASE, loungeAt).mul(
+    smoothstep(0, LOUNGE_EASE, loungeAt.oneMinus()),
+  );
+
   const gait = walking.mul(sin(cycle(CADENCE))).add(jogging.mul(sin(cycle(JOG_CADENCE))));
   const hopLift = sin(cycle(HOP_RATE)).max(0);
   const kick = swimming.mul(sin(cycle(KICK))).mul(KICK_VOXELS);
@@ -347,7 +377,14 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(photographing.mul(PHOTO_ARMS))
     .add(seated.add(sittingFlat).mul(SIT_ARMS))
     .add(sip.mul(side.max(0)).mul(SIP_LIFT))
-    .add(gesture.mul(side.negate().max(0)).mul(sin(cycle(WAG_RATE)).mul(WAG).add(GESTURE_LIFT)));
+    .add(gesture.mul(side.negate().max(0)).mul(sin(cycle(WAG_RATE)).mul(WAG).add(GESTURE_LIFT)))
+    .add(
+      reading
+        .mul(READ_ARMS)
+        .add(phoning.mul(side.max(0)).mul(PHONE_ARMS))
+        .mul(loungeEase),
+    )
+    .add(prone.mul(PRONE_ARMS));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.
   const fromShoulder = axis.sub(SHOULDER_ABOVE_HIP);
@@ -395,17 +432,21 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const lieUp = bodyThick.add(LIE_CLEAR).sub(bodyAxis).sub(hip);
   const swimAlong = bodyAxis.sub(bodyThick);
   const swimUp = bodyThick.add(SWIM_DEPTH).add(bodyAxis).add(hip).negate();
+  // Face down turns the way a swimmer does, head to the other end: rolling over in place would
+  // mirror the figure across x, which past the instance matrix only the head still knows.
+  const proneUp = bodyThick.negate().add(LIE_CLEAR).sub(bodyAxis).sub(hip);
 
   const along = limbAlong
     .add(sitAlong.mul(seated))
     .add(flatAlong.mul(sittingFlat))
-    .add(lieAlong.mul(lying))
-    .add(swimAlong.mul(swimming));
+    .add(lieAlong.mul(supine))
+    .add(swimAlong.mul(swimming.add(prone)));
   const up = limbUp
     .add(lift)
     .add(sitUp.mul(seated))
     .add(flatUp.mul(sittingFlat))
-    .add(lieUp.mul(lying))
+    .add(lieUp.mul(supine))
+    .add(proneUp.mul(prone))
     .add(swimUp.mul(swimming));
   // The figure's own +x lies at (cos, -sin) of its heading, and facing holds (sin, cos).
   material.positionNode = positionLocal.add(

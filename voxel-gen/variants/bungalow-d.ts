@@ -32,6 +32,12 @@ const FOOTING = 4;
 const DOORS = [15, 38] as const;
 const DOOR_W = 4;
 
+// Written down because the spots are declared against them; `build` checks they agree.
+const PORCH_FLOOR = 7;
+const ROOF = 21;
+const LOUNGERS = [TERRACE + 12, TERRACE + 18] as const;
+const LOUNGER_HEAD = BODY.z + 4;
+
 export default defineModel({
   id: 'bungalow-d',
   label: 'Bungalow D',
@@ -45,12 +51,23 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 20,
     doors: DOORS.map((along) => ({ x: along + 2, z: FRONT, facing: 0 })),
+    spots: [
+      // The cushion is the terrace's own layer, so the hips lie on the one above it.
+      ...LOUNGERS.map(
+        (x) => ({ x: x + 1, y: ROOF + 1, z: LOUNGER_HEAD + 4, facing: 0, pose: 'lie' }) as const,
+      ),
+      ...[TERRACE + 3, RIGHT - 3].map((x) => ({ x, y: ROOF, z: FRONT, facing: 0 }) as const),
+      ...[DOORS[0] + DOOR_W + 3, DOORS[1] - 4].map(
+        (x) => ({ x, y: PORCH_FLOOR, z: DECK.z1 - 1, facing: 0 }) as const,
+      ),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { slate, stucco, teak, terracotta } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });
 
     const floor = ground + FOOTING;
+    if (floor + 1 !== PORCH_FLOOR) throw new Error('The porch spots must stand on the porch');
     rubble(b, { ...BODY, y: ground, h: FOOTING });
     rubble(b, {
       x: DECK.x0 + 1,
@@ -176,13 +193,14 @@ export default defineModel({
     }
 
     const terrace = plate + 2;
+    if (terrace !== ROOF) throw new Error('The roof spots must stand on the roof');
     const edge = { y: terrace, x: TERRACE, w: RIGHT - TERRACE + 2, along: 'x' } as const;
     plankRail(b, { ...edge, z: BODY.z - 1 });
     plankRail(b, { ...edge, z: FRONT + 1 });
     plankRail(b, { y: terrace, x: RIGHT + 1, z: BODY.z - 1, w: BODY.d + 2, along: 'z' });
-    for (const x of [TERRACE + 12, TERRACE + 18]) {
-      b.box(x, x + 2, terrace, terrace, BODY.z + 4, BODY.z + 11, teak.light);
-      b.box(x, x + 2, terrace + 1, terrace + 2, BODY.z + 4, BODY.z + 4, teak.light);
+    for (const x of LOUNGERS) {
+      b.box(x, x + 2, terrace, terrace, LOUNGER_HEAD, LOUNGER_HEAD + 7, teak.light);
+      b.box(x, x + 2, terrace + 1, terrace + 2, LOUNGER_HEAD, LOUNGER_HEAD, teak.light);
     }
     parasol(b, { x: TERRACE + 16, z: BODY.z + 7, y: terrace, reach: 3 });
 

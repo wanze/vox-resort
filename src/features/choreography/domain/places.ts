@@ -408,20 +408,37 @@ function playedOn(site: SeatSite, venue: ModelVenue, visitors: readonly Place[])
   };
 }
 
+// By position: the network files seats by node and drops the unreachable, so no index lines up.
+function seatIndexOf(network: Pick<WalkNetwork, 'seats'>): ReadonlyMap<string, number> {
+  const seatIndex = new Map<string, number>();
+  for (const [index, seat] of network.seats.entries()) {
+    const key = positionKey(seat.x, seat.y, seat.z);
+    if (!seatIndex.has(key)) seatIndex.set(key, index);
+  }
+  return seatIndex;
+}
+
 // Index-aligned with `venues`, which is the resort's own list: the router's beach comes after it.
 export function placesFor(
   venues: readonly Venue[],
   placements: ReadonlyMap<string, Placement>,
   network: Pick<WalkNetwork, 'seats'>,
 ): readonly VenuePlaces[] {
-  // By position: the network files seats by node and drops the unreachable, so no index lines up.
-  const seatIndex = new Map<string, number>();
-  for (const [index, seat] of network.seats.entries()) {
-    const key = positionKey(seat.x, seat.y, seat.z);
-    if (!seatIndex.has(key)) seatIndex.set(key, index);
-  }
+  const seatIndex = seatIndexOf(network);
   return venues.map((venue) => {
     const placement = placements.get(venue.key);
     return placement ? placesOf(placement, seatIndex) : NO_PLACES;
+  });
+}
+
+// Index-aligned with the lodgings: where a party home before bed or after waking is drawn.
+export function homePlacesFor(
+  lodgings: readonly { readonly key: string }[],
+  placements: ReadonlyMap<string, Placement>,
+): readonly (readonly Place[])[] {
+  const noSeats = new Map<string, number>();
+  return lodgings.map((lodging) => {
+    const placement = placements.get(lodging.key);
+    return placement ? placesOf(placement, noSeats).visitors : [];
   });
 }

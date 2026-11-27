@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, lounger, loungerSpot, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
 import {
@@ -23,6 +23,13 @@ const CENTRE = BAYS[2];
 
 const POOL = { x: 3, z: 20, w: 13, d: 36 } as const;
 
+// Written down because the spots are declared against it; `build` checks the two agree.
+const GROUND = 3;
+const TERRACE = 17;
+
+// At the pool's shallow end, legs towards the water.
+const LOUNGERS = [4, 10].map((x) => ({ x, z: POOL.z - 9, y: GROUND, facing: 0 }) as const);
+
 export default defineModel({
   id: 'villa',
   label: 'Villa',
@@ -37,10 +44,17 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 35,
     doors: [{ x: CENTRE + 2, z: FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(loungerSpot),
+      ...[BAYS[0] + 2, BAYS[1] + 3, BAYS[3] + 2, BAYS[4] + 3].map(
+        (x) => ({ x, y: TERRACE, z: VERANDA.z + 2, facing: 0 }) as const,
+      ),
+    ],
   },
   windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64 });
+    if (ground !== GROUND) throw new Error('The loungers must stand on the plinth');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 2 });
     gableRoof(b, { ...BODY, y: eaves, ridge: 'x' });
 
@@ -61,6 +75,7 @@ export default defineModel({
     b.box(BODY.x - 1, RIGHT + 1, terrace, terrace, FRONT + 1, brink, PALETTE.stone.base);
 
     const rail = terrace + 1;
+    if (rail !== TERRACE) throw new Error('The terrace spots must stand on the terrace');
     balustrade(b, { x: BODY.x + 1, z: brink, y: rail, w: BODY.w - 2, along: 'x' });
     for (const x of [BODY.x + 1, RIGHT - 1]) {
       balustrade(b, { x, z: FRONT + 2, y: rail, w: brink - FRONT - 1, along: 'z' });
@@ -118,5 +133,6 @@ export default defineModel({
       blooms: [PALETTE.foliage.base, PALETTE.foliage.light],
     });
     flowerBox(b, { x: CENTRE + 10, z: brink + 4, y: ground, w: 10, along: 'x' });
+    for (const at of LOUNGERS) lounger(b, at);
   },
 });

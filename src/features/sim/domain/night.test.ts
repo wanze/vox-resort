@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   bedtimeOf,
   EARLY_WAKE_FROM,
+  homeHoursOf,
   isBedtime,
+  isEveningAtHome,
   isEarlyRiser,
+  isHomeTime,
   lightsOnShare,
   occupiedShare,
 } from './night';
@@ -136,5 +139,84 @@ describe('lightsOnShare', () => {
   it('turns them back on as the house wakes', () => {
     expect(lightsOnShare(at(6))).toBeGreaterThan(0.1);
     expect(lightsOnShare(at(6, 30))).toBe(1);
+  });
+});
+
+describe('homeHoursOf', () => {
+  const DAY = 24 * HOUR;
+  const before = (later: number, earlier: number): number => (later - earlier + DAY) % DAY;
+
+  it('brings every party home two to three hours before its bedtime', () => {
+    for (const party of PARTIES) {
+      const gap = before(bedtimeOf(party).sleepAt, homeHoursOf(party).homeAt);
+      expect(gap, `party ${party}`).toBeGreaterThanOrEqual(2 * HOUR);
+      expect(gap, `party ${party}`).toBeLessThan(3 * HOUR);
+    }
+  });
+
+  it('has nearly every party home an hour before the 21:30 sunset', () => {
+    const early = PARTIES.filter((party) => homeHoursOf(party).homeAt < 20.5 * HOUR);
+    expect(early.length).toBeGreaterThan(PARTIES.length * 0.9);
+  });
+
+  it('keeps a party at home twenty to fifty minutes after waking', () => {
+    for (const party of PARTIES.filter((each) => !isEarlyRiser(each))) {
+      const gap = before(homeHoursOf(party).outAt, bedtimeOf(party).wakeAt);
+      expect(gap, `party ${party}`).toBeGreaterThanOrEqual(20);
+      expect(gap, `party ${party}`).toBeLessThan(50);
+    }
+  });
+
+  it('sends an early riser straight out to the sunrise', () => {
+    for (const party of PARTIES.filter(isEarlyRiser)) {
+      expect(homeHoursOf(party).outAt, `party ${party}`).toBe(bedtimeOf(party).wakeAt);
+    }
+  });
+
+  it('draws the lingering apart from party to party', () => {
+    const evenings = new Set(
+      PARTIES.map((party) => before(bedtimeOf(party).sleepAt, homeHoursOf(party).homeAt)),
+    );
+    expect(evenings.size).toBeGreaterThan(10);
+  });
+});
+
+describe('isEveningAtHome', () => {
+  it('is the evening from coming home until bed, and never the morning after', () => {
+    for (const party of PARTIES) {
+      const { homeAt, outAt } = homeHoursOf(party);
+      const { sleepAt, wakeAt } = bedtimeOf(party);
+      expect(isEveningAtHome(party, homeAt), `party ${party}`).toBe(true);
+      expect(isEveningAtHome(party, sleepAt - 1), `party ${party}`).toBe(true);
+      expect(isEveningAtHome(party, sleepAt), `party ${party}`).toBe(false);
+      if (outAt !== wakeAt) expect(isEveningAtHome(party, wakeAt), `party ${party}`).toBe(false);
+    }
+  });
+});
+
+describe('isHomeTime', () => {
+  it('holds from coming home to going out, across midnight and the whole of bedtime', () => {
+    for (const party of PARTIES) {
+      const { homeAt, outAt } = homeHoursOf(party);
+      expect(isHomeTime(party, homeAt - 1), `party ${party}`).toBe(false);
+      expect(isHomeTime(party, homeAt), `party ${party}`).toBe(true);
+      expect(isHomeTime(party, 24 * HOUR), `party ${party}`).toBe(true);
+      expect(isHomeTime(party, outAt - 1), `party ${party}`).toBe(true);
+      expect(isHomeTime(party, outAt), `party ${party}`).toBe(false);
+    }
+  });
+
+  it('is never home time for a party up late', () => {
+    const { homeAt } = homeHoursOf(0);
+    expect(isHomeTime(0, homeAt, true)).toBe(false);
+  });
+
+  it('covers every tick of bedtime', () => {
+    for (const party of PARTIES) {
+      for (let tick = 0; tick < 24 * HOUR; tick += 7) {
+        if (isBedtime(party, tick))
+          expect(isHomeTime(party, tick), `party ${party} at ${tick}`).toBe(true);
+      }
+    }
   });
 });

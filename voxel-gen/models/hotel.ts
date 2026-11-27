@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, lounger, loungerSpot, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
 import {
@@ -33,6 +33,29 @@ const POOL = { x: 30, z: 20, w: 40, d: 30 } as const;
 
 const STAIR_HOUSE = { x: 112, z: 24, w: 22, d: 18 } as const;
 
+// Written down because the spots are declared against them; `build` checks they agree.
+const GROUND = 3;
+const ROOF = 65;
+const balconyFloor = (storey: number): number => GROUND + (storey + 1) * STOREY_VOXELS + 2;
+
+// Along the pool's near side, legs towards the water.
+const LOUNGERS = [33, 39, 45, 51, 57, 63].map(
+  (x) => ({ x, z: POOL.z + POOL.d + 2, y: ROOF, facing: 2 }) as const,
+);
+
+// Two to a balcony, leaning on the rail, on a few balconies of each floor.
+const LEANING = (
+  [
+    [0, 1],
+    [0, 8],
+    [1, 0],
+    [1, 9],
+    [2, 3],
+    [2, 6],
+    [3, 4],
+  ] as const
+).map(([storey, at]) => ({ storey, x: BALCONIES[at]! }));
+
 const LANTERNS = [74, 85] as const;
 
 // Every third voxel rather than the villa's second: each baluster is four quads the mesher cannot
@@ -63,12 +86,21 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 30,
     doors: [{ x: ARCHES[1] + 2, z: FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(loungerSpot),
+      ...LEANING.flatMap(({ storey, x }) =>
+        [x + 3, x + 8].map(
+          (at) => ({ x: at, y: balconyFloor(storey), z: FRONT + 3, facing: 0 }) as const,
+        ),
+      ),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: PLOT.w, d: PLOT.d });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: STOREYS });
     // No parapet: a roof somebody swims on is edged like a terrace, so the pool shows from the street.
     const deck = flatRoof(b, { ...BODY, y: eaves, parapet: 0, cover: PALETTE.stone });
+    if (ground !== GROUND || deck !== ROOF) throw new Error('The spots must stand on the floors');
 
     const cornice = arcade(b, {
       x: LOGGIA.x,
@@ -177,6 +209,8 @@ export default defineModel({
         b.set(x, eaves - 1, z, PALETTE.water.base);
       }
     }
+
+    for (const at of LOUNGERS) lounger(b, at);
 
     const lid = stuccoWall(b, { ...STAIR_HOUSE, y: deck, storeys: 1, skirting: 0 });
     flatRoof(b, { ...STAIR_HOUSE, y: lid, parapet: 1 });

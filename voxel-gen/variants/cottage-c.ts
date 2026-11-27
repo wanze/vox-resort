@@ -20,6 +20,9 @@ const RIGHT = BODY.x + BODY.w - 1;
 
 const LOGGIA = { x0: 9, x1: 22, z0: FRONT + 1, z1: FRONT + 7 } as const;
 const DOOR = LOGGIA.x0 + 7;
+
+// Written down because the spots are declared against it; `build` checks the two agree.
+const GROUND = 3;
 const DOOR_W = 4;
 
 // Stone where house C has its piers: the corners, and a pilaster halfway along each side.
@@ -45,10 +48,16 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 22,
     doors: [{ x: DOOR + 2, z: FRONT, facing: 0 }],
+    // In the loggia, either side of the door, two to a side.
+    spots: [LOGGIA.x0 + 2, LOGGIA.x1 - 2].flatMap((x) => [
+      { x, y: GROUND + 1, z: LOGGIA.z1 - 1, facing: 0 } as const,
+      { x, y: GROUND + 1, z: LOGGIA.z1 - 3, facing: x < DOOR ? 1 : 3 } as const,
+    ]),
   },
   build: (b: VoxelBuilder) => {
     const { grass, sand, stone, stucco, teak } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 48 });
+    if (ground !== GROUND) throw new Error('The loggia spots must stand in the loggia');
 
     const eaves = stuccoWall(b, {
       ...BODY,

@@ -87,6 +87,8 @@ export interface Cast extends DrawnAs {
   readonly places: readonly Place[];
   readonly heldBy: Int32Array;
   readonly venues: readonly VenueRanges[];
+  // Per lodging, its places for a party home and awake.
+  readonly homes: readonly Range[];
   // The flat indices of the places on a network seat, the only ones a passer-by can take.
   readonly onSeats: Int32Array;
   // The flat indices of the area and loop places: the only people perform draws.
@@ -142,6 +144,10 @@ export interface Casting {
   isWaiting(person: number): boolean;
   queuePlace(person: number): number;
   isAsleep(person: number): boolean;
+  // The lodging somebody is home and awake in, -1 otherwise; left out, nobody ever is.
+  homeOf?(person: number): number;
+  // Home before bed rather than after waking; left out, it is always the morning.
+  eveningAtHome?(person: number): boolean;
   isPresent(person: number): boolean;
   // Left out, everybody is an adult.
   isChild?(person: number): boolean;
@@ -166,6 +172,10 @@ export interface Bathing {
 
 const NOWHERE = -1;
 const ASLEEP = -2;
+// Below SWEEPING, the staff's own code: a lodging is counted down from here, -16 the first.
+const AT_HOME = -16;
+
+const homeCode = (lodging: number): number => AT_HOME - lodging;
 
 const gathers = (place: Place): boolean => place.act === 'tag' || place.act === 'play';
 
@@ -209,6 +219,7 @@ export function createCast(
   capacity: number,
   places: readonly VenuePlaces[],
   sea: SeaShore | null = null,
+  homes: readonly (readonly Place[])[] = [],
 ): Cast {
   const flat: Place[] = [];
   const take = (list: readonly Place[]): Range => {
@@ -223,6 +234,7 @@ export function createCast(
     lifeguards: take(venue.lifeguards),
     staff: take(venue.staff ?? []),
   }));
+  const homeRanges = homes.map(take);
   const courts = places.flatMap(({ game }, venue) => {
     if (!game) return [];
     const { visitors, watchers } = venues[venue]!;
@@ -280,6 +292,7 @@ export function createCast(
     places: flat,
     heldBy: new Int32Array(flat.length).fill(-1),
     venues,
+    homes: homeRanges,
     onSeats: Int32Array.from(onSeats),
     moving: Int32Array.from(moving),
     fromX: new Float32Array(capacity),
@@ -419,10 +432,47 @@ function insidePlace(
   return freeFor(cast, ranges.visitors, casting.isChild?.(person) === true, seatBy);
 }
 
+// A home's places stand on no network seat, so nobody passing can be sitting in one.
+const NO_SEATS = new Int32Array(0);
+
+// Standing at the rail at dusk and stretched out on a lounger over the morning coffee; a chair
+// takes neither the lounger nor anything else that is not still.
+const EVENING_POSES = [RESTING.standing, RESTING.sitting, RESTING.lying] as const;
+const MORNING_POSES = [RESTING.lying, RESTING.sitting, RESTING.standing] as const;
+const CHAIR_POSES = [RESTING.standing, RESTING.sitting] as const;
+
+function freeByPose(cast: Cast, range: Range, poses: readonly number[]): number {
+  for (const pose of poses) {
+    for (let index = range.start; index < range.start + range.count; index++) {
+      const place = cast.places[index]!;
+      if (place.pose === pose && !isMoving(place) && isFree(cast, index, NO_SEATS)) return index;
+    }
+  }
+  return -1;
+}
+
+// Out on the balcony or the loungers while there is room, and indoors out of sight when not.
+function castAtHome(cast: Cast, casting: Casting, person: number, lodging: number): void {
+  const range = cast.homes[lodging];
+  if (cast.placeOf[person]! >= 0) return;
+  let place = -1;
+  if (range && cast.chair[person] === 1) place = freeByPose(cast, range, CHAIR_POSES);
+  else if (range) {
+    const evening = casting.eveningAtHome?.(person) === true;
+    place = freeByPose(cast, range, evening ? EVENING_POSES : MORNING_POSES);
+  }
+  if (place >= 0) hold(cast, person, place);
+  else cast.shown[person] = SHOWN.hidden;
+}
+
 function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Array): void {
   const venue = cast.lastVenue[person]!;
   if (venue === ASLEEP) {
     cast.shown[person] = SHOWN.hidden;
+    return;
+  }
+  if (venue <= AT_HOME) {
+    castAtHome(cast, casting, person, AT_HOME - venue);
     return;
   }
   const ranges = venue >= 0 ? cast.venues[venue] : undefined;
@@ -468,6 +518,12 @@ function noteInside(cast: Cast, venue: number, waiting: number): void {
   if (waiting === 0 && venue >= 0 && venue < cast.inside.length) cast.inside[venue]!++;
 }
 
+function whereIs(casting: Casting, person: number): number {
+  if (casting.isAsleep(person)) return ASLEEP;
+  const home = casting.homeOf?.(person) ?? -1;
+  return home >= 0 ? homeCode(home) : casting.venueOf(person);
+}
+
 // Once after a frame's ticks. Every change is let go before anybody is placed, so a place given
 // up this frame can be taken this frame.
 export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
@@ -476,8 +532,7 @@ export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
   cast.inside.fill(0);
   for (let person = 0; person < count; person++) {
     let venue = NOWHERE;
-    if (casting.isPresent(person))
-      venue = casting.isAsleep(person) ? ASLEEP : casting.venueOf(person);
+    if (casting.isPresent(person)) venue = whereIs(casting, person);
     if (casting.bathing) noteBather(cast, casting, casting.bathing, person, venue);
     noteFamily(cast, casting, person, venue);
     const waiting = venue >= 0 && casting.isWaiting(person) ? 1 : 0;

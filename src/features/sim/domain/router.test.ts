@@ -67,7 +67,7 @@ import {
   stepWith,
 } from './litter';
 import { mix } from '../../random/domain/hash';
-import { bedtimeOf } from './night';
+import { bedtimeOf, homeHoursOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
@@ -1314,21 +1314,21 @@ describe('a visit to the beach', () => {
     expect(tileOf(0)).not.toBe(tileOf(second));
   });
 
-  it('ends the stay of a guest with a bed at their bedtime, and walks them back', () => {
+  it('ends the stay of a guest with a bed when they go home for the evening, and walks them back', () => {
     const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
-    const { sleepAt } = bedtimeOf(guests.party[housed]!);
+    const { homeAt } = homeHoursOf(guests.party[housed]!);
     const { needs, router, crowd } = onTheBeach([housed], {
       night: { lodgings: [hotel()], tickOfDay: () => NOON },
     });
-    router.tick(sleepAt - 3);
+    router.tick(homeAt - 3);
     expect(untilSettled(crowd, [housed])).toBe(true);
     expect(router.visitOf(housed)).not.toBeNull();
-    router.tick(sleepAt - 2);
-    expect(isWaiting(crowd, housed), 'called in before bed').toBe(true);
+    router.tick(homeAt - 2);
+    expect(isWaiting(crowd, housed), 'called in before the evening').toBe(true);
 
-    router.tick(sleepAt);
+    router.tick(homeAt);
     expect(router.visitOf(housed)).toBeNull();
-    expect(isWaiting(crowd, housed), 'still lying on the sand at bedtime').toBe(false);
+    expect(isWaiting(crowd, housed), 'still lying on the sand for the evening').toBe(false);
     expect(router.stayOf(housed)).toBe('leaving');
     expect(needs.level.fun[housed]).toBeGreaterThan(0.5);
   });
@@ -1845,7 +1845,7 @@ describe('the night', () => {
     expect(router.asleepCount).toBe(1);
   });
 
-  it('gets them up at their wake tick, rested, and out of the door', () => {
+  it('gets them up at their wake tick, rested, and home for the morning', () => {
     const { network, needs, router, crowd } = nightOn(housed);
     router.step(housed, nodeAt(network, 1));
     needs.level.energy[housed] = 0.2;
@@ -1856,8 +1856,54 @@ describe('the night', () => {
     router.tick(TICKS_PER_DAY + wakeAt);
     expect(router.isAsleep(housed)).toBe(false);
     expect(router.asleepCount).toBe(0);
-    expect(isWaiting(crowd, housed)).toBe(false);
+    expect(router.awakeAtHome(housed)).toBe(0);
+    expect(router.homeCount).toBe(1);
+    expect(isWaiting(crowd, housed), 'out before the morning at home').toBe(true);
     expect(needs.level.energy[housed]).toBe(1);
+  });
+
+  it('sends them out of the door once the morning at home is over', () => {
+    const { network, router, crowd } = nightOn(housed);
+    router.step(housed, nodeAt(network, 1));
+    const { outAt } = homeHoursOf(guests.party[housed]!);
+
+    router.tick(TICKS_PER_DAY + outAt - 1);
+    expect(router.homeCount).toBe(1);
+    router.tick(TICKS_PER_DAY + outAt);
+    expect(router.awakeAtHome(housed)).toBe(-1);
+    expect(router.homeCount).toBe(0);
+    expect(isWaiting(crowd, housed)).toBe(false);
+  });
+
+  it('sends a guest home before bed, up and about there until bedtime', () => {
+    const { network, clock, router, crowd } = nightOn(housed);
+    const { homeAt } = homeHoursOf(guests.party[housed]!);
+    const { sleepAt } = bedtimeOf(guests.party[housed]!);
+    clock.tick = homeAt;
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.step(housed, nodeAt(network, 1))).toBe(-1);
+    expect(router.isAsleep(housed)).toBe(false);
+    expect(router.awakeAtHome(housed)).toBe(0);
+    expect(isWaiting(crowd, housed)).toBe(true);
+    expect(router.isFree(housed)).toBe(false);
+
+    router.tick(sleepAt - 1);
+    expect(router.isAsleep(housed), 'in bed before bedtime').toBe(false);
+    router.tick(sleepAt);
+    expect(router.isAsleep(housed)).toBe(true);
+    expect(router.awakeAtHome(housed)).toBe(-1);
+    expect(router.asleepCount).toBe(1);
+    expect(router.homeCount).toBe(1);
+  });
+
+  it('lets a guest home for the evening go when they are sent off the plot', () => {
+    const { network, clock, router } = nightOn(housed);
+    clock.tick = homeHoursOf(guests.party[housed]!).homeAt;
+    router.step(housed, nodeAt(network, 1));
+    router.sendHome(housed);
+    expect(router.awakeAtHome(housed)).toBe(-1);
+    expect(router.homeCount).toBe(0);
+    expect(router.isLeaving(housed)).toBe(true);
   });
 
   it('never puts a guest with no bed to sleep, and routes them to venues all night', () => {
@@ -3247,7 +3293,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(141)",
+        "claims": "Array(135)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3310,7 +3356,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(82)",
+        "claims": "Array(85)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3368,10 +3414,10 @@ describe('on the reference resort', () => {
         "working": "Uint8Array(40)",
       }
     `);
-    expect(digestOf(a.router)).toMatchInlineSnapshot(`"4cbefd61e846ad1d"`);
-    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"297efedb0d7f3f80"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"dec54d50125f1275"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"6b3396b21fc696a1"`);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"318a9d61ed6471b3"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"c560a7632a843c81"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"245b827915427436"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"4cfedb0e4d4be722"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {

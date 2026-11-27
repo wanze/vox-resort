@@ -1,7 +1,7 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { poolWater } from '../parts/pool.ts';
-import { oleander, parasol } from '../parts/props.ts';
+import { lounger, loungerSpot, oleander, parasol } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
 import { plankRail, SLATS } from '../parts/veranda.ts';
 import {
@@ -46,6 +46,13 @@ const ENTRANCE = MAIN_BAYS[1].x0 + 8;
 const PLINTH = 4;
 const POOL = { x: 8, z: 49, w: 24, d: 8 } as const;
 
+// Six long, which is all the plinth leaves behind the pool.
+const LOUNGERS = [POOL.x + 2, POOL.x + 8, POOL.x + 14].map(
+  (x) => ({ x, z: POOL.z + POOL.d + 1, y: PLINTH, facing: 2, length: 6 }) as const,
+);
+// The upper loggias' floor, a storey up on the slab over the lower ones; `build` checks it.
+const UPPER_FLOOR = 17;
+
 export default defineModel({
   id: 'villa-c',
   label: 'Villa C',
@@ -61,11 +68,19 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 35,
     doors: [{ x: ENTRANCE + 2, z: MAIN_FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(loungerSpot),
+      ...[MAIN_BAYS[0].x0 + 4, MAIN_BAYS[1].x1 - 3].map(
+        (x) => ({ x, y: UPPER_FLOOR, z: MAIN_FRONT + LOGGIA, facing: 0 }) as const,
+      ),
+      { x: WING_BAY.x0 + 3, y: UPPER_FLOOR, z: WING_FRONT + LOGGIA, facing: 0 },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { amber, grass, sand, stone, stucco, teak } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64, height: PLINTH });
     const upper = ground + STOREY_VOXELS + 1;
+    if (upper !== UPPER_FLOOR) throw new Error('The loggia spots must stand on the upper floor');
 
     const shutters = { trim: stucco, timber: LOUVRES } as const;
     const rail = { along: 'x', rail: SLATS, pitch: 64 } as const;
@@ -153,13 +168,8 @@ export default defineModel({
       stone.light,
     );
 
-    const loungers = POOL.z + POOL.d + 1;
-    for (const x of [POOL.x + 2, POOL.x + 8, POOL.x + 14]) {
-      b.box(x, x + 2, ground, ground, loungers, loungers + 3, teak.base);
-      b.box(x, x + 2, ground + 1, ground + 1, loungers, loungers + 3, stucco.light);
-      b.box(x, x + 2, ground + 2, ground + 2, loungers + 3, loungers + 3, stucco.light);
-    }
-    parasol(b, { x: POOL.x + 6, z: loungers + 1, y: ground, reach: 2, canvas: amber });
+    for (const at of LOUNGERS) lounger(b, at);
+    parasol(b, { x: POOL.x + 6, z: POOL.z + POOL.d + 2, y: ground, reach: 2, canvas: amber });
 
     // Oleanders kept low so they hide no loggia, as in the reference.
     for (const [x, z] of [

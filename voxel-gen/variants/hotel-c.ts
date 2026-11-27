@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { oleander, picnicTable } from '../parts/props.ts';
+import { oleander, picnicSeats, picnicTable } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
 import { plankRail, SLATS } from '../parts/veranda.ts';
 import {
@@ -49,6 +49,30 @@ const LOBBY_FRONT = frontOf(WINGS[1]) + LOGGIA;
 const LANTERNS = [LOBBY.x - 3, LOBBY.x + LOBBY.w + 1] as const;
 const LANTERN_Z = frontOf(WINGS[1]) + 1;
 
+const floorOf = (storey: number): number => GROUND + 1 + storey * STOREY_VOXELS;
+
+const TABLES = [
+  { x: 30, z: 66, y: GROUND },
+  { x: 128, z: 66, y: GROUND },
+  { x: 134, z: 56, y: GROUND },
+] as const;
+
+// Out on the upper loggias, at the rail, a bay or two of each wing.
+const LEANING = [
+  ...[0, 2].map((bay) => ({ wing: WINGS[0], bay })),
+  ...[1, 3].map((bay) => ({ wing: WINGS[1], bay })),
+].flatMap(({ wing, bay }) =>
+  [1, 2].map(
+    (storey) =>
+      ({
+        x: bayAt(wing, bay) + 3 * storey,
+        y: floorOf(storey),
+        z: frontOf(wing) + LOGGIA,
+        facing: 0,
+      }) as const,
+  ),
+);
+
 export default defineModel({
   id: 'hotel-c',
   label: 'Hotel C',
@@ -71,11 +95,13 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 30,
     doors: [{ x: LOBBY.x + LOBBY.w / 2, z: frontOf(WINGS[1]), facing: 0 }],
+    spots: [...TABLES.flatMap(picnicSeats), ...LEANING],
   },
   build: (b: VoxelBuilder) => {
     const { glass, grass, sand, stone, stucco, teak } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: PLOT.w, d: PLOT.d });
-    const floors = Array.from({ length: STOREYS }, (_, i) => ground + 1 + i * STOREY_VOXELS);
+    if (ground !== GROUND) throw new Error('The spots must stand on the plinth');
+    const floors = Array.from({ length: STOREYS }, (_, storey) => floorOf(storey));
 
     const shutters = { trim: stucco, timber: LOUVRES } as const;
     const rail = { along: 'x', rail: SLATS, pitch: 64 } as const;
@@ -211,12 +237,6 @@ export default defineModel({
       oleander(b, { x, z, y: ground });
     }
 
-    for (const [x, z] of [
-      [30, 66],
-      [128, 66],
-      [134, 56],
-    ] as const) {
-      picnicTable(b, { x, z, y: ground });
-    }
+    for (const table of TABLES) picnicTable(b, table);
   },
 });

@@ -23,6 +23,10 @@ const STAIR = { z: DECK.z0 + 3, w: 4 } as const;
 
 const DOOR = LEFT + 10;
 
+// Written down because the spots are declared against it; `build` checks the two agree.
+const GROUND = 2;
+const TERRACE = GROUND + FOOTING + 1;
+
 export default defineModel({
   id: 'bungalow-c',
   label: 'Bungalow C',
@@ -36,10 +40,20 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 20,
     doors: [{ x: DOOR + 2, z: FRONT, facing: 0 }],
+    spots: [
+      ...[DECK.x0 + 3, DECK.x0 + 9, DECK.x0 + 15].map(
+        (x) => ({ x, y: TERRACE, z: DECK.z1 - 1, facing: 0 }) as const,
+      ),
+      // Over the low table at the terrace's far end.
+      { x: DECK.x1 - 4, y: TERRACE, z: DECK.z0 + 5, facing: 2 },
+      { x: DECK.x1 - 6, y: TERRACE, z: DECK.z0 + 3, facing: 1 },
+      { x: DECK.x1 - 2, y: TERRACE, z: DECK.z0 + 3, facing: 3 },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { glass, metal, slate, stucco, teak, terracotta } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });
+    if (ground !== GROUND) throw new Error('The spots must stand on the terrace');
 
     const floor = ground + FOOTING;
     // Set back a voxel under the terrace so its white slab casts a line of shadow on the footing.

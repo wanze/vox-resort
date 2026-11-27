@@ -14,6 +14,9 @@ const DOOR = 14;
 const PORCH = { x0: 10, x1: 21, z1: FRONT + 5 } as const;
 const CHIMNEY = { x: 21, z: 9 } as const;
 
+// Written down because the spots are declared against it; `build` checks the two agree.
+const GROUND = 3;
+
 export default defineModel({
   id: 'cottage-b',
   label: 'Cottage B',
@@ -27,10 +30,20 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 22,
     doors: [{ x: DOOR + 1, z: FRONT, facing: 0 }],
+    // Under the lean-to, two either side of the door and clear of its pots.
+    spots: [
+      ...[PORCH.x0 + 2, PORCH.x1 - 2].map(
+        (x) => ({ x, y: GROUND + 1, z: PORCH.z1 - 1, facing: 0 }) as const,
+      ),
+      ...[PORCH.x0 + 3, PORCH.x1 - 3].map(
+        (x) => ({ x, y: GROUND + 1, z: PORCH.z1 - 2, facing: 0 }) as const,
+      ),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { bloom, foliage, grass, stone, stucco, teak, terracotta } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 48 });
+    if (ground !== GROUND) throw new Error('The porch spots must stand on the porch');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1, quoins: false });
 
     // Dressed-stone corners, two wide so they read at this scale; one-voxel quoins vanish.

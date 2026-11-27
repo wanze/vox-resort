@@ -51,8 +51,13 @@ export interface SimHooks {
 }
 
 export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: SimHooks): void {
-  decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather), (person) =>
-    resort.router.isAsleep(person),
+  // Home and up is as restful as asleep: an evening on the balcony must not send them out hungry.
+  decayNeeds(
+    resort.needs,
+    resort.guests,
+    ticks,
+    weatherEffect(clock.weather),
+    (person) => resort.router.isAsleep(person) || resort.router.awakeAtHome(person) >= 0,
   );
   // One tick at a time: a place freed on the first tick must let somebody in on the first.
   for (let tick = ticks; tick > 0; tick--) {

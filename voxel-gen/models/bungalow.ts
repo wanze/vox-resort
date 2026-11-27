@@ -20,6 +20,11 @@ const BRINK = DECK.z + DECK.d - 1;
 
 const STILTS = 3;
 
+// Written down because the spots are declared against it; `build` checks the two agree.
+const SAND = 2;
+const LOUNGERS = [HUT.x + 3, RIGHT - 6] as const;
+const LOUNGER_HEAD = BRINK + 3;
+
 export default defineModel({
   id: 'bungalow',
   label: 'Bungalow',
@@ -33,9 +38,19 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 20,
     doors: [{ x: HUT.x + 18, z: FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(
+        (x) => ({ x: x + 1, y: SAND + 2, z: LOUNGER_HEAD + 4, facing: 0, pose: 'lie' }) as const,
+      ),
+      // At the rail either side of the steps, looking out to sea.
+      ...[HUT.x + 5, HUT.x + 11, RIGHT - 10, RIGHT - 4].map(
+        (x) => ({ x, y: SAND + STILTS + 1, z: BRINK - 1, facing: 0 }) as const,
+      ),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const sand = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });
+    if (sand !== SAND) throw new Error('The spots must stand on the sand');
 
     const floor = sand + STILTS;
     for (const x of [HUT.x, HUT.x + 17, RIGHT - 1]) {
@@ -130,8 +145,8 @@ export default defineModel({
     });
 
     const { amber, stucco, teak } = PALETTE;
-    const head = BRINK + 3;
-    for (const x of [HUT.x + 3, RIGHT - 6]) {
+    const head = LOUNGER_HEAD;
+    for (const x of LOUNGERS) {
       b.box(x, x + 3, sand, sand, head, head + 5, teak.shade);
       b.box(x, x + 3, sand + 1, sand + 1, head, head + 5, stucco.light);
       b.box(x, x + 3, sand + 2, sand + 2, head + 3, head + 3, amber.base);

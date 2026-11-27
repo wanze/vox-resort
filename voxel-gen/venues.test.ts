@@ -580,3 +580,33 @@ describe('the craft a hut hires out', () => {
     }
   });
 });
+
+describe('the places a lodging draws its party at home', () => {
+  const lodgings = venues.map(buildModel).filter((model) => model.venue!.role === 'lodging');
+
+  it('gives every lodging somewhere outside to be seen before bed', () => {
+    for (const model of lodgings) {
+      expect(
+        model.venue!.spots?.length ?? 0,
+        `${model.id} keeps everybody indoors`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  // Lying overlaps the cushion it rests on, so only the hips' own layer must be clear.
+  it('stands, seats or lays everybody on something, clear up to the head', () => {
+    for (const model of lodgings) {
+      const painted = new Set(model.voxels.map((v) => `${v.x},${v.y},${v.z}`));
+      for (const spot of model.venue!.spots ?? []) {
+        const at = `${model.id} at ${spot.x},${spot.y},${spot.z}`;
+        expect(painted.has(`${spot.x},${spot.y - 1},${spot.z}`), `${at} floats`).toBe(true);
+        const clear = spot.pose === 'lie' ? [0] : [0, 1, 2, 3];
+        for (const up of clear) {
+          expect(painted.has(`${spot.x},${spot.y + up},${spot.z}`), `${at} is walled in`).toBe(
+            false,
+          );
+        }
+      }
+    }
+  });
+});

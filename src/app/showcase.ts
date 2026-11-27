@@ -96,7 +96,7 @@ import { CHECK_IN_TICK } from '../features/sim/domain/checkIn';
 import { beachVenueFor, withBeach } from '../features/sim/domain/beach';
 import { relabelled, shelterOf, type Venue } from '../features/sim/domain/venues';
 import { assignNames, namedPlacesOf, renameTo } from '../features/naming/domain/venueNames';
-import { lightsOnShare, occupiedShare } from '../features/sim/domain/night';
+import { isEveningAtHome, lightsOnShare, occupiedShare } from '../features/sim/domain/night';
 import {
   cancelRenovation,
   carryAgeing,
@@ -336,7 +336,7 @@ import {
   type Cast,
   type Casting,
 } from '../features/choreography/domain/casting';
-import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
+import { homePlacesFor, placesFor, type VenuePlaces } from '../features/choreography/domain/places';
 import { advanceActs, perform } from '../features/choreography/domain/acts';
 import { performAtSea } from '../features/choreography/domain/seaSwim';
 import { performOnSand } from '../features/choreography/domain/sandCastles';
@@ -1152,7 +1152,8 @@ function buildResort(
   const places = placesFor(venues, byKey(plot.layout.placements), network);
   const rentals = rentalsOf(shore, plot.layout.placements, hireOf);
   const bathing = { shore, rentals, span: spanOf(plan) };
-  const cast = createCast(population, places, { sand: network.sand, swim: bathing });
+  const homes = homePlacesFor(facts.lodgings, byKey(plot.layout.placements));
+  const cast = createCast(population, places, { sand: network.sand, swim: bathing }, homes);
   const overlay = buildOverlayField();
   const chair = parts.props.find((model) => model.id === WHEELCHAIR_ID);
   const crowd = buildCrowdField({
@@ -1216,6 +1217,8 @@ function buildResort(
       isWaiting: (person: number) => router.isWaitingAt(person),
       queuePlace: (person: number) => router.queuePlaceOf(person),
       isAsleep: (person: number) => router.isAsleep(person),
+      homeOf: (person: number) => router.awakeAtHome(person),
+      eveningAtHome: (person: number) => isEveningAtHome(guests.party[person]!, parts.tickOfDay()),
       isPresent: (person: number) => guests.present[person] === 1,
       isChild: (person: number) => guests.child[person] === 1,
       partyOf: (person: number) => guests.party[person]!,
@@ -1369,10 +1372,12 @@ function recastAfterEdit(
 ): void {
   const was = resort.cast;
   resort.places = placesFor(resort.venues, byKey(resort.plot.placements), network);
-  resort.cast = createCast(resort.guests.count, resort.places, {
-    sand: network.sand,
-    swim: resort.bathing,
-  });
+  resort.cast = createCast(
+    resort.guests.count,
+    resort.places,
+    { sand: network.sand, swim: resort.bathing },
+    homePlacesFor(resort.lodgings, byKey(resort.plot.placements)),
+  );
   carryPlaces(
     was,
     resort.cast,
@@ -1573,7 +1578,7 @@ function lightRooms(
   welcome: boolean,
   last: number | null,
 ): number {
-  const home = welcome ? 1 : occupiedShare(resort.beds.total, resort.router.asleepCount);
+  const home = welcome ? 1 : occupiedShare(resort.beds.total, resort.router.homeCount);
   const share = home * lightsOnShare(tickOfDay);
   if (share !== last) resort.world.setOccupiedShare(share);
   return share;

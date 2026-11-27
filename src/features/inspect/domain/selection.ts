@@ -404,6 +404,7 @@ export type Errand =
   | { readonly kind: 'waiting'; readonly at: string; readonly place: number; readonly named?: true }
   | { readonly kind: 'inside'; readonly at: string; readonly named?: true }
   | { readonly kind: 'asleep'; readonly at: string }
+  | { readonly kind: 'home'; readonly at: string }
   | { readonly kind: 'beach'; readonly stage: BeachStage }
   | { readonly kind: 'checking-in'; readonly at: string; readonly named?: true }
   | { readonly kind: 'leaving' }
@@ -437,6 +438,8 @@ export interface ErrandFacts {
   readonly goal: Named | null;
   readonly home: Named | null;
   readonly asleep: boolean;
+  // Home and up, before bed or after waking.
+  readonly atHome?: boolean;
   readonly beach: BeachStage | null;
   readonly checkingIn?: boolean;
   readonly leaving?: boolean;
@@ -447,6 +450,7 @@ export interface ErrandFacts {
 export function errandOf(facts: ErrandFacts): Errand {
   const { visit, goal, home } = facts;
   if (facts.asleep && home) return { kind: 'asleep', at: home.label };
+  if (facts.atHome && home) return { kind: 'home', at: home.label };
   if (facts.beach) return { kind: 'beach', stage: facts.beach };
   // The desk may be the goal or the visit; a walk home at night goes first either way.
   const desk = facts.checkingIn && !home ? (visit?.venue ?? goal) : null;
@@ -468,6 +472,7 @@ function errandWording(errand: NonNullable<Errand>, moving: Moving = 'Walking'):
   }
   if (errand.kind === 'inside') return `Inside ${refer(errand.at, errand.named)}`;
   if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
+  if (errand.kind === 'home') return `At home at the ${errand.at}`;
   if (errand.kind === 'beach') return BEACH_WALKS[errand.stage];
   if (errand.kind === 'checking-in') return `Checking in at ${refer(errand.at, errand.named)}`;
   if (errand.kind === 'leaving') return 'Leaving the resort';

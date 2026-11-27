@@ -36,13 +36,18 @@ export interface RouterState extends Readonly<
   readonly pitched: Set<number>;
   readonly promised: Set<number>;
   asleepCount: number;
+  // Asleep or up and about at home: the night's loop runs while anybody is.
+  homeCount: number;
 }
+
+// The `asleep` column: a party home before bed or after waking is held there as a sleeper is.
+export const AT_HOME = { away: 0, asleep: 1, awake: 2 } as const;
 
 // Saved under a shape of their own, by snapshotRouterState.
 export const ROUTER_SAVED_OTHERWISE = ['occupancy', 'errands', 'stays', 'partyPitches'] as const;
 
 // Followed from the saved columns on a restore.
-export const ROUTER_DERIVED = ['pitched', 'promised', 'asleepCount'] as const;
+export const ROUTER_DERIVED = ['pitched', 'promised', 'asleepCount', 'homeCount'] as const;
 
 export type RouterStateSnapshot = Pick<
   RouterSnapshot,
@@ -74,6 +79,7 @@ export function createRouterState(people: number, parties: number, venues: numbe
     pitched: new Set(),
     promised: new Set(),
     asleepCount: 0,
+    homeCount: 0,
   };
 }
 
@@ -146,6 +152,7 @@ export function restoreRouterState(snapshot: RouterStateSnapshot): RouterState {
         claim.pitch.spots.map((spot) => spot.seat).filter((seat) => seat >= 0),
       ),
     ),
-    asleepCount: columns.asleep.reduce((total, each) => total + each, 0),
+    asleepCount: columns.asleep.reduce((total, each) => total + Number(each === AT_HOME.asleep), 0),
+    homeCount: columns.asleep.reduce((total, each) => total + Number(each !== AT_HOME.away), 0),
   };
 }

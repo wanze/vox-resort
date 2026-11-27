@@ -3,6 +3,7 @@ import type { Pitch } from './beachPitch';
 import { VISIT } from './occupancy';
 import { ROUTER_COLUMNS, ROUTER_VENUE_COLUMNS } from './routerSnapshot';
 import {
+  AT_HOME,
   createRouterState,
   restoreRouterState,
   ROUTER_DERIVED,
@@ -33,6 +34,7 @@ const busyState = () => {
   state.promised.add(5);
   state.asleep[2] = 1;
   state.asleepCount = 1;
+  state.homeCount = 1;
   state.doorOf[2] = 7;
   state.occupancy.state[3] = VISIT.waiting;
   state.occupancy.at[3] = 1;
@@ -76,7 +78,16 @@ describe('the guest router state', () => {
     expect(restored.pitched).toEqual(new Set([33]));
     expect(restored.promised).toEqual(new Set([5]));
     expect(restored.asleepCount).toBe(1);
+    expect(restored.homeCount).toBe(1);
     expect(restored.occupancy.queues[1]).toEqual([3]);
+  });
+
+  it('counts somebody home and awake as home, not as asleep', () => {
+    const state = busyState();
+    state.asleep[0] = AT_HOME.awake;
+    const restored = restoreRouterState(snapshotRouterState(state));
+    expect(restored.asleepCount).toBe(1);
+    expect(restored.homeCount).toBe(2);
   });
 
   it('shares no array between a snapshot, the state it was taken of, and itself', () => {

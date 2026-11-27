@@ -21,6 +21,10 @@ const LADDER = { x: 12, w: 4 } as const;
 
 const PORCH = 4;
 
+// Written down because the spots are declared against it; `build` checks the two agree.
+const BEACH = 2;
+const DECK_FLOOR = BEACH + STILTS + 1;
+
 export default defineModel({
   id: 'bungalow-b',
   label: 'Bungalow B',
@@ -34,10 +38,21 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 20,
     doors: [{ x: DOOR + 2, z: FRONT, facing: 0 }],
+    spots: [
+      // The deck chair by the door, its back to the hut.
+      { x: RIGHT - 3, y: DECK_FLOOR + 3, z: FRONT + 4, facing: 2, pose: 'sit' },
+      ...[LADDER.x + LADDER.w + 4, LADDER.x + LADDER.w + 10].map(
+        (x) => ({ x, y: DECK_FLOOR, z: DECK.z1 - 1, facing: 0 }) as const,
+      ),
+      { x: DECK.x0 + 2, y: DECK_FLOOR, z: DECK.z0 + 8, facing: 3 },
+      { x: DECK.x1 - 2, y: DECK_FLOOR, z: DECK.z0 + 8, facing: 1 },
+      { x: DECK.x0 + 12, y: DECK_FLOOR, z: DECK.z0 + 1, facing: 2 },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { sand, teak } = PALETTE;
     const beach = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: sand });
+    if (beach !== BEACH) throw new Error('The spots must stand on the deck');
 
     const floor = beach + STILTS;
     for (const x of [DECK.x0, 16, 26, 35, DECK.x1 - 1]) {

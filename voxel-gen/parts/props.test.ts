@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { flowerBox, oleander, parasol, pergola, picnicTable, pottedPlant } from './props.ts';
+import {
+  flowerBox,
+  lounger,
+  loungerSpot,
+  oleander,
+  parasol,
+  pergola,
+  picnicSeats,
+  picnicTable,
+  pottedPlant,
+} from './props.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -118,6 +128,36 @@ describe('picnicTable', () => {
     expect(at(b, 4, 1, 0)).toBe(PALETTE.teak.base);
     expect(at(b, 4, 1, 4)).toBe(PALETTE.teak.base);
     expect(at(b, 4, 0, 0)).toBeUndefined();
+  });
+});
+
+describe('picnicSeats', () => {
+  it('sits two on each bench, facing across the top', () => {
+    const b = new VoxelBuilder();
+    picnicTable(b, { x: 0, z: 0, y: 0 });
+    const seats = picnicSeats({ x: 0, z: 0, y: 0 });
+    expect(seats).toHaveLength(4);
+    for (const seat of seats) {
+      expect(at(b, seat.x, seat.y - 1, seat.z)).toBe(PALETTE.teak.base);
+      expect(at(b, seat.x, seat.y, seat.z)).toBeUndefined();
+    }
+    expect(seats.map((seat) => seat.facing).toSorted()).toEqual([0, 0, 2, 2]);
+  });
+});
+
+describe('lounger', () => {
+  it('lays the hips on the mattress, the backrest behind the head and the legs to its facing', () => {
+    for (const facing of [0, 2] as const) {
+      const b = new VoxelBuilder();
+      const o = { x: 0, z: 0, y: 0, facing };
+      lounger(b, o);
+      const spot = loungerSpot(o);
+      expect(spot.facing).toBe(facing);
+      expect(at(b, spot.x, spot.y - 1, spot.z)).toBe(PALETTE.stucco.light);
+      expect(at(b, spot.x, spot.y, spot.z)).toBeUndefined();
+      const back = facing === 0 ? 0 : 7;
+      expect(at(b, spot.x, 3, back)).toBe(PALETTE.stucco.light);
+    }
   });
 });
 

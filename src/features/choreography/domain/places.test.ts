@@ -15,7 +15,7 @@ import {
 } from '../../layout/domain/rotation';
 import { venuesOn } from '../../sim/domain/venues';
 import { createCast, recast, type Casting } from './casting';
-import { placesFor, type AreaPlace, type LoopPlace, type Place } from './places';
+import { homePlacesFor, placesFor, type AreaPlace, type LoopPlace, type Place } from './places';
 
 const placed = (id: string, rotation: Rotation = 0, tileX = 2, tileZ = 3): Placement => {
   const { model } = objectTypeById(id);
@@ -130,6 +130,26 @@ describe('placesFor', () => {
 const isArea = (place: Place): place is AreaPlace =>
   place.act === 'swim' || place.act === 'laps' || place.act === 'wade';
 const isLoop = (place: Place): place is LoopPlace => place.act === 'loop';
+
+describe('homePlacesFor', () => {
+  it('lays out a lodging’s spots where it stands, in lodging order', () => {
+    const villa = placed('villa');
+    const homes = homePlacesFor(
+      [{ key: 'gone#0' }, { key: villa.key }],
+      new Map([[villa.key, villa]]),
+    );
+    expect(homes[0]).toEqual([]);
+    const declared = objectTypeById('villa').model.venue!.spots!;
+    expect(homes[1]).toHaveLength(declared.length);
+    for (const place of homes[1]!) {
+      expect(place.kind).toBe('visitor');
+      expect(place.seat).toBe(-1);
+      expect(place.x).toBeGreaterThanOrEqual(villa.x);
+      expect(place.x).toBeLessThan(villa.x + villa.width);
+    }
+    expect(homes[1]!.some((place) => place.pose === RESTING.lying)).toBe(true);
+  });
+});
 
 describe('placesFor at the pool', () => {
   it('turns the areas and the loops with the venue', () => {

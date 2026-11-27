@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, lounger, loungerSpot, pottedPlant } from '../parts/props.ts';
 import { poolWater } from '../parts/pool.ts';
 import { flatRoof, gableRoof, hipRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
@@ -41,6 +41,13 @@ const STAIR_HOUSE = { x: 94, z: 12, w: 12, d: 12 } as const;
 
 const LANTERNS = [75, 84] as const;
 
+// The roof terrace's floor, written down for the spots; `build` checks the two agree.
+const ROOF = 77;
+const TABLES = [64, 88] as const;
+const LOUNGERS = [60, 67, 74, 81].map(
+  (x) => ({ x, z: POOL.z + POOL.d + 3, y: ROOF, facing: 0 }) as const,
+);
+
 // Every third voxel: each baluster is four quads the mesher cannot merge.
 const PITCH = 3;
 
@@ -69,6 +76,19 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 30,
     doors: [{ x: DOOR + 3, z: FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(loungerSpot),
+      ...[56, 62, 68, 74, 84, 90, 96, 102].map(
+        (x) => ({ x, y: ROOF, z: FRONT, facing: 0 }) as const,
+      ),
+      // Round the two tables under the shade, one to a side.
+      ...TABLES.flatMap((x) => [
+        { x: x - 2, y: ROOF, z: 45, facing: 1 } as const,
+        { x: x + 7, y: ROOF, z: 46, facing: 3 } as const,
+        { x: x + 2, y: ROOF, z: 42, facing: 0 } as const,
+        { x: x + 3, y: ROOF, z: 49, facing: 2 } as const,
+      ]),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { bloom, foliage, grass, metal, stone, stucco, teak } = PALETTE;
@@ -207,12 +227,8 @@ export default defineModel({
       balustrade(b, { x, z: CENTRE.z - 1, y: deck, w: CENTRE.d + 2, along: 'z', pitch: PITCH });
     }
     poolWater(b, { ...POOL, deck: eaves });
-    for (const x of [60, 67, 74, 81]) {
-      const z = POOL.z + POOL.d + 3;
-      b.box(x, x + 3, deck, deck, z, z + 7, teak.shade);
-      b.box(x, x + 3, deck + 1, deck + 1, z + 2, z + 7, stucco.light);
-      b.box(x, x + 3, deck + 1, deck + 3, z, z + 1, stucco.light);
-    }
+    if (deck !== ROOF) throw new Error('The roof spots must stand on the roof');
+    for (const at of LOUNGERS) lounger(b, at);
 
     const shade = { z0: 40, z1: 51 } as const;
     for (const x of [57, 79, 101]) {
@@ -225,7 +241,7 @@ export default defineModel({
     for (let x = 57; x <= 102; x += 5) {
       b.box(x, x, deck + 11, deck + 11, shade.z0 - 1, shade.z1 + 1, teak.light);
     }
-    for (const x of [64, 88]) {
+    for (const x of TABLES) {
       b.box(x, x + 5, deck, deck + 2, 44, 47, teak.shade);
       b.box(x - 1, x + 6, deck + 3, deck + 3, 43, 48, teak.light);
     }

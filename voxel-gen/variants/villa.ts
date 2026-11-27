@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
+import { flowerBox, lounger, loungerSpot, parasol, pottedPlant } from '../parts/props.ts';
 import { poolWater } from '../parts/pool.ts';
 import { gableRoof, hipRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
@@ -28,6 +28,12 @@ const DOOR = WING.x + 6;
 // A metre of plinth, so the plunge pool has two courses of water above its floor.
 const PLINTH = 4;
 
+const LOUNGERS = [POOL.x + 2, POOL.x + 8, POOL.x + 18].map(
+  (x) => ({ x, z: POOL.z + POOL.d + 1, y: PLINTH, facing: 0 }) as const,
+);
+// The arcade's top, which `build` checks: the balcony floor is the layer above it.
+const BALCONY = 15;
+
 export default defineModel({
   id: 'villa-b',
   label: 'Villa B',
@@ -41,6 +47,10 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 35,
     doors: [{ x: DOOR + 2, z: WING_FRONT, facing: 0 }],
+    spots: [
+      ...LOUNGERS.map(loungerSpot),
+      ...[26, 31, 37].map((x) => ({ x, y: BALCONY, z: LOGGIA.z + 2, facing: 0 }) as const),
+    ],
   },
   windows: WINDOW_GLASS,
   water: [PALETTE.water.base],
@@ -60,6 +70,7 @@ export default defineModel({
     b.box(27, 31, crest + 3, crest + 3, 9, 13, stone.light);
 
     const balcony = arcade(b, { ...LOGGIA, y: ground, along: 'x', bays: 3, pier: 2 });
+    if (balcony !== BALCONY) throw new Error('The balcony spots must stand on the balcony');
     b.box(
       LOGGIA.x,
       LOGGIA.x + LOGGIA.w - 1,
@@ -125,14 +136,7 @@ export default defineModel({
 
     poolWater(b, { ...POOL, deck: ground - 1 });
 
-    const lounger = (x: number, z: number): void => {
-      b.box(x, x + 3, ground, ground, z, z + 7, teak.shade);
-      b.box(x, x + 3, ground + 1, ground + 1, z + 2, z + 7, stucco.light);
-      b.box(x, x + 3, ground + 1, ground + 3, z, z + 1, stucco.light);
-    };
-    lounger(POOL.x + 2, POOL.z + POOL.d + 1);
-    lounger(POOL.x + 8, POOL.z + POOL.d + 1);
-    lounger(POOL.x + 18, POOL.z + POOL.d + 1);
+    for (const at of LOUNGERS) lounger(b, at);
     parasol(b, { x: POOL.x + 15, z: POOL.z + POOL.d + 4, y: ground, reach: 3 });
 
     // Lawn along the front, cut by the path to the door, is where the planting goes.

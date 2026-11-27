@@ -857,6 +857,12 @@ describe('a guest at night', () => {
     expect(line).not.toContain('tile');
   });
 
+  it('says a guest on their balcony is at home', () => {
+    const crowd = seatedStreet('sit');
+    const unwinding: Errand = { kind: 'home', at: 'Villa' };
+    expect(activityLine(crowd, content, guests, 0, unwinding)).toContain('At home at the Villa');
+  });
+
   it('says a guest heading for bed is walking home, not merely walking there', () => {
     const crowd = seatedStreet('sit');
     const bedward: Errand = { kind: 'walking', to: 'Bungalow', home: true };
@@ -918,6 +924,13 @@ describe('errandOf', () => {
     });
     expect(errandOf({ ...none, home: BUNGALOW, asleep: true })).toEqual({
       kind: 'asleep',
+      at: 'Bungalow',
+    });
+  });
+
+  it('words a guest up and about at home as at home, not walking there', () => {
+    expect(errandOf({ ...none, home: BUNGALOW, goal: BAKERY, atHome: true })).toEqual({
+      kind: 'home',
       at: 'Bungalow',
     });
   });

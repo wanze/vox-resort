@@ -21,6 +21,10 @@ const DOOR = 12;
 const PORCH = { x0: WING.x + 1, x1: MAIN.x - 2, z1: WING_FRONT + 6 } as const;
 const CHIMNEY = { x: 37, z: 8 } as const;
 
+// The roof terrace over the wing, written down for the spots; `build` checks the two agree.
+const TERRACE = 16;
+const GROUND = 3;
+
 export default defineModel({
   id: 'house-b',
   label: 'House B',
@@ -34,6 +38,18 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 22,
     doors: [{ x: DOOR + 1, z: WING_FRONT, facing: 0 }],
+    // On the roof terrace, past the planter, at the parapet over the porch.
+    spots: [
+      ...[WING.x + 13, WING.x + 17].map(
+        (x) => ({ x, y: TERRACE, z: WING_FRONT - 2, facing: 0 }) as const,
+      ),
+      { x: WING.x + 10, y: TERRACE, z: WING.z + 4, facing: 1 },
+      { x: WING.x + 15, y: TERRACE, z: WING.z + 4, facing: 2 },
+      // Under the porch, either side of the pots.
+      ...[PORCH.x0 + 2, PORCH.x1 - 2].map(
+        (x) => ({ x, y: GROUND, z: PORCH.z1 - 1, facing: 0 }) as const,
+      ),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { bloom, foliage, grass, stone, stucco, teak, terracotta } = PALETTE;
@@ -43,6 +59,8 @@ export default defineModel({
 
     // A solid parapet, not balusters: forty of them would double the house's triangles.
     const terrace = stuccoWall(b, { ...WING, y: ground, storeys: 1 });
+    if (terrace !== TERRACE || ground !== GROUND)
+      throw new Error('The terrace spots must stand on the terrace');
     b.box(WING.x, MAIN.x, terrace - 1, terrace - 1, WING.z, WING_FRONT, stone.light);
     b.box(WING.x, MAIN.x, terrace, terrace + 2, WING_FRONT - 1, WING_FRONT, stucco.base);
     b.box(WING.x, WING.x + 1, terrace, terrace + 2, WING.z, WING_FRONT, stucco.base);

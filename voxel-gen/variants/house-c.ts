@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
-import { oleander, picnicTable } from '../parts/props.ts';
+import { oleander, picnicSeats, picnicTable } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
 import { plankRail, SLATS } from '../parts/veranda.ts';
 import {
@@ -33,6 +33,11 @@ const BACK = 2;
 const DOOR_W = 4;
 const doorAt = (bay: (typeof BAYS)[number]): number => bay.x0 + 8;
 
+// Written down because the spots are declared against them; `build` checks they agree.
+const GROUND = 3;
+const UPPER = 16;
+const TABLE = { x: 19, z: LOGGIA.z1 + 9, y: GROUND } as const;
+
 export default defineModel({
   id: 'house-c',
   label: 'House C',
@@ -46,6 +51,10 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 22,
     doors: BAYS.map((bay) => ({ x: doorAt(bay) + 2, z: FRONT, facing: 0 })),
+    spots: [
+      ...picnicSeats(TABLE),
+      ...BAYS.map((bay) => ({ x: bay.x0 + 3, y: UPPER, z: LOGGIA.z1, facing: 0 }) as const),
+    ],
   },
   build: (b: VoxelBuilder) => {
     const { grass, sand, stone, stucco, teak } = PALETTE;
@@ -144,6 +153,9 @@ export default defineModel({
     // The oleander at the corner of the photo, kept low so it hides no door.
     oleander(b, { x: 40, z: garden + 3, y: ground });
 
-    picnicTable(b, { x: 19, z: garden + 4, y: ground });
+    if (ground !== GROUND || upper !== UPPER || garden + 4 !== TABLE.z) {
+      throw new Error('The spots must stand where the floors and the table are');
+    }
+    picnicTable(b, TABLE);
   },
 });

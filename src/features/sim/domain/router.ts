@@ -37,12 +37,13 @@ import {
 import { type Gateway } from './gateways';
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
-import { isBedtime, NIGHT_RELIEF } from './night';
+import { isBedtime, isHomeTime, NIGHT_RELIEF } from './night';
 import { isBeach, LOUNGER_RELIEF, SHADE_RELIEF, withBeach } from './beach';
 import { pitchFor, type PitchSpot } from './beachPitch';
 import { arriveAt, type ArrivalOutcome, leaveVenue, sweepOccupancy, VISIT } from './occupancy';
 import { routerVenuesMatch, type RouterSnapshot } from './routerSnapshot';
 import {
+  AT_HOME,
   createRouterState,
   restoreRouterState,
   snapshotRouterState,
@@ -155,7 +156,11 @@ export interface Router {
   isLeaving(person: number): boolean;
   readonly fieldCount: number;
   readonly asleepCount: number;
+  // Asleep, or home and awake before bed or after waking.
+  readonly homeCount: number;
   isAsleep(person: number): boolean;
+  // The lodging somebody is home and awake in, -1 for anybody asleep or out.
+  awakeAtHome(person: number): number;
   // Neither asleep, arriving, leaving, inside, in a line nor on the sand.
   isFree(person: number): boolean;
   // Sends the whole party to the venue as checking in does; false for anybody not free. A party
@@ -423,6 +428,9 @@ export function createRouter(parts: {
 
   const bedtime = (party: number, tickOfDay: number): boolean =>
     isBedtime(party, tickOfDay, parts.upLate?.(party) ?? false);
+
+  const homeTime = (party: number, tickOfDay: number): boolean =>
+    isHomeTime(party, tickOfDay, parts.upLate?.(party) ?? false);
 
   // Only from fields already built: sweeping just to score would make the lazy build eager.
   // Unvisited venues are scored on the straight line, except for a party in a wheelchair, whose
@@ -881,7 +889,7 @@ export function createRouter(parts: {
   const leaveErrand = (person: number, venue: number): void => {
     const route = errandOf(person);
     const staying =
-      state.stays[person] !== null && now < state.stayUntil[person]! && !dueInBed(person);
+      state.stays[person] !== null && now < state.stayUntil[person]! && !dueHome(person);
     if (route && staying) {
       walkBack(person, route);
       return;
@@ -909,8 +917,8 @@ export function createRouter(parts: {
     walkBack(person, home);
   };
 
-  const dueInBed = (person: number): boolean =>
-    state.homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
+  const dueHome = (person: number): boolean =>
+    state.homeLodging[person]! >= 0 && homeTime(guests.party[person]!, parts.tickOfDay());
 
   const beachIndex = (): number => {
     const last = venues.length - 1;
@@ -1031,7 +1039,7 @@ export function createRouter(parts: {
     for (let person = 0; person < guests.count; person++) {
       if (state.occupancy.state[person] !== VISIT.inside || state.occupancy.at[person] !== beach)
         continue;
-      if (state.homeLodging[person]! < 0 || !bedtime(guests.party[person]!, tickOfDay)) continue;
+      if (state.homeLodging[person]! < 0 || !homeTime(guests.party[person]!, tickOfDay)) continue;
       leaveVenue(state.occupancy, person);
       leave(person, beach);
     }
@@ -1083,37 +1091,64 @@ export function createRouter(parts: {
     }
     state.homeward[person] = 1;
     if (onward !== at) return onward;
-    fallAsleep(person, lodging, at);
+    comeHome(person, lodging, at);
     return -1;
   };
 
-  // The door is kept in the visit column, which nobody asleep uses.
-  const fallAsleep = (person: number, lodging: number, door: number): void => {
+  // The door is kept in the visit column, which nobody at home uses.
+  const comeHome = (person: number, lodging: number, door: number): void => {
     const people = crowd();
     const { x, z } = lodgings[lodging]!;
     holdAt(people, person, x, network.nodes[door]!.y, z, people.heading[person] ?? 0);
     clearPartyGoal(goals, guests, person);
     state.doorOf[person] = door;
-    state.asleep[person] = 1;
-    state.asleepCount++;
+    const asleep = bedtime(guests.party[person]!, parts.tickOfDay());
+    state.asleep[person] = asleep ? AT_HOME.asleep : AT_HOME.awake;
+    state.homeCount++;
+    if (asleep) state.asleepCount++;
   };
 
-  // Checks "no longer bedtime" rather than the exact wake tick, which a multi-tick frame
+  // Checks "no longer bedtime" rather than the exact turn of the hour, which a multi-tick frame
   // or a dragged clock could step over.
-  const wakeWhoeverIsUp = (tickOfDay: number): void => {
+  const passTheNight = (tickOfDay: number): void => {
     for (let person = 0; person < guests.count; person++) {
-      if (state.asleepCount === 0) break;
-      if (state.asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
-      relieve(needs, person, NIGHT_RELIEF);
-      parts.onWoke?.(person);
-      getUp(person);
+      if (state.homeCount === 0) break;
+      const home = state.asleep[person]!;
+      if (home === AT_HOME.awake) endTheEvening(person, tickOfDay);
+      else if (home === AT_HOME.asleep) wakeIfUp(person, tickOfDay);
     }
   };
 
-  const getUp = (person: number): void => {
-    state.asleep[person] = 0;
-    state.homeward[person] = 0;
+  const endTheEvening = (person: number, tickOfDay: number): void => {
+    const party = guests.party[person]!;
+    if (bedtime(party, tickOfDay)) {
+      state.asleep[person] = AT_HOME.asleep;
+      state.asleepCount++;
+    } else if (!homeTime(party, tickOfDay)) getUp(person);
+  };
+
+  const wakeIfUp = (person: number, tickOfDay: number): void => {
+    const party = guests.party[person]!;
+    if (isBedtime(party, tickOfDay)) return;
+    relieve(needs, person, NIGHT_RELIEF);
+    parts.onWoke?.(person);
+    if (!homeTime(party, tickOfDay)) {
+      getUp(person);
+      return;
+    }
+    state.asleep[person] = AT_HOME.awake;
     state.asleepCount--;
+  };
+
+  const leaveHome = (person: number): void => {
+    if (state.asleep[person] === AT_HOME.asleep) state.asleepCount--;
+    if (state.asleep[person] !== AT_HOME.away) state.homeCount--;
+    state.asleep[person] = AT_HOME.away;
+  };
+
+  const getUp = (person: number): void => {
+    leaveHome(person);
+    state.homeward[person] = 0;
     const door = state.doorOf[person]!;
     state.doorOf[person] = -1;
     if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
@@ -1140,10 +1175,7 @@ export function createRouter(parts: {
     if (person < 0 || person >= goals.count) return;
     state.leaving[person] = 0;
     state.homeward[person] = 0;
-    if (state.asleep[person] === 1) {
-      state.asleep[person] = 0;
-      state.asleepCount--;
-    }
+    leaveHome(person);
     leaveVenue(state.occupancy, person);
     leaveStay(person);
     clearPartyGoal(goals, guests, person);
@@ -1195,7 +1227,7 @@ export function createRouter(parts: {
   const isFree = (person: number): boolean =>
     person >= 0 &&
     person < goals.count &&
-    state.asleep[person] === 0 &&
+    state.asleep[person] === AT_HOME.away &&
     state.leaving[person] === 0 &&
     state.arriving[person] === 0 &&
     state.occupancy.state[person] === VISIT.away &&
@@ -1220,9 +1252,9 @@ export function createRouter(parts: {
   // The one place an out-of-range person index is turned away; later code indexes columns.
   const nightStep = (person: number, at: number): number => {
     if (person < 0 || person >= goals.count) return -1;
-    if (state.asleep[person] === 1) return -1;
+    if (state.asleep[person] !== AT_HOME.away) return -1;
     state.homeward[person] = 0;
-    if (!bedtime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
+    if (!homeTime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
     return homewardStep(person, at);
   };
 
@@ -1236,7 +1268,7 @@ export function createRouter(parts: {
       for (const person of queue) carryWaiting(before, person, old, venue);
     }
     for (let person = 0; person < guests.count; person++) {
-      if (before.state.asleep[person] === 1) carrySleeper(before, person);
+      if (before.state.asleep[person] !== AT_HOME.away) carrySleeper(before, person);
     }
   };
 
@@ -1275,8 +1307,9 @@ export function createRouter(parts: {
     const door = nearestNode(network, doorsFor(declared, routes.index).nodes, before, person);
     if (door < 0) return;
     state.doorOf[person] = door;
-    state.asleep[person] = 1;
-    state.asleepCount++;
+    state.asleep[person] = before.state.asleep[person]!;
+    state.homeCount++;
+    if (state.asleep[person] === AT_HOME.asleep) state.asleepCount++;
     state.homeward[person] = before.state.homeward[person]!;
   };
 
@@ -1329,15 +1362,16 @@ export function createRouter(parts: {
     },
 
     offTheSand(person) {
-      if (person < 0 || person >= goals.count || state.asleep[person] === 1) return false;
-      return state.homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
+      if (person < 0 || person >= goals.count || state.asleep[person] !== AT_HOME.away)
+        return false;
+      return dueHome(person);
     },
 
     sendHome(person) {
       if (person < 0 || person >= goals.count || state.leaving[person] === 1) return;
       state.leaving[person] = 1;
       clearPartyGoal(goals, guests, person);
-      if (state.asleep[person] === 1) getUp(person);
+      if (state.asleep[person] !== AT_HOME.away) getUp(person);
     },
 
     turnOut(venue) {
@@ -1429,7 +1463,7 @@ export function createRouter(parts: {
       for (const person of swept.moved) {
         stand(person, state.occupancy.at[person]!, state.doorOf[person]!, true);
       }
-      if (state.asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
+      if (state.homeCount > 0) passTheNight(at % TICKS_PER_DAY);
       callInForBed(at % TICKS_PER_DAY);
       sendOnErrands();
     },
@@ -1461,7 +1495,8 @@ export function createRouter(parts: {
 
     holds(person) {
       return (
-        state.asleep[person] === 1 || (state.occupancy.state[person] ?? VISIT.away) !== VISIT.away
+        state.asleep[person] !== AT_HOME.away ||
+        (state.occupancy.state[person] ?? VISIT.away) !== VISIT.away
       );
     },
 
@@ -1473,8 +1508,16 @@ export function createRouter(parts: {
       return state.asleepCount;
     },
 
+    get homeCount() {
+      return state.homeCount;
+    },
+
     isAsleep(person) {
-      return state.asleep[person] === 1;
+      return state.asleep[person] === AT_HOME.asleep;
+    },
+
+    awakeAtHome(person) {
+      return state.asleep[person] === AT_HOME.awake ? state.homeLodging[person]! : -1;
     },
 
     isWaitingAt(person) {
@@ -1532,7 +1575,7 @@ export function createRouter(parts: {
 
     walksTheSand(person) {
       if (person < 0 || person >= goals.count) return false;
-      if (state.asleep[person] === 1 || state.leaving[person] === 1) return false;
+      if (state.asleep[person] !== AT_HOME.away || state.leaving[person] === 1) return false;
       if (state.fetching[person]! >= 0) return true;
       const stay = this.stayOf(person);
       return stay === 'arriving' || stay === 'leaving';

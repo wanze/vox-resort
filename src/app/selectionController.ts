@@ -236,6 +236,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       goal: router.goalOf(person),
       home: router.homewardTo(person),
       asleep: router.isAsleep(person),
+      atHome: router.awakeAtHome(person) >= 0,
       beach: router.stayOf(person),
       checkingIn: router.isArriving(person),
       leaving: router.isLeaving(person),

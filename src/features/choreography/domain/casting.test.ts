@@ -151,6 +151,83 @@ describe('recast', () => {
   });
 });
 
+describe('recast, for a party home before bed or after waking', () => {
+  const lying = (x: number): Place => ({ ...place('visitor', x), pose: RESTING.lying });
+  // One lodging with a balcony spot and a lounger, and one with nowhere outside.
+  const HOMES = [[place('visitor', 41), lying(42)], []];
+
+  const atHome = (count: number, evening = false) => {
+    const home = new Int32Array(count).fill(NONE);
+    const scene = world(count);
+    const casting: Casting = {
+      ...scene.casting,
+      homeOf: (person) => home[person]!,
+      eveningAtHome: () => evening,
+    };
+    return { ...scene, home, casting };
+  };
+
+  it('lays them on the lounger first in the morning', () => {
+    const { home, casting } = atHome(2);
+    const cast = createCast(2, ALL, null, HOMES);
+    home.fill(0);
+    recast(cast, casting, freeSeats());
+    expect([cast.shown[0], cast.shown[1]]).toEqual([SHOWN.placed, SHOWN.placed]);
+    expect([cast.x[0], cast.x[1]]).toEqual([42, 41]);
+    expect(cast.pose[0]).toBe(RESTING.lying);
+  });
+
+  it('stands them at the balcony rail first in the evening', () => {
+    const { home, casting } = atHome(1, true);
+    const cast = createCast(1, ALL, null, HOMES);
+    home[0] = 0;
+    recast(cast, casting, freeSeats());
+    expect(cast.x[0]).toBe(41);
+    expect(cast.pose[0]).toBe(RESTING.standing);
+  });
+
+  it('keeps whoever the lodging has no place for indoors, out of sight', () => {
+    const { home, casting } = atHome(3);
+    const cast = createCast(3, ALL, null, HOMES);
+    home.set([0, 0, 1]);
+    recast(cast, casting, freeSeats());
+    expect(Array.from(cast.shown)).toEqual([SHOWN.placed, SHOWN.placed, SHOWN.hidden]);
+  });
+
+  it('gives the place up at bedtime, for the next party home to take', () => {
+    const { home, asleep, casting } = atHome(2, true);
+    const cast = createCast(2, ALL, null, HOMES);
+    home[0] = 0;
+    recast(cast, casting, freeSeats());
+    home[0] = NONE;
+    asleep[0] = 1;
+    home[1] = 0;
+    recast(cast, casting, freeSeats());
+    expect(cast.shown[0]).toBe(SHOWN.hidden);
+    expect(cast.x[1]).toBe(41);
+  });
+
+  it('stands somebody in a wheelchair on the balcony, never on the lounger', () => {
+    const { home, casting } = atHome(2, true);
+    const chairs: Casting = { ...casting, inChair: (person) => person === 1 };
+    const cast = createCast(2, ALL, null, HOMES);
+    home[0] = 0;
+    recast(cast, chairs, freeSeats());
+    home[1] = 0;
+    recast(cast, chairs, freeSeats());
+    expect(cast.x[0]).toBe(41);
+    expect(cast.shown[1]).toBe(SHOWN.hidden);
+  });
+
+  it('counts nobody at home inside a venue', () => {
+    const { home, casting } = atHome(1);
+    const cast = createCast(1, ALL, null, HOMES);
+    home[0] = 0;
+    recast(cast, casting, freeSeats());
+    expect(ALL.map((_, venue) => insideAt(cast, venue))).toEqual([0, 0, 0, 0]);
+  });
+});
+
 describe('carryPlaces', () => {
   it('keeps whoever a standing venue held on the same place, wherever the venue now sits', () => {
     const { venue, waiting, queue, casting } = world(4);

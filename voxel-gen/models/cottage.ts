@@ -1,6 +1,6 @@
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, picnicSeats, picnicTable, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
 import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
@@ -9,6 +9,11 @@ const BODY = { x: 2, z: 2, w: 28, d: 36 } as const;
 const FRONT = BODY.z + BODY.d - 1;
 const LEFT = BODY.x;
 const RIGHT = BODY.x + BODY.w - 1;
+
+// Written down because the table is declared against it; `build` checks the two agree.
+const GROUND = 3;
+// Beside the canopy, on the garden's open side.
+const TABLE = { x: 21, z: FRONT + 5, y: GROUND } as const;
 
 export default defineModel({
   id: 'cottage',
@@ -23,9 +28,11 @@ export default defineModel({
     dwellSeconds: { min: 25_200, max: 32_400 },
     price: 22,
     doors: [{ x: 15, z: FRONT, facing: 0 }],
+    spots: picnicSeats(TABLE),
   },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 48 });
+    if (ground !== GROUND) throw new Error('The table must stand on the plinth');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
     gableRoof(b, { ...BODY, y: eaves, ridge: 'z' });
 
@@ -42,6 +49,7 @@ export default defineModel({
 
     flowerBox(b, { x: 5, z: FRONT + 1, y: ground, w: 7, along: 'x' });
     for (const x of [10, 20]) pottedPlant(b, { x, z: FRONT + 2, y: ground });
+    picnicTable(b, TABLE);
 
     b.box(11, 20, ground + 10, ground + 10, FRONT + 1, FRONT + 4, PALETTE.teak.base);
     for (const x of [11, 20]) {

@@ -1,5 +1,5 @@
 import { PALETTE, type Ramp } from '../palette.ts';
-import type { Color, VoxelBuilder } from '../voxelgen.ts';
+import type { Color, ModelSpot, VoxelBuilder } from '../voxelgen.ts';
 
 export interface PottedPlantOptions {
   readonly x: number;
@@ -192,6 +192,47 @@ export function picnicTable(b: VoxelBuilder, o: GardenPropOptions): void {
   for (const side of [o.z, o.z + 4]) {
     b.box(o.x, o.x + 8, o.y + 1, o.y + 1, side, side, teak.base);
   }
+}
+
+// Two to a bench, facing each other across the top.
+export function picnicSeats(o: GardenPropOptions): readonly ModelSpot[] {
+  return [o.x + 2, o.x + 6].flatMap((x): ModelSpot[] => [
+    { x, y: o.y + 2, z: o.z, facing: 0, pose: 'sit' },
+    { x, y: o.y + 2, z: o.z + 4, facing: 2, pose: 'sit' },
+  ]);
+}
+
+// Legs to `facing`: 0 has the backrest at the low-z end, 2 at the high. Six long is the pool's
+// lounger, the shortest a lying figure fits; eight gives the backrest a second course.
+export interface LoungerOptions extends GardenPropOptions {
+  readonly facing: 0 | 2;
+  readonly length?: 6 | 8;
+}
+
+const backOf = (o: LoungerOptions): number => ((o.length ?? 8) === 8 ? 2 : 1);
+
+export function lounger(b: VoxelBuilder, o: LoungerOptions): void {
+  const { stucco, teak } = PALETTE;
+  const length = o.length ?? 8;
+  const back = backOf(o);
+  const head = o.facing === 0 ? o.z : o.z + length - back;
+  const foot = o.facing === 0 ? o.z + back : o.z;
+  b.box(o.x, o.x + 3, o.y, o.y, o.z, o.z + length - 1, teak.shade);
+  b.box(o.x, o.x + 3, o.y + 1, o.y + 1, foot, foot + length - back - 1, stucco.light);
+  b.box(o.x, o.x + 3, o.y + 1, o.y + 3, head, head + back - 1, stucco.light);
+}
+
+// The hips three along the mattress from the backrest, as the pool's loungers have them.
+export function loungerSpot(o: LoungerOptions): ModelSpot {
+  const length = o.length ?? 8;
+  const back = backOf(o);
+  return {
+    x: o.x + 1,
+    y: o.y + 2,
+    z: o.facing === 0 ? o.z + back + 3 : o.z + length - back - 4,
+    facing: o.facing,
+    pose: 'lie',
+  };
 }
 
 export interface PergolaOptions {

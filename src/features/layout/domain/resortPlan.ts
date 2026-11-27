@@ -105,6 +105,8 @@ export const LAMP_ID = 'street-lamp';
 export const BEACH_LAMP_ID = 'street-lamp-b';
 export const HEDGE_ID = 'hedge';
 
+export const STONE_WALL_ID = 'stone-wall';
+
 export const BENCH_ID = 'bench';
 
 const PEDALO_RENTAL_ID = 'pedalo-rental';

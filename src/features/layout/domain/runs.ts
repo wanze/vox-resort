@@ -61,20 +61,40 @@ export function aloneTurn(tile: Tile, isPaved: PavedAt, otherwise: Rotation): Ro
 const ALONG_X: ReadonlySet<MosaicSide> = new Set(['e', 'w']);
 const ALONG_Z: ReadonlySet<MosaicSide> = new Set(['n', 's']);
 
-// The generator lays each hedge along its path, and two rows back to back between parallel paths
-// are not one hedge, so a laid run joins only along the way it was laid.
+const alongOf = (rotation: Rotation): ReadonlySet<MosaicSide> =>
+  rotation % 2 === 0 ? ALONG_X : ALONG_Z;
+
+const STEPS: { readonly [side in MosaicSide]: readonly [number, number] } = {
+  n: [0, -1],
+  s: [0, 1],
+  e: [1, 0],
+  w: [-1, 0],
+};
+
+// The generator lays each length along its path, and two rows back to back between parallel paths
+// are not one hedge, so two pieces join only where one of them runs towards the other: that still
+// turns a corner, whose arms each run into it.
 export function layRuns(props: readonly Placement[], kit: RunKit): Placement[] {
-  const styles = new Map<string, string | null>();
+  const laid = new Map<string, { style: string; rotation: Rotation }>();
   for (const placement of props) {
-    styles.set(tileKey(placement.tileX, placement.tileZ), kit.styleOf(placement.id));
+    const style = kit.styleOf(placement.id);
+    if (style !== null) {
+      laid.set(tileKey(placement.tileX, placement.tileZ), { style, rotation: placement.rotation });
+    }
   }
-  const styleAt: StyleAt = (x, z) => styles.get(tileKey(x, z)) ?? null;
+  const styleAt: StyleAt = (x, z) => laid.get(tileKey(x, z))?.style ?? null;
   return props.map((placement) => {
     const style = kit.styleOf(placement.id);
     if (style === null) return placement;
     const tile = { x: placement.tileX, z: placement.tileZ };
-    const way = placement.rotation % 2 === 0 ? ALONG_X : ALONG_Z;
-    const joined = new Set([...joinedSides(tile, style, styleAt)].filter((side) => way.has(side)));
+    const own = alongOf(placement.rotation);
+    const joined = new Set(
+      [...joinedSides(tile, style, styleAt)].filter((side) => {
+        const [dx, dz] = STEPS[side];
+        const other = laid.get(tileKey(tile.x + dx, tile.z + dz))!;
+        return own.has(side) || alongOf(other.rotation).has(side);
+      }),
+    );
     const fit = kit.pieceFor(style, joined, placement.rotation);
     if (fit === null) return placement;
     return {

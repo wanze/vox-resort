@@ -56,6 +56,9 @@ const TYPES: GeneratorType[] = ORIGINAL_TYPES.map((type) => ({
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
   placement: type.model.placement,
+  litters: (type.model.venue?.litter ?? 0) > 0,
+  binReach: type.model.binReach,
+  doorFacings: type.venue?.doors?.map((door) => door.facing) ?? [],
 }));
 
 const ITEMS = ORIGINAL_TYPES.map(layoutItemFor);
@@ -74,6 +77,8 @@ const params = (overrides: Partial<ResortParams> = {}): ResortParams => ({
   seed: 1,
   ...overrides,
 });
+
+const BIN_ID = 'litter-bin';
 
 const count = (plan: ReturnType<typeof generateResort>, id: string) =>
   plan.plots.filter((plot) => plot.id === id).length;
@@ -257,6 +262,33 @@ describe('generateResort', () => {
     for (const set of SWEEP) {
       const plan = planOf(set);
       expect(() => layoutResort(ITEMS, plan)).not.toThrow();
+    }
+  });
+
+  it('stands a litter bin within reach of nearly every stall that sells food', () => {
+    const reach = ORIGINAL_TYPES.find((type) => type.id === BIN_ID)!.model.binReach;
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const rectOf = (plot: (typeof plan.plots)[number]) => {
+        const footprint = footprintOf(plot);
+        return {
+          x0: plot.tileX,
+          x1: plot.tileX + footprint.x - 1,
+          z0: plot.tileZ,
+          z1: plot.tileZ + footprint.z - 1,
+        };
+      };
+      const bins = plan.plots.filter((plot) => plot.id === BIN_ID).map(rectOf);
+      const stalls = plan.plots.filter((plot) => BY_ID.get(plot.id)?.litters).map(rectOf);
+      const binned = stalls.filter((stall) =>
+        bins.some(
+          (bin) =>
+            Math.max(bin.x0 - stall.x1, stall.x0 - bin.x1, bin.z0 - stall.z1, stall.z0 - bin.z1) <=
+            reach,
+        ),
+      );
+      // A packed row can leave a stall with no free tile round it that blocks nobody's door.
+      expect({ set, most: binned.length >= stalls.length * 0.8 }).toEqual({ set, most: true });
     }
   });
 
@@ -1115,9 +1147,12 @@ const fnv1a = (text: string): number => {
   return hash;
 };
 
+// The bins by the stalls are stood last, after everything the hash was pinned on.
 const withoutNeighbourhoods = (plan: ReturnType<typeof generateResort>) => {
   const { neighbourhoods: _, ...rest } = plan;
-  return rest;
+  const plots = [...rest.plots];
+  while (plots.at(-1)?.id === BIN_ID) plots.pop();
+  return { ...rest, plots };
 };
 
 const inPlot = (plan: ReturnType<typeof generateResort>) =>

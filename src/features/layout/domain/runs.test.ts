@@ -85,6 +85,18 @@ describe('layRuns', () => {
     expect(laid[0]!.key).toBe('hedge-end@1,1');
   });
 
+  it('turns a corner where a row along each axis runs into it', () => {
+    const along = (x: number, z: number, rotation: 0 | 1) =>
+      place(item('hedge'), `hedge:${x},${z}`, x, z, rotation);
+    const laid = layRuns([along(1, 1, 0), along(2, 1, 0), along(1, 2, 1), along(1, 3, 1)], KIT);
+    expect(laid[0]!.id).toBe('hedge-corner');
+    expect(laid.slice(1).map((placement) => placement.id)).toEqual([
+      'hedge-end',
+      'hedge',
+      'hedge-end',
+    ]);
+  });
+
   it('leaves what is not a run alone', () => {
     const lamp = place(item('street-lamp'), 'lamp', 1, 1, 0);
     expect(layRuns([lamp], KIT)).toEqual([lamp]);

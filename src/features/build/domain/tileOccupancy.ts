@@ -1,4 +1,4 @@
-import { standsOnTerrain } from '../../catalog/domain/objectTypes';
+import { showsGroundUnder } from '../../catalog/domain/objectTypes';
 import type { Placement, Tile } from '../../layout/domain/resortLayout';
 import { tileKey } from '../../layout/domain/tileKey';
 
@@ -67,8 +67,8 @@ export function createTileOccupancy(placements: readonly Placement[] = []): Tile
 const typeIdOf = (key: string): string => key.split(/[@#]/, 1)[0]!;
 
 // Nothing with a plate stands here, so the terrain is what shows: the tile is empty, or what
-// stands on it stands on the terrain itself.
+// stands on it stands on the terrain itself, clear of where a drop slopes away.
 export function showsGround(occupancy: TileOccupancy, tile: Tile): boolean {
   const key = occupancy.keyAt(tile);
-  return key === undefined || standsOnTerrain(typeIdOf(key));
+  return key === undefined || showsGroundUnder(typeIdOf(key));
 }

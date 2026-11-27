@@ -85,6 +85,9 @@ const GENERATOR_TYPES: readonly GeneratorType[] = ORIGINAL_TYPES.map((type) => (
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
   placement: type.model.placement,
+  litters: (type.model.venue?.litter ?? 0) > 0,
+  binReach: type.model.binReach,
+  doorFacings: type.venue?.doors?.map((door) => door.facing) ?? [],
 }));
 
 const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);

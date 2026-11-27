@@ -1,5 +1,6 @@
 import catalogueJson from '../../../../voxel-gen/facts.json';
 import type { Catalogue } from '../../../../voxel-gen/catalogue.ts';
+import { SLOPE_FRACTION } from '../../rendering/domain/terrainSurface';
 import {
   MODEL_CATEGORIES,
   TILE_VOXELS,
@@ -91,11 +92,17 @@ export function objectTypeGroups(): readonly ObjectTypeGroup[] {
   })).filter((group) => group.types.length > 0);
 }
 
-const ON_TERRAIN: ReadonlySet<string> = new Set(
-  OBJECT_TYPES.filter((type) => type.model.onTerrain).map((type) => type.id),
+// A terrace edge slopes away under the ground it shows, so only a model whose foot keeps off the
+// slope may leave it showing; a hedge or a bed reaching the edge would hang over the drop.
+const SLOPE_RUN = TILE_VOXELS * SLOPE_FRACTION;
+
+const GROUND_SHOWN: ReadonlySet<string> = new Set(
+  OBJECT_TYPES.filter((type) => type.model.onTerrain && type.model.footInset >= SLOPE_RUN).map(
+    (type) => type.id,
+  ),
 );
 
-export const standsOnTerrain = (id: string): boolean => ON_TERRAIN.has(id);
+export const showsGroundUnder = (id: string): boolean => GROUND_SHOWN.has(id);
 
 export function objectTypeById(id: string): ObjectTypeDefinition {
   const found = OBJECT_TYPES.find((type) => type.id === id);

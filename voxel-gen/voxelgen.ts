@@ -833,6 +833,9 @@ export interface ModelFacts extends Omit<VoxelModel, 'voxels' | 'canopy'> {
   // Per tile of the model's own grid, row by row, the top of its highest solid layer; 0 for none.
   readonly solidTops: readonly number[];
   readonly turnless: boolean;
+  // Tile voxels between the edge of its footprint and the nearest of its lowest layers; 0 for a
+  // model on a plate, whose plate is its foot.
+  readonly footInset: number;
 }
 
 // A quarter of a tile's cells: a roof, a floor or a hedge fills that, a lamp post or a court's
@@ -867,6 +870,24 @@ export function turnlessOf(model: VoxelModel): boolean {
   return voxels.every(({ x, y, z, color }) => painted.get(`${deep - 1 - z},${y},${x}`) === color);
 }
 
+// A terrace step's height: what stands lower than this over a sloped edge hangs in the air.
+const FOOT_LAYERS = 8;
+
+export function footInsetOf(model: VoxelModel): number {
+  if (!model.onTerrain) return 0;
+  const tile = TILE_VOXELS / (model.scale ?? 1);
+  const across = model.tiles.x * tile;
+  const deep = model.tiles.z * tile;
+  const low = ON_TERRAIN_LIFT + FOOT_LAYERS / (model.scale ?? 1);
+  let inset = Infinity;
+  for (const { x, y, z } of dayVoxelsOf(model)) {
+    if (y >= low) continue;
+    inset = Math.min(inset, x, z, across - 1 - x, deep - 1 - z);
+  }
+  if (inset === Infinity) return TILE_VOXELS / 2;
+  return Math.max(0, inset * (model.scale ?? 1));
+}
+
 // The swatch colour: the colour painted most by day; a tie goes to the colour met first.
 function dominantColorOf(model: VoxelModel): Color {
   const counts = new Map<Color, number>();
@@ -895,5 +916,6 @@ export function factsOf(model: VoxelModel): ModelFacts {
     dominantColor: dominantColorOf(model),
     solidTops: solidTopsOf(model),
     turnless: turnlessOf(model),
+    footInset: footInsetOf(model),
   };
 }

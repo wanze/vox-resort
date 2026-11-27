@@ -18,7 +18,7 @@ const SAND_FOOT = 0.3;
 const SEA_UNDERLAP = 1;
 
 // Six voxels against a level's eight, so a step reads as a slope rather than a wall.
-const SLOPE_FRACTION = 3 / 8;
+export const SLOPE_FRACTION = 3 / 8;
 
 // Measured twice: the foam must hug the drawn staircase, while the depth gradient needs the
 // continuous curve or it lays diagonal bands across the bay.

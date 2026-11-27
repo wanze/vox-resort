@@ -531,6 +531,8 @@ describe('a catalogue with styles', () => {
   });
 });
 
+const tilesOf = (key: string) => key.split('@')[1]!.split(',').map(Number) as [number, number];
+
 const derived = (layout: ResortLayout): Set<string> =>
   new Set([...layout.paths, ...layout.props].map((placement) => placement.key));
 
@@ -564,7 +566,10 @@ describe('derived keys under an edit', () => {
 
     expect(was.size).toBeGreaterThan(3000);
     expect(added).toHaveLength(1);
-    expect(removed).toEqual([]);
+    // Only the hedge the cottage crowds out, which takes the corner it turned with it.
+    for (const [x, z] of removed.map(tilesOf)) {
+      expect(Math.max(Math.abs(x - 13), Math.abs(z - 4))).toBeLessThanOrEqual(4);
+    }
   });
 });
 
@@ -796,14 +801,26 @@ describe('the resort plan', () => {
     }
   });
 
-  it('lays every hedge along the path beside it', () => {
-    const { hedges } = decorationsFor(items, RESORT_PLAN);
+  it('lays every straight length of border along the path beside it', () => {
+    const { hedges, walls } = decorationsFor(items, RESORT_PLAN);
     const paved = new Set(pathTilesFor(items, RESORT_PLAN).map((tile) => `${tile.x},${tile.z}`));
     expect(hedges.some((hedge) => hedge.rotation === 1)).toBe(true);
-    for (const { tile, rotation } of hedges) {
+    for (const { tile, rotation } of [...hedges, ...walls]) {
       const alongZ = paved.has(`${tile.x - 1},${tile.z}`) || paved.has(`${tile.x + 1},${tile.z}`);
-      expect(rotation).toBe(alongZ ? 1 : 0);
+      const alongX = paved.has(`${tile.x},${tile.z - 1}`) || paved.has(`${tile.x},${tile.z + 1}`);
+      if (alongX !== alongZ) expect(rotation).toBe(alongZ ? 1 : 0);
     }
+  });
+
+  it('turns a border round the corners of a block', () => {
+    const { hedges, walls } = decorationsFor(items, RESORT_PLAN);
+    const laid = new Set([...hedges, ...walls].map(({ tile }) => `${tile.x},${tile.z}`));
+    const turning = [...hedges, ...walls].filter(
+      ({ tile }) =>
+        (laid.has(`${tile.x - 1},${tile.z}`) || laid.has(`${tile.x + 1},${tile.z}`)) &&
+        (laid.has(`${tile.x},${tile.z - 1}`) || laid.has(`${tile.x},${tile.z + 1}`)),
+    );
+    expect(turning.length).toBeGreaterThan(0);
   });
 
   it('stands more than one of the types the resort repeats', () => {

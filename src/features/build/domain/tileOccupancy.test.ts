@@ -94,11 +94,21 @@ describe('showsGround', () => {
     const occupancy = createTileOccupancy([
       place(COTTAGE, 'cottage@0,0', 0, 0),
       place(item('palm'), 'palm@5,5', 5, 5),
-      place(item('palm-b'), 'palm-b#2', 6, 5),
+      place(item('street-lamp-b'), 'street-lamp-b#2', 6, 5),
     ]);
     expect(showsGround(occupancy, { x: 9, z: 9 })).toBe(true);
     expect(showsGround(occupancy, { x: 5, z: 5 })).toBe(true);
     expect(showsGround(occupancy, { x: 6, z: 5 })).toBe(true);
     expect(showsGround(occupancy, { x: 1, z: 2 })).toBe(false);
+  });
+
+  // A terrace edge slopes away under ground that shows, and these reach out over the slope.
+  it('lays the ground square under a hedge or a flower bed', () => {
+    const occupancy = createTileOccupancy([
+      place(item('hedge-corner'), 'hedge-corner@1,1', 1, 1),
+      place(item('flowerbed'), 'flowerbed@3,3', 3, 3),
+    ]);
+    expect(showsGround(occupancy, { x: 1, z: 1 })).toBe(false);
+    expect(showsGround(occupancy, { x: 3, z: 3 })).toBe(false);
   });
 });

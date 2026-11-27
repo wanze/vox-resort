@@ -16,6 +16,7 @@ import {
   DERIVED_IDS,
   FLAT_PAVING_IDS,
   HEDGE_ID,
+  STONE_WALL_ID,
   JETTY_ID,
   LAMP_ID,
   PATH_ID,
@@ -52,6 +53,7 @@ import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
 import { rotateExtent, ROTATIONS, type Extent, type Rotation } from './rotation';
 import { pavedLookup, tileKey } from './tileKey';
+import { bordersFor, type BorderGround } from './borders';
 
 const LAMP_SPACING = 5;
 
@@ -582,6 +584,7 @@ export interface Decorations {
   readonly beachLamps: readonly Tile[];
   readonly benches: readonly TurnedTile[];
   readonly hedges: readonly TurnedTile[];
+  readonly walls: readonly TurnedTile[];
 }
 
 // A turn of 1 swings +z round to +x, so the sequence runs +z, +x, -z, -x: the order seat facings use.
@@ -645,15 +648,50 @@ export function decorationsFor(
       (park) => tile.x >= park.x0 && tile.x <= park.x1 && tile.z >= park.z0 && tile.z <= park.z1,
     );
   const benches = spacedBenches({ ring, paved, taken, inPark });
-  const hedges = hedgeRuns({
+  const { hedges, walls } = bordersFor(
     ring,
-    taken,
-    occupied,
-    skip: inPark,
-    paved,
-    pathNeighbours,
-  });
-  return { lamps, beachLamps, benches, hedges };
+    bordersGround({ plan, terrain, occupied, paved, taken, skip: inPark }),
+    plan.neighbourhoods ?? [],
+  );
+  return { lamps, beachLamps, benches, hedges, walls };
+}
+
+// A stone wall stands by the sea and on the terraces: a hedge there would be fighting the salt
+// and the slope.
+const STONE_NEAR_SAND = 3;
+
+function bordersGround(parts: {
+  readonly plan: ResortPlan;
+  readonly terrain: Terrain;
+  readonly occupied: ReadonlyMap<string, string>;
+  readonly paved: ReadonlySet<string>;
+  readonly taken: ReadonlySet<string>;
+  readonly skip: (tile: Tile) => boolean;
+}): BorderGround {
+  const { plan, terrain, occupied, paved, taken, skip } = parts;
+  const nextToBuilding = (x: number, z: number): boolean =>
+    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dz) => occupied.has(tileKey(x + dx, z + dz))));
+  const nearSand = (x: number, z: number): boolean => {
+    for (let dx = -STONE_NEAR_SAND; dx <= STONE_NEAR_SAND; dx++) {
+      for (let dz = -STONE_NEAR_SAND; dz <= STONE_NEAR_SAND; dz++) {
+        if (terrain.surfaceOf(x + dx, z + dz) === 'sand') return true;
+      }
+    }
+    return false;
+  };
+  const onPlot = (x: number, z: number): boolean =>
+    x >= 0 && z >= 0 && x < plan.tilesX && z < plan.tilesZ;
+  const bare = (key: string): boolean => !paved.has(key) && !occupied.has(key) && !taken.has(key);
+  return {
+    isPaved: (x, z) => paved.has(tileKey(x, z)),
+    canPlant: (x, z) =>
+      onPlot(x, z) &&
+      bare(tileKey(x, z)) &&
+      terrain.surfaceOf(x, z) === 'grass' &&
+      !skip({ x, z }) &&
+      !nextToBuilding(x, z),
+    favoursStone: (x, z) => terrain.levelOf(x, z) > 0 || nearSand(x, z),
+  };
 }
 
 // Both ends of every ramp and flight and the tiles round them: on the sand a lamp there stood
@@ -722,38 +760,6 @@ function spacedBenches(parts: {
     taken.add(tileKey(tile.x, tile.z));
   }
   return benches;
-}
-
-// Unturned a hedge lies along x, which is the way a path beside it to the north or south runs.
-function alongPathBeside(paved: ReadonlySet<string>, tile: Tile): Rotation {
-  const [, dz] = soleNeighbour(paved, tile.x, tile.z) ?? [0, 1];
-  return dz === 0 ? 1 : 0;
-}
-
-function hedgeRuns(parts: {
-  readonly ring: readonly Tile[];
-  readonly taken: ReadonlySet<string>;
-  readonly occupied: ReadonlyMap<string, string>;
-  readonly skip: (tile: Tile) => boolean;
-  readonly paved: ReadonlySet<string>;
-  readonly pathNeighbours: (x: number, z: number) => number;
-}): TurnedTile[] {
-  const { ring, taken, occupied, skip, paved, pathNeighbours } = parts;
-  const nextToBuilding = (x: number, z: number): boolean =>
-    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dz) => occupied.has(tileKey(x + dx, z + dz))));
-  const candidates = ring.filter(
-    (tile) =>
-      !taken.has(tileKey(tile.x, tile.z)) &&
-      !skip(tile) &&
-      pathNeighbours(tile.x, tile.z) === 1 &&
-      !nextToBuilding(tile.x, tile.z),
-  );
-  const candidateKeys = new Set(candidates.map((tile) => tileKey(tile.x, tile.z)));
-  return candidates
-    .filter((tile) =>
-      NEIGHBOURS.some(([dx, dz]) => candidateKeys.has(tileKey(tile.x + dx, tile.z + dz))),
-    )
-    .map((tile) => ({ tile, rotation: alongPathBeside(paved, tile) }));
 }
 
 function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan): void {
@@ -1047,7 +1053,7 @@ function propsFor(
   styleOf: StyleOf,
 ): Placement[] {
   const byId = new Map(items.map((item) => [item.id, item]));
-  const { lamps, beachLamps, benches, hedges } = decorationsFor(items, plan);
+  const { lamps, beachLamps, benches, hedges, walls } = decorationsFor(items, plan);
   const beachLamp = byId.has(BEACH_LAMP_ID) ? BEACH_LAMP_ID : LAMP_ID;
   // The ground styles a lamp, not the mix: the tall one on grass and the low one on the sand.
   const turned: { id: string; tile: Tile; rotation: Rotation }[] = [
@@ -1058,6 +1064,7 @@ function propsFor(
       tile,
       rotation,
     })),
+    ...walls.map(({ tile, rotation }) => ({ id: STONE_WALL_ID, tile, rotation })),
     ...benches.map(({ tile, rotation }) => ({
       id: styleOf(BENCH_ID, tile.x, tile.z),
       tile,

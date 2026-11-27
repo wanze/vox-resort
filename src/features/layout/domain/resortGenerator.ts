@@ -17,7 +17,8 @@ import {
   type HousingBlock,
   type ParkLayout,
 } from './districtLayouts';
-import { WOBBLE_LIMIT } from './parkShapes';
+import { WOBBLE_LIMIT, type TileRect } from './parkShapes';
+import { binTilesFor } from './litterBins';
 import { neighbourPairs, spreadPairs, uncutRuns, type LaneCut } from './districtMerge';
 import { SHORE_REACH } from './placementGround';
 import { createTerrain, terrainFor, type Terrain, type TerrainEdit } from './terrain';
@@ -95,6 +96,12 @@ export interface GeneratorType {
   readonly tilesX: number;
   readonly tilesZ: number;
   readonly placement?: ModelPlacement;
+  // Sells something a guest may drop, so a bin stands beside it.
+  readonly litters?: boolean;
+  // Tiles a guest holding litter will walk to this from; unset is not a bin.
+  readonly binReach?: number;
+  // The way each door faces, unturned.
+  readonly doorFacings?: readonly Rotation[];
 }
 
 const clamp = (value: number, low: number, high: number): number =>
@@ -2181,7 +2188,81 @@ function standResort(parts: StandParts): ResortPlan {
     density: params.density,
     seed: params.seed,
   });
+  standBins({ skeleton, ground, shore: land.shore, plots, missing, types });
   return { ...skeleton, plots, standsWholeCatalogue: missing.size === 0 };
+}
+
+function plotRect(plot: ResortPlot, type: GeneratorType): TileRect {
+  const footprint = footprintOf(type, plot.rotation ?? 0);
+  return {
+    x0: plot.tileX,
+    x1: plot.tileX + footprint.x - 1,
+    z0: plot.tileZ,
+    z1: plot.tileZ + footprint.z - 1,
+  };
+}
+
+// Stood last, and without a draw, so a bin never moves anything else the generator stands.
+function standBins(parts: {
+  readonly skeleton: ResortPlan;
+  readonly ground: Terrain;
+  readonly shore: Shore | null;
+  readonly plots: ResortPlot[];
+  readonly missing: Set<string>;
+  readonly types: ReadonlyMap<string, GeneratorType>;
+}): void {
+  const { skeleton, ground, shore, plots, missing, types } = parts;
+  const bin = [...types.values()].find((type) => (type.binReach ?? 0) > 0);
+  if (!bin) return;
+  const stood = plots.flatMap((plot) => {
+    const type = types.get(plot.id);
+    if (!type) return [];
+    const rect = plotRect(plot, type);
+    // As the layout's spurs: dressing and anything on the sand get none.
+    const reached =
+      type.category !== 'grounds' && ground.surfaceOf(plot.tileX, plot.tileZ) !== 'sand';
+    const doorSides = (type.doorFacings ?? []).map((facing) =>
+      normalizeRotation(facing + (plot.rotation ?? 0)),
+    );
+    return [{ type, rect, reached, doorSides }];
+  });
+  const covered = new Set(
+    stood.flatMap(({ rect }) => {
+      const keys: string[] = [];
+      for (let x = rect.x0; x <= rect.x1; x++) {
+        for (let z = rect.z0; z <= rect.z1; z++) keys.push(tileKey(x, z));
+      }
+      return keys;
+    }),
+  );
+  // A landmark stands on the paving, which the layout then leaves unpaved under it.
+  const streets = new Set(
+    streetTiles(skeleton)
+      .map((tile) => tileKey(tile.x, tile.z))
+      .filter((key) => !covered.has(key)),
+  );
+  const lastRow = (shore?.spec.beach ?? 0) - 1;
+  const tiles = binTilesFor({
+    stalls: stood.filter(({ type }) => type.litters).map(({ rect }) => rect),
+    standing: stood,
+    bins: stood.filter(({ type }) => type.id === bin.id).map(({ rect }) => rect),
+    reach: bin.binReach!,
+    ground: {
+      tilesX: skeleton.tilesX,
+      tilesZ: skeleton.tilesZ,
+      isStreet: (x, z) => streets.has(tileKey(x, z)),
+      // The tideline and the lane behind the beach stay clear, as the beach keeps them.
+      canStand: (x, z) => {
+        if (x < 0 || z < 0 || x >= skeleton.tilesX || z >= skeleton.tilesZ) return false;
+        if (ground.surfaceOf(x, z) === 'water') return false;
+        const depth = beachDepthAt(shore, x, z);
+        return depth !== 0 && depth !== lastRow;
+      },
+      isRouted: (x, z) => ground.surfaceOf(x, z) === 'grass',
+    },
+  });
+  for (const tile of tiles) plots.push({ id: bin.id, tileX: tile.x, tileZ: tile.z, rotation: 0 });
+  if (tiles.length > 0) missing.delete(bin.id);
 }
 
 // Its own generator, so a change on the beach or the hill does not rebuild the town behind it.
